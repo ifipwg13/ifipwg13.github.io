@@ -42,21 +42,26 @@ storage. No local software installation is needed.
 
 ## Current activation state
 
-The public and private pull requests remain unmerged. Repository access,
-labels, Issues, and Pages settings have not been changed by this implementation.
+The private configuration PR was merged after approval. The `registration`,
+`talk`, and `meeting:demo-001` labels now exist, and the demo registration Issue is
+open. The public PR remains unmerged; public `main` and Pages settings are unchanged.
 
-- The participants button temporarily opens a search for the demo meeting's
-  registration Issue. During the separately approved activation step, replace
-  that button's URL with the newly created Issue's exact URL before member testing.
+- The participants button opens the demo meeting's exact registration Issue:
+  <https://github.com/ifipwg13/meetings/issues/2>.
 - The proposal list includes both open and closed Issues for this meeting.
-- The submission form becomes available only after approval and merging its
-  configuration into the private repository's default branch. Its labels must
-  also be created separately before testing.
+- The submission form is on the private repository's default branch and its
+  labels exist. Actual Read-role label assignment, field validation, and usability
+  remain live test cases; they have not been recorded as passed.
 - An account without private repository access cannot use these GitHub links.
 
-The public preview can be inspected now. End-to-end member testing waits for
-private activation. See the private repository's `ADMINISTRATION.md` and
-`TESTING.md` for that procedure.
+The public preview can now link to the activated private demo. See the private
+repository's `ADMINISTRATION.md` and `TESTING.md` for the two-account test procedure.
+All test proposals should remain fictitious and private.
+
+If you already have a running Codespaces preview, open **Terminal → New Terminal**
+and run `git pull --ff-only origin prototype/meeting-management`, then refresh the
+preview tab. Leave the preview server running in its original terminal. A
+Codespace does not automatically receive new commits pushed to the PR branch.
 
 ## Files and future meetings
 
