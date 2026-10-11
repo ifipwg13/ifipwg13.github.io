@@ -70,11 +70,24 @@ Codespace does not automatically receive new commits pushed to the PR branch.
 Links within the site are relative, so they work in the Codespaces preview and
 under `/prototype/` on a future Pages deployment.
 
-To add another fictitious meeting, copy `prototype/meetings/demo-001/index.html`
-into a new meeting directory, update its public details and three GitHub links,
-then add its entry to `prototype/index.html`. Use the private administrator guide
-for the matching form, label, and registration Issue. Never copy attendance or
-proposal contents into public files, commits, pull request descriptions, or logs.
+The meeting list now includes **Create meeting** for administrators. It opens
+a private GitHub form, like the talk-submission button. This form and its
+automation become active only after the separate private automation PR is
+approved and merged and its Actions credential is configured.
+
+The administrator enters fictitious meeting details once. The generator creates
+the registration Issue and label, prepares a private talk-form PR, and adds the
+page and list entry to this existing draft PR branch. Talk submission is enabled
+after an approved private setup merge. No HTML editing or Codespaces session is
+needed to submit a meeting request; an existing preview still needs to pull
+updates before it displays generated files.
+
+The `generated-meetings` markers in the index reserve the generated list area.
+Other index content and the original `demo-001` page remain manually maintained.
+Only confirmed public meeting metadata and generic private links are exported.
+Never copy attendance or proposal contents into public files, commits, pull
+request descriptions, or logs. Read the private repository's `ADMINISTRATION.md`
+and `AUTOMATION.md` for activation and the administrator's form procedure.
 
 GitHub Pages currently publishes `main` from the repository root. Keep this
 pull request unmerged throughout initial testing, including second-meeting tests.
