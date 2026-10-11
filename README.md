@@ -20,7 +20,7 @@ Private participation and proposal records belong exclusively in the private
 4. Paste this command into the terminal and press Enter:
 
    ```sh
-   python3 -m http.server 8000 --bind 0.0.0.0 --directory prototype
+   python3 scripts/preview_server.py
    ```
 
 5. When **Open in Browser** appears, click it. Otherwise, open the **Ports** tab
@@ -31,7 +31,10 @@ Private participation and proposal records belong exclusively in the private
 
 Keep port visibility **Private**. This preview is separate from GitHub Pages:
 opening it does not merge the pull request or publish the website. The Python
-server serves only `prototype/`, never the repository root or private records.
+server serves only HTML and CSS from `prototype/` on the latest public PR branch,
+never the repository root or private records. It fetches the branch when a page
+is requested, so refreshing Firefox receives generated meeting updates without
+another terminal command. Your local files and branches are not changed.
 
 Use a personally billed, two-core codespace within your available free allowance.
 The creation dialog identifies who pays. A GitHub Free personal account includes
@@ -58,10 +61,24 @@ The public preview can now link to the activated private demo. See the private
 repository's `ADMINISTRATION.md` and `TESTING.md` for the two-account test procedure.
 All test proposals should remain fictitious and private.
 
-If you already have a running Codespaces preview, open **Terminal → New Terminal**
-and run `git pull --ff-only origin prototype/meeting-management`, then refresh the
-preview tab. Leave the preview server running in its original terminal. A
-Codespace does not automatically receive new commits pushed to the PR branch.
+If you already have a running preview using `python3 -m http.server`, switch it
+once to the server that receives GitHub updates:
+
+1. Click its terminal and press **Ctrl+C** to stop the old server.
+2. Run these commands, one at a time:
+
+   ```sh
+   git pull --ff-only origin prototype/meeting-management
+   python3 scripts/preview_server.py
+   ```
+
+3. Refresh your existing Firefox preview tab.
+
+For each subsequent meeting, wait for the **Meeting prepared** comment on its
+request Issue, then refresh Firefox. No further `git pull` is needed to display
+new meetings or activate their talk buttons. The server must stay running and
+the Codespace must be able to reach GitHub. If an update fails, the preview shows
+an error rather than silently displaying an old meeting list.
 
 ## Files and future meetings
 
@@ -71,16 +88,17 @@ Links within the site are relative, so they work in the Codespaces preview and
 under `/prototype/` on a future Pages deployment.
 
 The meeting list now includes **Create meeting** for administrators. It opens
-a private GitHub form, like the talk-submission button. This form and its
-automation become active only after the separate private automation PR is
-approved and merged and its Actions credential is configured.
+a private GitHub form, like the talk-submission button. The form and automation
+are active; its configured Actions credential has successfully prepared the
+second meeting and enabled its talk button after an approved private setup merge.
 
 The administrator enters fictitious meeting details once. The generator creates
 the registration Issue and label, prepares a private talk-form PR, and adds the
 page and list entry to this existing draft PR branch. Talk submission is enabled
 after an approved private setup merge. No HTML editing or Codespaces session is
-needed to submit a meeting request; an existing preview still needs to pull
-updates before it displays generated files.
+needed to submit a meeting request. With the preview server above, refreshing
+Firefox fetches generated updates. The older plain Python file server continues
+to require manual pulls; restart it with the new command once.
 
 The `generated-meetings` markers in the index reserve the generated list area.
 Other index content and the original `demo-001` page remain manually maintained.
@@ -93,3 +111,8 @@ GitHub Pages currently publishes `main` from the repository root. Keep this
 pull request unmerged throughout initial testing, including second-meeting tests.
 Merging or publishing requires separate explicit approval; no deployment workflow
 or Pages configuration is introduced here.
+
+The preview server uses the Git authentication already provided by Codespaces.
+It needs no extra token or secret and reads no private Issues. The static site
+remains plain HTML/CSS. To test preview synchronization without credentials or
+network access, run `python3 -m unittest discover -s tests -v`.
