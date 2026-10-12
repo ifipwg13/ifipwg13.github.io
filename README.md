@@ -102,7 +102,10 @@ Firefox fetches generated updates. The older plain Python file server continues
 to require manual pulls; restart it with the new command once.
 
 The `generated-meetings` markers in the index reserve the generated list area.
-Other index content and the original `demo-001` page remain manually maintained.
+Cards are ordered by start date, latest first; equal dates use the larger existing
+meeting counter first. The original demo card is in this same region so it follows
+the order, while its contents and page remain manually maintained. Other index
+content is preserved. Future generated updates and retries retain this order.
 Only confirmed public meeting metadata and generic private links are exported.
 
 The draft preview displays dates as DD-MM-YYYY, including the start and end
