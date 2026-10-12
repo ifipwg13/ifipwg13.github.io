@@ -106,8 +106,8 @@ Other index content and the original `demo-001` page remain manually maintained.
 Only confirmed public meeting metadata and generic private links are exported.
 
 The draft preview displays dates as DD-MM-YYYY, including the start and end
-of multi-day meetings. Private form/workflow updates awaiting approval simplify
-meeting creation to one name in GitHub's **Title** field and accept DD-MM-YYYY
+of multi-day meetings. The activated private form/workflow simplifies
+meeting creation to one name in GitHub's **Title** field and accepts DD-MM-YYYY
 input. Registration titles and talk-form prefixes use `[meeting N] `; talk
 prefixes remain editable by their authors. Existing IDs, labels, and private
 destinations are retained. GitHub's Cancel behavior and the new-tab links are
