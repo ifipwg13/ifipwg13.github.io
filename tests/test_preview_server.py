@@ -2,7 +2,10 @@
 
 import http.client
 import importlib.util
+import re
+import select
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -16,6 +19,11 @@ spec.loader.exec_module(p)
 
 def git(repository, *args):
     return subprocess.run(["git", "-C", str(repository), *args], capture_output=True, check=True).stdout
+
+
+def meeting_page(title, stylesheet="assets/style.css"):
+    return (f'<!doctype html><html><head><link rel="stylesheet" href="{stylesheet}"></head>'
+            f'<body><h1>{title}</h1><a class="button" href="https://github.com/">View meeting</a></body></html>')
 
 
 class PreviewTests(unittest.TestCase):
@@ -34,7 +42,7 @@ class PreviewTests(unittest.TestCase):
         self.main = git(self.remote, "rev-parse", "main")
         git(self.remote, "switch", "-c", p.BRANCH)
         (self.remote / "prototype/assets").mkdir(parents=True)
-        (self.remote / "prototype/index.html").write_text("<h1>First meeting</h1>")
+        (self.remote / "prototype/index.html").write_text(meeting_page("First meeting"))
         (self.remote / "prototype/assets/style.css").write_text("h1 {color: navy}")
         (self.remote / "prototype-secret.html").write_text("Outside prototype")
         (self.remote / "prototype/.hidden.html").write_text("Hidden")
@@ -49,9 +57,9 @@ class PreviewTests(unittest.TestCase):
         self.source = p.GitSource(self.checkout)
 
     def publish(self):
-        (self.remote / "prototype/index.html").write_text("<h1>First and new meeting</h1>")
+        (self.remote / "prototype/index.html").write_text(meeting_page("First and new meeting"))
         (self.remote / "prototype/meetings/meeting-12").mkdir(parents=True)
-        (self.remote / "prototype/meetings/meeting-12/index.html").write_text("<h1>New meeting</h1>")
+        (self.remote / "prototype/meetings/meeting-12/index.html").write_text(meeting_page("New meeting", "../../assets/style.css"))
         git(self.remote, "add", "prototype")
         git(self.remote, "commit", "-m", "Add a meeting")
 
@@ -118,6 +126,129 @@ class PreviewTests(unittest.TestCase):
         self.assertGreater(int(headers["Content-Length"]), 0)
         self.assertEqual(content, b"")
         self.assertEqual(self.request(server, "/?refresh=1")[0], 200)
+
+    def test_page_contains_its_styling_and_live_revision_without_a_css_request(self):
+        server = self.server()
+        status, headers, content = self.request(server)
+        self.assertEqual(status, 200)
+        self.assertIn(b"<style>\nh1 {color: navy}\n</style>", content)
+        self.assertNotIn(b'rel="stylesheet"', content)
+        self.assertIn(b"<strong>Live preview</strong>", content)
+        revision = git(self.remote, "rev-parse", p.BRANCH).decode().strip()
+        self.assertEqual(headers["X-Preview-Revision"], revision)
+        self.assertIn(revision[:7].encode(), content)
+        self.assertEqual(headers["Pragma"], "no-cache")
+
+    def test_legacy_and_slashless_urls_redirect_to_a_styled_current_page(self):
+        self.publish()
+        server = self.server()
+        for old, new in [("/prototype", "/"), ("/prototype/", "/"),
+                         ("/prototype/index.html", "/index.html"),
+                         ("/prototype/assets/style.css", "/assets/style.css"),
+                         ("/prototype/meetings/meeting-12", "/meetings/meeting-12/"),
+                         ("/meetings/meeting-12", "/meetings/meeting-12/")]:
+            with self.subTest(old=old):
+                status, headers, content = self.request(server, old)
+                self.assertEqual(status, 307)
+                self.assertEqual(headers["Location"], new)
+                self.assertEqual(headers["Cache-Control"], "no-store")
+                self.assertEqual(content, b"")
+                status, headers, content = self.request(server, new)
+                self.assertEqual(status, 200)
+                if new.endswith(".css"):
+                    self.assertIn(b"color: navy", content)
+                else:
+                    self.assertIn(b"Live preview", content)
+                    self.assertIn(b"<style>", content)
+
+    def test_html_and_style_use_the_same_revision_during_a_concurrent_update(self):
+        first = git(self.remote, "rev-parse", p.BRANCH).decode().strip()
+        original = self.source.read
+        switched = False
+
+        def advancing_read(path, revision=None):
+            nonlocal switched
+            content = original(path, revision)
+            if path.endswith(".html") and not switched:
+                switched = True
+                self.publish()
+                (self.remote / "prototype/assets/style.css").write_text("h1 {color: green}")
+                git(self.remote, "add", "prototype/assets/style.css")
+                git(self.remote, "commit", "-m", "Update styling")
+                self.source.latest(force=True)
+            return content
+
+        server = self.server()
+        with patch.object(self.source, "read", side_effect=advancing_read):
+            _, headers, content = self.request(server)
+        self.assertEqual(headers["X-Preview-Revision"], first)
+        self.assertIn(b"First meeting", content)
+        self.assertIn(b"color: navy", content)
+        self.assertNotIn(b"color: green", content)
+        _, headers, content = self.request(server)
+        self.assertIn(b"First and new meeting", content)
+        self.assertIn(b"color: green", content)
+        self.assertNotEqual(headers["X-Preview-Revision"], first)
+
+    def test_missing_stylesheet_returns_uncached_error_instead_of_unstyled_page(self):
+        (self.remote / "prototype/assets/style.css").unlink()
+        git(self.remote, "add", "prototype/assets/style.css")
+        git(self.remote, "commit", "-m", "Simulate missing stylesheet")
+        server = self.server()
+        with patch("builtins.print"):
+            status, headers, content = self.request(server)
+        self.assertEqual(status, 503)
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertNotIn(b"First meeting", content)
+
+    def test_legacy_traversal_and_redirect_to_external_host_are_refused(self):
+        server = self.server()
+        for url in ["/prototype/../README.md", "/prototype/%2e%2e/prototype-secret.html",
+                    "/%2f%2fexample.com/index.html", "//example.com/index.html"]:
+            with self.subTest(url=url):
+                status, headers, content = self.request(server, url)
+                self.assertEqual(status, 404)
+                self.assertNotIn("Location", headers)
+                self.assertEqual(headers["Cache-Control"], "no-store")
+
+    def test_invalid_html_structure_cannot_silently_serve_an_unstyled_page(self):
+        (self.remote / "prototype/index.html").write_text("<h1>Missing stylesheet</h1>")
+        git(self.remote, "add", "prototype/index.html")
+        git(self.remote, "commit", "-m", "Simulate incomplete page")
+        server = self.server()
+        with patch("builtins.print"):
+            status, headers, content = self.request(server)
+        self.assertEqual(status, 503)
+        self.assertNotIn(b"Missing stylesheet", content)
+
+    def test_fetched_script_starts_outside_checkout_and_preserves_local_work(self):
+        helper = Path(self.directory.name) / "fetched-preview.py"
+        helper.write_text(Path(p.__file__).read_text())
+        (self.checkout / "prototype/index.html").write_text("Preserved local changes")
+        head = git(self.checkout, "rev-parse", "HEAD")
+        process = subprocess.Popen([sys.executable, str(helper), "--repository", str(self.checkout), "--port", "0"],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            readable, _, _ = select.select([process.stdout], [], [], 20)
+            self.assertTrue(readable, "Preview did not start")
+            line = process.stdout.readline().decode()
+            match = re.search(r"LIVE PREVIEW on port ([0-9]+)", line)
+            self.assertIsNotNone(match, line)
+            connection = http.client.HTTPConnection("127.0.0.1", int(match[1]), timeout=10)
+            try:
+                connection.request("GET", "/")
+                response = connection.getresponse()
+                self.assertEqual(response.status, 200)
+                content = response.read()
+                self.assertIn(b"First meeting", content)
+                self.assertIn(b"Live preview", content)
+            finally:
+                connection.close()
+            self.assertEqual(git(self.checkout, "rev-parse", "HEAD"), head)
+            self.assertEqual((self.checkout / "prototype/index.html").read_text(), "Preserved local changes")
+        finally:
+            process.terminate()
+            process.communicate(timeout=10)
 
     def test_failed_update_does_not_silently_serve_stale_page_or_echo_git_output(self):
         server = self.server()

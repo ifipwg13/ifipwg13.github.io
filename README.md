@@ -24,9 +24,10 @@ Private participation and proposal records belong exclusively in the private
    ```
 
 5. When **Open in Browser** appears, click it. Otherwise, open the **Ports** tab
-   beside **Terminal**, find port **8000**, and click its **Open in Browser**
-   globe icon. If the port is missing, choose **Add Port** and enter `8000`.
-6. The prototype opens in a new Firefox tab. Choose **View meeting** to inspect
+   beside **Terminal**, find port **8001**, and click its **Open in Browser**
+   globe icon. If the port is missing, choose **Add Port** and enter `8001`.
+6. The prototype opens in a new Firefox tab with a **Live preview** bar at the
+   top. That bar confirms this is the server receiving GitHub updates. Choose **View meeting** to inspect
    the fictitious event. Allow the popup if Firefox blocks the new tab.
 
 Keep port visibility **Private**. This preview is separate from GitHub Pages:
@@ -35,6 +36,10 @@ server serves only HTML and CSS from `prototype/` on the latest public PR branch
 never the repository root or private records. It fetches the branch when a page
 is requested, so refreshing Firefox receives generated meeting updates without
 another terminal command. Your local files and branches are not changed.
+The server includes the stylesheet in each preview page, using the same Git
+version for both. Styling does not depend on a second browser request. The
+**Live preview** bar shows the retrieved version and time (Europe/Berlin).
+Port **8001** distinguishes this preview from an older server on port 8000.
 
 Use a personally billed, two-core codespace within your available free allowance.
 The creation dialog identifies who pays. A GitHub Free personal account includes
@@ -61,21 +66,32 @@ The public preview can now link to the activated private demo. See the private
 repository's `ADMINISTRATION.md` and `TESTING.md` for the two-account test procedure.
 All test proposals should remain fictitious and private.
 
-If you already have a running preview using `python3 -m http.server`, switch it
-once to the server that receives GitHub updates:
+If an existing preview shows old meetings or loses its styling, update and
+restart the preview server:
 
-1. Click its terminal and press **Ctrl+C** to stop the old server.
-2. Run these commands, one at a time:
+1. Click the terminal running the server and press **Ctrl+C** to stop it.
+2. Paste this whole block and press Enter. It runs the current preview server
+   from GitHub and preserves local files, even if your checkout is older:
 
    ```sh
-   cd "$(git rev-parse --show-toplevel)"
-   git pull --ff-only origin prototype/meeting-management
-   python3 scripts/preview_server.py
+   cd "$(git rev-parse --show-toplevel)" &&
+   git fetch origin prototype/meeting-management &&
+   meeting_preview_script="$(mktemp /tmp/meeting-preview.XXXXXX.py)" &&
+   git show origin/prototype/meeting-management:scripts/preview_server.py > "$meeting_preview_script" &&
+   python3 "$meeting_preview_script" --repository "$PWD" --port 8001
    ```
 
-3. Open port **8000** from the **Ports** tab again. The new server opens directly
-   at the meeting list; an old URL ending in `/prototype/` must be replaced by
-   the port's root address. Subsequently, just refresh Firefox.
+   The terminal must report **LIVE PREVIEW on port 8001**. If it reports an error,
+   copy that error for diagnosis; the block stops rather than running older code.
+3. Close the old preview tab. In **Ports**, open **8001** using its globe icon.
+   Add port `8001` if it is absent, keeping its visibility **Private**. Confirm
+   the new tab shows the **Live preview** bar, styled buttons, and the current
+   meetings. Subsequent updates need only a browser refresh.
+
+Old `/prototype/` URLs redirect to the current preview's root, and meeting links
+without a final slash redirect to their correct directory URL. HTML, styling,
+redirects, and errors all instruct browsers not to cache preview responses. A
+GitHub or stylesheet failure shows an error rather than an old or unstyled page.
 
 For each subsequent meeting, wait for the **Meeting prepared** comment on its
 request Issue, then refresh Firefox. No further `git pull` is needed to display
