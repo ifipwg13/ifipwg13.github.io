@@ -92,9 +92,10 @@ a private GitHub form, like the talk-submission button. The form and automation
 are active; its configured Actions credential has successfully prepared the
 second meeting and enabled its talk button after an approved private setup merge.
 
-The administrator enters fictitious meeting details once. The generator creates
-the registration Issue and label, prepares a private talk-form PR, and adds the
-page and list entry to this existing draft PR branch. Talk submission is enabled
+The administrator enters fictitious meeting details once. The generator adds
+registration instructions to that same Issue and a meeting label, prepares a
+private talk-form PR, and adds the page and list entry to this existing draft PR
+branch. Talk submission is enabled
 after an approved private setup merge. No HTML editing or Codespaces session is
 needed to submit a meeting request. With the preview server above, refreshing
 Firefox fetches generated updates. The older plain Python file server continues
@@ -103,6 +104,15 @@ to require manual pulls; restart it with the new command once.
 The `generated-meetings` markers in the index reserve the generated list area.
 Other index content and the original `demo-001` page remain manually maintained.
 Only confirmed public meeting metadata and generic private links are exported.
+
+The draft preview displays dates as DD-MM-YYYY, including the start and end
+of multi-day meetings. Private form/workflow updates awaiting approval simplify
+meeting creation to one name in GitHub's **Title** field and accept DD-MM-YYYY
+input. Registration titles and talk-form prefixes use `[meeting N] `; talk
+prefixes remain editable by their authors. Existing IDs, labels, and private
+destinations are retained. GitHub's Cancel behavior and the new-tab links are
+unchanged; no custom meeting form or redirect is introduced.
+
 Never copy attendance or proposal contents into public files, commits, pull
 request descriptions, or logs. Read the private repository's `ADMINISTRATION.md`
 and `AUTOMATION.md` for activation and the administrator's form procedure.
