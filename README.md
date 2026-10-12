@@ -68,11 +68,14 @@ once to the server that receives GitHub updates:
 2. Run these commands, one at a time:
 
    ```sh
+   cd "$(git rev-parse --show-toplevel)"
    git pull --ff-only origin prototype/meeting-management
    python3 scripts/preview_server.py
    ```
 
-3. Refresh your existing Firefox preview tab.
+3. Open port **8000** from the **Ports** tab again. The new server opens directly
+   at the meeting list; an old URL ending in `/prototype/` must be replaced by
+   the port's root address. Subsequently, just refresh Firefox.
 
 For each subsequent meeting, wait for the **Meeting prepared** comment on its
 request Issue, then refresh Firefox. No further `git pull` is needed to display
@@ -104,7 +107,8 @@ to require manual pulls; restart it with the new command once.
 The `generated-meetings` markers in the index reserve the generated list area.
 Cards are ordered by start date, latest first; equal dates use the larger existing
 meeting counter first. The original demo card is in this same region so it follows
-the order, while its contents and page remain manually maintained. Other index
+the order. Its confirmed metadata is retained privately and its card/page are
+synchronized like subsequent meetings, preserving its original private links. Other index
 content is preserved. Future generated updates and retries retain this order.
 Only confirmed public meeting metadata and generic private links are exported.
 
@@ -119,6 +123,25 @@ unchanged; no custom meeting form or redirect is introduced.
 Never copy attendance or proposal contents into public files, commits, pull
 request descriptions, or logs. Read the private repository's `ADMINISTRATION.md`
 and `AUTOMATION.md` for activation and the administrator's form procedure.
+
+## Archive and hide
+
+On a meeting card or page, expand **Manage meeting — organizers**. **Archive
+meeting** opens the existing private registration Issue: the administrator
+confirms by clicking **Close issue**. **Hide meeting** opens that same Issue:
+the administrator selects **hidden** in its **Labels** menu. Wait for Actions
+to succeed, then refresh the preview. Clicking a preview button alone does not
+change the meeting. No extra operation Issue or browser credential is needed.
+
+Archived meetings remain visible with an **Archived** notice and links to retained
+private records. Hidden meetings have neither a current card nor a page; their
+private registration and proposals remain available to invited members. There
+is no Delete button. Read-role members cannot complete these administrator actions.
+
+Successful setup and visibility changes reconcile all meetings, including pending
+private setups, in start-date order. An administrator can repair the complete list
+using **Actions → Prepare meeting → Run workflow** in the private repository.
+The public preview remains plain HTML/CSS and uses no private API in the browser.
 
 GitHub Pages currently publishes `main` from the repository root. Keep this
 pull request unmerged throughout initial testing, including second-meeting tests.

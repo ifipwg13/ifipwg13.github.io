@@ -43,6 +43,9 @@ a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .meeting-details dt { font-weight: 600; }
 .meeting-details dd { margin: 0; }
 .help { color: #46566a; }
+.organizer-controls { margin-top: 1rem; border-top: 1px solid #d6dee8; padding-top: .75rem; }
+.organizer-controls summary { cursor: pointer; font-weight: 600; }
+.organizer-controls summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .instructions { padding-left: 1.5rem; }
 .instructions li { margin-block: .75rem; }
 .site-footer { border-top: 1px solid #d6dee8; color: #46566a; font-size: .9rem; }
