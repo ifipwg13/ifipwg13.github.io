@@ -5,8 +5,8 @@ import importlib.util
 import re
 import select
 import subprocess
-import sys
 import tempfile
+import textwrap
 import threading
 import unittest
 from pathlib import Path
@@ -222,11 +222,28 @@ class PreviewTests(unittest.TestCase):
         self.assertNotIn(b"Missing stylesheet", content)
 
     def test_fetched_script_starts_outside_checkout_and_preserves_local_work(self):
-        helper = Path(self.directory.name) / "fetched-preview.py"
-        helper.write_text(Path(p.__file__).read_text())
+        # Reproduce managed checkouts that fetch only main: an ordinary fetch
+        # must not be mistaken for updating origin/prototype/meeting-management.
+        git(self.checkout, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main")
+        initial = git(self.checkout, "rev-parse", "origin/" + p.BRANCH)
+        (self.remote / "scripts").mkdir()
+        (self.remote / "scripts/preview_server.py").write_text(Path(p.__file__).read_text())
+        git(self.remote, "add", "scripts/preview_server.py")
+        git(self.remote, "commit", "-m", "Publish current preview server")
+        latest = git(self.remote, "rev-parse", p.BRANCH)
+        self.assertNotEqual(initial, latest)
+        git(self.checkout, "fetch", "origin", p.BRANCH)
+        self.assertEqual(git(self.checkout, "rev-parse", "origin/" + p.BRANCH), initial)
+        readme = (Path(p.__file__).resolve().parents[1] / "README.md").read_text()
+        blocks = re.findall(r"```sh\n(.*?)```", readme, flags=re.DOTALL)
+        command = textwrap.dedent(next(block for block in blocks if "meeting_preview_script=" in block))
+        command = command.replace("--port 8001", "--port 0")
+        command = command.replace("/tmp/meeting-preview.", str(Path(self.directory.name) / "meeting-preview."))
         (self.checkout / "prototype/index.html").write_text("Preserved local changes")
         head = git(self.checkout, "rev-parse", "HEAD")
-        process = subprocess.Popen([sys.executable, str(helper), "--repository", str(self.checkout), "--port", "0"],
+        # exec keeps the server as this process, so teardown cannot orphan it.
+        command = command.replace('python3 "$meeting_preview_script"', 'exec python3 "$meeting_preview_script"')
+        process = subprocess.Popen(["bash", "-c", command], cwd=self.checkout,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             readable, _, _ = select.select([process.stdout], [], [], 20)
@@ -245,6 +262,7 @@ class PreviewTests(unittest.TestCase):
             finally:
                 connection.close()
             self.assertEqual(git(self.checkout, "rev-parse", "HEAD"), head)
+            self.assertEqual(git(self.checkout, "rev-parse", "origin/" + p.BRANCH), latest)
             self.assertEqual((self.checkout / "prototype/index.html").read_text(), "Preserved local changes")
         finally:
             process.terminate()

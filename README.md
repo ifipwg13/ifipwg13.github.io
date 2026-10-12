@@ -75,7 +75,7 @@ restart the preview server:
 
    ```sh
    cd "$(git rev-parse --show-toplevel)" &&
-   git fetch origin prototype/meeting-management &&
+   git fetch origin refs/heads/prototype/meeting-management:refs/remotes/origin/prototype/meeting-management &&
    meeting_preview_script="$(mktemp /tmp/meeting-preview.XXXXXX.py)" &&
    git show origin/prototype/meeting-management:scripts/preview_server.py > "$meeting_preview_script" &&
    python3 "$meeting_preview_script" --repository "$PWD" --port 8001
