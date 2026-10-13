@@ -48,23 +48,13 @@ include a free Codespaces allowance. Stop the codespace at
 <https://github.com/codespaces> when finished; delete it after testing to release
 storage. No local software installation is needed.
 
-## Current activation state
+## Using the prototype
 
-The private configuration PR was merged after approval. The `registration`,
-`talk`, and `meeting:demo-001` labels now exist, and the demo registration Issue is
-open. The public PR remains unmerged; public `main` and Pages settings are unchanged.
+Member and organizer instructions are in the
+[private repository README](https://github.com/ifipwg13/meetings/blob/main/README.md),
+which requires repository access.
 
-- The participants button opens the demo meeting's exact registration Issue:
-  <https://github.com/ifipwg13/meetings/issues/2>.
-- The proposal list includes both open and closed Issues for this meeting.
-- The submission form is on the private repository's default branch and its
-  labels exist. Actual Read-role label assignment, field validation, and usability
-  remain live test cases; they have not been recorded as passed.
-- An account without private repository access cannot use these GitHub links.
-
-The public preview can now link to the activated private demo. See the private
-repository's `ADMINISTRATION.md` and `TESTING.md` for the two-account test procedure.
-All test proposals should remain fictitious and private.
+## Update an existing preview
 
 If an existing preview shows old meetings or loses its styling, update and
 restart the preview server:
@@ -93,77 +83,26 @@ without a final slash redirect to their correct directory URL. HTML, styling,
 redirects, and errors all instruct browsers not to cache preview responses. A
 GitHub or stylesheet failure shows an error rather than an old or unstyled page.
 
-For each subsequent meeting, wait for the **Meeting prepared** comment on its
-request Issue, then refresh Firefox. No further `git pull` is needed to display
+After meeting updates, refresh Firefox. No further `git pull` is needed to display
 new meetings or activate their talk buttons. The server must stay running and
 the Codespace must be able to reach GitHub. If an update fails, the preview shows
 an error rather than silently displaying an old meeting list.
 
-## Files and future meetings
+## Prototype files
 
 `prototype/index.html` lists meetings. Each event has its own directory under
 `prototype/meetings/`; `prototype/assets/style.css` supplies the shared styling.
 Links within the site are relative, so they work in the Codespaces preview and
 under `/prototype/` on a future Pages deployment.
 
-The meeting list now includes **Create meeting** for administrators. It opens
-a private GitHub form, like the talk-submission button. The form and automation
-are active; its configured Actions credential has successfully prepared the
-second meeting and enabled its talk button after an approved private setup merge.
+Cards are ordered by start date, latest first. Dates are displayed as DD-MM-YYYY,
+including multi-day ranges. The `generated-meetings` markers reserve the list
+area for generated updates; the rest of the index is preserved.
 
-The administrator enters fictitious meeting details once. The generator adds
-registration instructions to that same Issue and a meeting label, prepares a
-private talk-form PR, and adds the page and list entry to this existing draft PR
-branch. Talk submission is enabled
-after an approved private setup merge. No HTML editing or Codespaces session is
-needed to submit a meeting request. With the preview server above, refreshing
-Firefox fetches generated updates. The older plain Python file server continues
-to require manual pulls; restart it with the new command once.
-
-The `generated-meetings` markers in the index reserve the generated list area.
-Cards are ordered by start date, latest first; equal dates use the larger existing
-meeting counter first. The original demo card is in this same region so it follows
-the order. Its confirmed metadata is retained privately and its card/page are
-synchronized like subsequent meetings, preserving its original private links. Other index
-content is preserved. Future generated updates and retries retain this order.
-Only confirmed public meeting metadata and generic private links are exported.
-
-The draft preview displays dates as DD-MM-YYYY, including the start and end
-of multi-day meetings. The activated private form/workflow simplifies
-meeting creation to one name in GitHub's **Title** field and accepts DD-MM-YYYY
-input. Registration titles and talk-form prefixes use `[meeting N] `; talk
-prefixes remain editable by their authors. Existing IDs, labels, and private
-destinations are retained. GitHub's Cancel behavior and the new-tab links are
-unchanged; no custom meeting form or redirect is introduced.
-
-The current Create meeting form has no timezone field or public-preview checkbox.
-New meetings use Berlin/Rome local time, including daylight saving. Earlier
-explicit timezone answers remain compatible on retries. On each activated meeting
-page, **Add talk** opens its meeting-specific private GitHub form. Bologna's
-previously pending private setup has now been merged, enabling its talk form.
-
-Never copy attendance or proposal contents into public files, commits, pull
-request descriptions, or logs. Read the private repository's `ADMINISTRATION.md`
-and `AUTOMATION.md` for activation and the administrator's form procedure.
-
-## Archive and hide
-
-On a meeting card or page, expand **Manage meeting — organizers**. **Archive
-meeting** opens the existing private registration Issue: the administrator
-confirms by clicking **Close issue**. **Hide meeting** opens that same Issue:
-the administrator selects **hidden** in its **Labels** menu. Wait for Actions
-to succeed, then refresh the preview. Clicking a preview button alone does not
-change the meeting. No extra operation Issue or browser credential is needed.
-
-Archived meetings remain visible with an **Archived** notice and links to retained
-private records. Hidden meetings have neither a current card nor a page; their
-private registration and proposals remain available to invited members. There
-is no Delete button. Read-role members cannot complete these administrator actions.
-
-Successful setup and visibility changes reconcile all meetings, including pending
-private setups, in start-date order. An administrator can repair the complete list
-using **Actions → Prepare meeting → Run workflow** in the private repository.
-The public preview remains plain HTML/CSS and uses no private API in the browser.
+The private README explains how to create, archive, hide, and restore meetings.
+Only meeting metadata and generic private links belong in public files. Never
+copy attendance, proposal contents, comments, or identities into public files,
+commits, or PR descriptions.
 
 GitHub Pages currently publishes `main` from the repository root. Keep this
 pull request unmerged throughout initial testing, including second-meeting tests.
