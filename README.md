@@ -136,6 +136,12 @@ prefixes remain editable by their authors. Existing IDs, labels, and private
 destinations are retained. GitHub's Cancel behavior and the new-tab links are
 unchanged; no custom meeting form or redirect is introduced.
 
+The current Create meeting form has no timezone field or public-preview checkbox.
+New meetings use Berlin/Rome local time, including daylight saving. Earlier
+explicit timezone answers remain compatible on retries. On each activated meeting
+page, **Add talk** opens its meeting-specific private GitHub form. Bologna's
+previously pending private setup has now been merged, enabling its talk form.
+
 Never copy attendance or proposal contents into public files, commits, pull
 request descriptions, or logs. Read the private repository's `ADMINISTRATION.md`
 and `AUTOMATION.md` for activation and the administrator's form procedure.
