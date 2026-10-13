@@ -1,8 +1,8 @@
-# Meeting Management Prototype
+# Meetings website
 
-A small experiment in managing meeting registration and talk proposals with
-GitHub. All event details are fictitious. This is not an official working-group
-website and contains no migrated content.
+A plain HTML/CSS website listing meeting details and related talk Issues.
+Registration and discussion use the private GitHub repository. No content from
+the existing group website has been migrated.
 
 The prototype uses plain HTML and CSS, with no dependencies or build step.
 Private participation and proposal records belong exclusively in the private
@@ -95,8 +95,11 @@ an error rather than silently displaying an old meeting list.
 Links within the site are relative, so they work in the Codespaces preview and
 under `/prototype/` on a future Pages deployment.
 
-Cards are ordered by start date, latest first. Dates are displayed as DD-MM-YYYY,
-including multi-day ranges. The `generated-meetings` markers reserve the list
+Cards are ordered by start date, latest first. **When:** shows DD-MM-YYYY dates
+or date ranges, **Where:** shows the location, and descriptions remain unlabeled
+paragraphs. Hours and timezones are not displayed. Matching talk Issues appear
+on the cards and meeting pages as Issue numbers and links; talk contents and
+account identities remain private. The `generated-meetings` markers reserve the list
 area for generated updates; the rest of the index is preserved.
 
 The private README explains how to create, archive, hide, and restore meetings.

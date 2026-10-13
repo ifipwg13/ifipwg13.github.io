@@ -39,9 +39,12 @@ a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .button-secondary { background: #fff; color: #174f87; }
 .button-secondary:hover { background: #edf3fa; }
 .actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-block: 1rem; }
-.meeting-details { display: grid; grid-template-columns: 6rem 1fr; gap: .5rem 1rem; }
-.meeting-details dt { font-weight: 600; }
-.meeting-details dd { margin: 0; }
+.talks-overview { margin-block: 1rem; }
+.talks-overview summary { cursor: pointer; font-weight: 600; }
+.talks-overview summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
+.talk-list { padding-left: 1.5rem; }
+.talk-list li + li { margin-top: .5rem; }
+.talk-abstract { white-space: pre-wrap; }
 .help { color: #46566a; }
 .organizer-controls { margin-top: 1rem; border-top: 1px solid #d6dee8; padding-top: .75rem; }
 .organizer-controls summary { cursor: pointer; font-weight: 600; }
@@ -54,8 +57,6 @@ a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 
 @media (max-width: 35rem) {
   .container { padding: 1rem; }
-  .meeting-details { grid-template-columns: 1fr; gap: .15rem; }
-  .meeting-details dd { margin-bottom: .75rem; }
   .actions { flex-direction: column; align-items: stretch; }
 }
 
