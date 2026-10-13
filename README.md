@@ -5,8 +5,8 @@ Registration and discussion use the private GitHub repository. No content from
 the existing group website has been migrated.
 
 The prototype uses plain HTML and CSS, with no dependencies or build step.
-Private participation and proposal records belong exclusively in the private
-`ifipwg13/meetings` repository.
+Participation, abstracts, and discussion belong in the private `ifipwg13/meetings`
+repository. The website displays each talk's title and entered author names.
 
 ## Preview in Firefox without publishing
 
@@ -98,13 +98,15 @@ under `/prototype/` on a future Pages deployment.
 Cards are ordered by start date, latest first. **When:** shows DD-MM-YYYY dates
 or date ranges, **Where:** shows the location, and descriptions remain unlabeled
 paragraphs. Hours and timezones are not displayed. Matching talk Issues appear
-on the cards and meeting pages as Issue numbers and links; talk contents and
-account identities remain private. The `generated-meetings` markers reserve the list
+on the cards and meeting pages as **title by authors**, with the title linking to
+its private Issue. Automatic meeting prefixes and Issue-number labels are omitted.
+Abstracts, comments, registration accounts, and other private content remain private.
+The `generated-meetings` markers reserve the list
 area for generated updates; the rest of the index is preserved.
 
 The private README explains how to create, archive, hide, and restore meetings.
-Only meeting metadata and generic private links belong in public files. Never
-copy attendance, proposal contents, comments, or identities into public files,
+Meeting metadata, talk titles, and entered authors belong in public files. Never
+copy attendance, abstracts, comments, or GitHub account identities into public files,
 commits, or PR descriptions.
 
 GitHub Pages currently publishes `main` from the repository root. Keep this

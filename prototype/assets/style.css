@@ -44,7 +44,6 @@ a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .talks-overview summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .talk-list { padding-left: 1.5rem; }
 .talk-list li + li { margin-top: .5rem; }
-.talk-abstract { white-space: pre-wrap; }
 .help { color: #46566a; }
 .organizer-controls { margin-top: 1rem; border-top: 1px solid #d6dee8; padding-top: .75rem; }
 .organizer-controls summary { cursor: pointer; font-weight: 600; }
