@@ -284,6 +284,29 @@ class PreviewTests(unittest.TestCase):
         with self.assertRaisesRegex(p.PreviewError, "original origin"):
             p.GitSource(self.checkout)
 
+    def test_selected_feature_branch_is_previewed_without_merging_the_prototype(self):
+        prototype = git(self.remote, "rev-parse", p.BRANCH)
+        main = git(self.remote, "rev-parse", "main")
+        git(self.remote, "switch", "-c", "feature/review")
+        (self.remote / "prototype/index.html").write_text(meeting_page("Review feature"))
+        git(self.remote, "add", "prototype/index.html")
+        git(self.remote, "commit", "-m", "Unmerged review feature")
+        self.source = p.GitSource(self.checkout, branch="feature/review")
+        server = self.server()
+        status, headers, content = self.request(server)
+        self.assertEqual(status, 200)
+        self.assertIn(b"Review feature", content)
+        self.assertEqual(headers["X-Preview-Revision"], git(self.remote, "rev-parse", "feature/review").decode().strip())
+        self.assertEqual(git(self.remote, "rev-parse", p.BRANCH), prototype)
+        self.assertEqual(git(self.remote, "rev-parse", "main"), main)
+        default = p.GitSource(self.checkout)
+        self.assertIn(b"First meeting", default.page("prototype/index.html")[0])
+
+    def test_invalid_review_branch_names_are_rejected(self):
+        for branch in ["-main", "../main", "main:refs/heads/main", "feature/../main", "main\nprivate", "feature/"]:
+            with self.subTest(branch=branch), self.assertRaises(p.PreviewError):
+                p.GitSource(self.checkout, branch=branch)
+
 
 if __name__ == "__main__":
     unittest.main()

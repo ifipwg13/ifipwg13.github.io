@@ -25,6 +25,7 @@ a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .meeting-card + .meeting-card { margin-top: 1rem; }
 .meeting-card h3 { margin-top: .25rem; }
 .button {
+  font: inherit;
   display: inline-block;
   background: #174f87;
   color: #fff;
@@ -38,16 +39,26 @@ a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .button:hover { background: #113c68; text-decoration: underline; }
 .button-secondary { background: #fff; color: #174f87; }
 .button-secondary:hover { background: #edf3fa; }
+.button:disabled, .button:disabled:hover {
+  color: #64748b;
+  background: #f4f7fa;
+  border-color: #cbd5e1;
+  cursor: not-allowed;
+  text-decoration: none;
+}
 .actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-block: 1rem; }
 .talks-overview { margin-block: 1rem; }
 .talks-overview summary { cursor: pointer; font-weight: 600; }
 .talks-overview summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .talk-list { padding-left: 1.5rem; }
 .talk-list li + li { margin-top: .5rem; }
+.talk-abstract { margin-top: .5rem; }
+.talk-abstract summary { cursor: pointer; font-weight: 600; }
+.talk-abstract summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
+.abstract-text { white-space: pre-wrap; margin-top: .5rem; }
+.talk-hide { font-size: .9rem; }
 .help { color: #46566a; }
 .organizer-controls { margin-top: 1rem; border-top: 1px solid #d6dee8; padding-top: .75rem; }
-.organizer-controls summary { cursor: pointer; font-weight: 600; }
-.organizer-controls summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .instructions { padding-left: 1.5rem; }
 .instructions li { margin-block: .75rem; }
 .site-footer { border-top: 1px solid #d6dee8; color: #46566a; font-size: .9rem; }

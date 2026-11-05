@@ -5,8 +5,8 @@ Registration and discussion use the private GitHub repository. No content from
 the existing group website has been migrated.
 
 The prototype uses plain HTML and CSS, with no dependencies or build step.
-Participation, abstracts, and discussion belong in the private `ifipwg13/meetings`
-repository. The website displays each talk's title and entered author names.
+Participation and discussion belong in the private `ifipwg13/meetings` repository.
+The website displays each talk's title, entered authors, and expandable abstract.
 
 ## Preview in Firefox without publishing
 
@@ -100,14 +100,57 @@ or date ranges, **Where:** shows the location, and descriptions remain unlabeled
 paragraphs. Hours and timezones are not displayed. Matching talk Issues appear
 on the cards and meeting pages as **title by authors**, with the title linking to
 its private Issue. Automatic meeting prefixes and Issue-number labels are omitted.
-Abstracts, comments, registration accounts, and other private content remain private.
+Each meeting page shows an initially collapsed **Abstract** disclosure under its
+talks. Abstracts are escaped text with paragraph breaks; index cards omit them.
+Comments, registration accounts, and unrelated private content remain private.
+Talks labeled `talk-hidden` are omitted completely, including their links. Meeting
+Hide takes precedence over talk visibility. Closed talks retain a closed marker;
+archived talks remain synchronized, with late submissions excluded by the private
+archive cutoff. Hide/restore preserves individual talk settings.
 The `generated-meetings` markers reserve the list
 area for generated updates; the rest of the index is preserved.
 
 The private README explains how to create, archive, hide, and restore meetings.
-Meeting metadata, talk titles, and entered authors belong in public files. Never
-copy attendance, abstracts, comments, or GitHub account identities into public files,
+Meeting metadata, talk titles, entered authors, and abstracts belong in public files. Never
+copy attendance, comments, unrelated Issue sections, or GitHub account identities into public files,
 commits, or PR descriptions.
+
+Hiding removes current listings, not previously published Git history, earlier
+artifacts, external caches, screenshots, or downloaded copies. The private Issue
+and its discussion remain retained. Administrator instructions are in the private
+README; ordinary members retain Read access and cannot manage visibility labels.
+
+Meeting pages place **View participants and register | Add talk | Archive | Hide**
+in a single responsive group. These links remain visible on the static site;
+GitHub enforces private-repository access and administrative permissions. Active
+members need Read access or higher; Archive/Hide require Admin under the current
+Admin/Read role model. Archived pages disable Add talk and Archive, retain a
+registration-record link, and allow Hide. Hidden meetings have no public page.
+A talk's Hide shortcut opens its private Issue; Admins apply/remove `talk-hidden`
+there. Show is managed privately so hidden talks have no identifying placeholder.
+
+## Preview this feature draft
+
+In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C,
+then run:
+
+```sh
+python3 scripts/preview_server.py --branch feature/public-talk-abstracts-visibility --port 8001
+```
+
+Open port **8001** using **Ports → Open in Browser**. Firefox displays the review
+branch and refreshes it from GitHub, with HTML and styling from the same commit.
+This optional branch selection leaves the existing prototype preview default
+unchanged. Generated pages in this feature draft are a review snapshot. Real
+event synchronization requires the separately approved private implementation
+merge; the workflow always runs trusted private `main`. No PR is merged or Pages
+website published by starting a preview.
+
+The public feature PR targets the existing prototype branch. Public website PR
+#1 stays draft and unmerged. After both feature PRs are separately approved and
+integrated (private code to `main`, public feature to the prototype branch), use
+the normal preview command without `--branch` for real event synchronization.
+The isolated feature branch remains a review snapshot until it is updated again.
 
 GitHub Pages currently publishes `main` from the repository root. Keep this
 pull request unmerged throughout initial testing, including second-meeting tests.
