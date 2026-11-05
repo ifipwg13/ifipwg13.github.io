@@ -70,7 +70,7 @@ def styled_preview(content, stylesheet, revision):
 
 
 class GitSource:
-    def __init__(self, repository, interval=2):
+    def __init__(self, repository, interval=2, branch=BRANCH):
         self.repository = Path(repository)
         self.interval = interval
         self.last_fetch = None
@@ -82,6 +82,14 @@ class GitSource:
         ssh_repo = remote in {"git@github.com:" + REPOSITORY, "git@github.com:" + REPOSITORY + ".git"}
         if not (https_repo or ssh_repo):
             raise PreviewError("Run this preview from the ifipwg13/ifipwg13.github.io repository with its original origin remote.")
+        if not isinstance(branch, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", branch):
+            raise PreviewError("Choose a valid public Git branch for the preview.")
+        try:
+            self.git("check-ref-format", "refs/heads/" + branch)
+        except PreviewError:
+            raise PreviewError("Choose a valid public Git branch for the preview.") from None
+        self.branch = branch
+        self.ref = "refs/remotes/origin/" + branch
 
     def git(self, *args, missing_ok=False):
         try:
@@ -99,8 +107,8 @@ class GitSource:
     def latest(self, force=False):
         with self.lock:
             if force or self.last_fetch is None or time.monotonic() - self.last_fetch >= self.interval:
-                self.git("fetch", "--quiet", "origin", f"refs/heads/{BRANCH}:{REF}")
-                commit = self.git("rev-parse", "--verify", REF).decode().strip()
+                self.git("fetch", "--quiet", "origin", f"refs/heads/{self.branch}:{self.ref}")
+                commit = self.git("rev-parse", "--verify", self.ref).decode().strip()
                 if not re.fullmatch(r"[0-9a-f]{40,64}", commit):
                     raise PreviewError("The prototype branch could not be read. Refresh again.")
                 self.commit = commit
@@ -182,10 +190,11 @@ def make_server(source, host="0.0.0.0", port=8001):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8001)
+    parser.add_argument("--branch", default=BRANCH, help="Public branch to preview; defaults to the existing prototype draft.")
     parser.add_argument("--repository", type=Path, default=Path(__file__).resolve().parents[1])
     args = parser.parse_args()
     try:
-        source = GitSource(args.repository)
+        source = GitSource(args.repository, branch=args.branch)
         source.latest()
         with make_server(source, port=args.port) as server:
             print(f"LIVE PREVIEW on port {server.server_port}. Open this port from Codespaces Ports. "
