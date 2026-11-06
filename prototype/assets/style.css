@@ -70,7 +70,7 @@ a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .talk-title, .talk-authors { color: var(--link); text-decoration: underline; text-underline-offset: .18em; }
 span.talk-title, span.talk-authors { cursor: text; }
 .talk-abstract { display: inline; }
-.talk-abstract > summary { display: inline; white-space: nowrap; cursor: pointer; color: var(--link); font-weight: 600; }
+.talk-abstract > summary { display: inline; margin-inline-start: .25rem; white-space: nowrap; cursor: pointer; color: var(--link); font-weight: 600; }
 .talk-abstract > summary::before { content: "▸ "; }
 .talk-abstract[open] > summary::before { content: "▾ "; }
 .talk-abstract summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
