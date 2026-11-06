@@ -33,9 +33,11 @@ def validate(records):
         if not isinstance(record['talks'], list):
             raise ValueError('Talks must be a list.')
         for talk in record['talks']:
-            if not isinstance(talk, dict) or set(talk) != {'title', 'abstract'}:
-                raise ValueError('Only talk titles and abstracts are allowed.')
-            if not isinstance(talk['title'], str) or not talk['title'].strip() or not isinstance(talk['abstract'], str):
+            if not isinstance(talk, dict) or set(talk) != {'title', 'authors', 'abstract'}:
+                raise ValueError('Only talk titles, authors, and abstracts are allowed.')
+            if (not isinstance(talk['title'], str) or not talk['title'].strip()
+                    or not isinstance(talk['authors'], str) or not talk['authors'].strip()
+                    or not isinstance(talk['abstract'], str)):
                 raise ValueError('Invalid talk content.')
         key = meeting_key(record)
         if key in identifiers:
@@ -58,14 +60,14 @@ def schedule(record):
     return result
 
 
-def talks_html(record, detail=False):
+def talks_html(record):
     if not record['talks']:
         return ''
     rows = []
     for number, talk in enumerate(record['talks'], 1):
         ident = meeting_key(record) + '-talk-' + str(number)
-        target = '#' + ident if detail else 'legacy-meetings/' + meeting_key(record) + '/#' + ident
-        content = '<a href="' + target + '">' + html.escape(talk['title']) + '</a>'
+        content = ('<span class="talk-title">' + html.escape(talk['title']) + '</span> by '
+                   '<span class="talk-authors">' + html.escape(talk['authors']) + '</span>')
         if talk['abstract']:
             escaped = html.escape(talk['abstract'])
             escaped = re.sub(r'[ \t]+$', lambda match: ''.join('&#32;' if c == ' ' else '&#9;' for c in match[0]), escaped, flags=re.MULTILINE)
@@ -93,7 +95,7 @@ def card(record):
 
 
 def page(record):
-    talks = talks_html(record, detail=True)
+    talks = talks_html(record)
     section = '<section aria-labelledby="talks-heading"><h2 id="talks-heading">Talks</h2>' + talks + '</section>' if talks else ''
     result = f'''<!doctype html>
 {GENERATED}

@@ -47,7 +47,7 @@ class BrowserTests(unittest.TestCase):
         cls.records = json.loads((ROOT / 'prototype/data/legacy-meetings.json').read_text())
         cls.sorter = (ROOT / 'prototype/assets/meetings-list.js').read_text()
         cls.static = http.server.ThreadingHTTPServer(('127.0.0.1', 0),
-            functools.partial(QuietFiles, directory=str(ROOT / 'prototype')))
+            functools.partial(QuietFiles, directory=str(ROOT)))
         cls.preview = p.make_server(LocalSource(), host='127.0.0.1', port=0)
         for server in (cls.static, cls.preview):
             threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -77,9 +77,46 @@ class BrowserTests(unittest.TestCase):
         self.page = self.context.new_page()
         self.page.on('pageerror', lambda error: self.errors.append(str(error)))
 
-    def open(self, server, path='/'):
+    def open(self, server, path='/prototype/'):
         response = self.page.goto(f'http://127.0.0.1:{server.server_port}' + path)
         self.assertEqual(response.status, 200)
+
+    def test_home_members_meetings_and_detail_navigation_match_static_hosting(self):
+        for server in (self.static, self.preview):
+            base = f'http://127.0.0.1:{server.server_port}'
+            for width in (1100, 375, 320):
+                with self.subTest(preview=server is self.preview, width=width):
+                    self.page.set_viewport_size({'width': width, 'height': 950})
+                    self.open(server, '/')
+                    self.assertEqual(self.page.locator('h1').inner_text(), 'Foundations of System Specification')
+                    self.assertEqual(self.page.locator('.affiliation').inner_text(), 'An IFIP TC1 Working Group')
+                    nav = self.page.get_by_role('navigation', name='Main navigation')
+                    self.assertEqual(nav.get_by_role('link').all_text_contents(), ['Home', 'Members', 'Meetings'])
+                    self.assertEqual(nav.locator('a').evaluate_all('links => links.map(a => a.pathname)'), ['/', '/members/', '/prototype/'])
+                    self.assertEqual(nav.locator('[aria-current="page"]').inner_text(), 'Home')
+                    colors = self.page.locator('h1').evaluate('node => [getComputedStyle(node).color, getComputedStyle(document.body).color]')
+                    self.no_overflow()
+                    nav.get_by_role('link', name='Members', exact=True).click()
+                    self.assertEqual(self.page.url, base + '/members/')
+                    self.assertEqual(self.page.locator('#members-heading').inner_text(), 'Members')
+                    self.assertEqual(self.page.locator('#emeriti-heading').inner_text(), 'Emeriti')
+                    self.assertEqual(self.page.locator('[aria-labelledby="members-heading"] li').count(), 34)
+                    self.assertEqual(self.page.locator('[aria-labelledby="emeriti-heading"] li').count(), 36)
+                    self.assertEqual(self.page.locator('.member-list a').count(), 0)
+                    self.assertEqual(self.page.get_by_text('Cirstea, Corina (UK) Secretary', exact=True).count(), 1)
+                    self.assertEqual(self.page.locator('h1').evaluate('node => [getComputedStyle(node).color, getComputedStyle(document.body).color]'), colors)
+                    self.no_overflow()
+                    self.page.get_by_role('navigation').get_by_role('link', name='Meetings', exact=True).click()
+                    self.assertEqual(self.page.url, base + '/prototype/')
+                    self.ordered_dates()
+                    self.page.locator('.meeting-card').first.locator(':scope > a.button').click()
+                    self.assertEqual(self.page.locator('h1').evaluate('node => [getComputedStyle(node).color, getComputedStyle(document.body).color]'), colors)
+                    self.page.get_by_role('link', name='All meetings', exact=True).click()
+                    self.assertEqual(self.page.url, base + '/prototype/')
+                    self.page.get_by_role('navigation').get_by_role('link', name='Home', exact=True).click()
+                    self.assertEqual(self.page.url, base + '/')
+        self.assertFalse(self.external)
+        self.assertFalse(self.errors)
 
     def ordered_dates(self):
         values = self.page.locator('section[aria-label="Meetings"] > article').evaluate_all(
@@ -147,7 +184,7 @@ class BrowserTests(unittest.TestCase):
         links = [card.locator(':scope > a.button').get_attribute('href') for card in cards.all()]
         for record, link in zip(self.records, links):
             with self.subTest(meeting=record['name']):
-                self.open(self.static, '/' + link)
+                self.open(self.static, '/prototype/' + link)
                 self.assertEqual(self.page.locator('h1').inner_text(), record['name'])
                 self.assertEqual(self.page.locator('.meeting-summary time').first.get_attribute('datetime'), record['start_date'])
                 self.assertEqual(self.page.locator('.meeting-summary time').last.get_attribute('datetime'), record['end_date'])
@@ -156,7 +193,9 @@ class BrowserTests(unittest.TestCase):
                 rows = self.page.locator('.talk-list > li')
                 self.assertEqual(rows.count(), len(record['talks']))
                 for row, talk in zip(rows.all(), record['talks']):
-                    self.assertEqual(row.locator(':scope > a').text_content(), talk['title'])
+                    self.assertEqual(row.locator('.talk-title').text_content(), talk['title'])
+                    self.assertEqual(row.locator('.talk-authors').text_content(), talk['authors'])
+                    self.assertEqual(row.locator('a').count(), 0)
                     disclosure = row.locator('.talk-abstract')
                     self.assertEqual(disclosure.count(), int(bool(talk['abstract'])))
                     if talk['abstract']:
@@ -187,14 +226,33 @@ class BrowserTests(unittest.TestCase):
             self.page.keyboard.press('Space')
             self.assertTrue(text.is_visible())
             self.no_overflow()
-            talk_link = overview.locator('.talk-list > li > a').first
-            target = talk_link.get_attribute('href')
-            talk_link.click()
-            self.assertTrue(self.page.url.endswith('/' + target))
-            self.assertEqual(self.page.locator('.talk-list > li').first.get_attribute('id'), target.split('#')[1])
+            self.assertEqual(overview.locator('.talk-list a').count(), 0)
+            view = card.locator(':scope > a.button')
+            target = view.get_attribute('href')
+            view.click()
+            self.assertTrue(self.page.url.endswith('/prototype/' + target))
+            self.assertEqual(self.page.locator('.talk-list > li .talk-authors').first.text_content(), self.records[0]['talks'][0]['authors'])
             self.no_overflow()
         self.assertFalse(self.external)
         self.assertFalse(self.errors)
+
+    def test_group_pages_and_legacy_abstracts_work_without_javascript(self):
+        context = self.browser.new_context(java_script_enabled=False, viewport={'width': 375, 'height': 950})
+        try:
+            page = context.new_page()
+            base = f'http://127.0.0.1:{self.static.server_port}'
+            self.assertEqual(page.goto(base + '/').status, 200)
+            page.get_by_role('navigation').get_by_role('link', name='Members', exact=True).click()
+            self.assertEqual(page.locator('.member-list > li').count(), 70)
+            page.get_by_role('navigation').get_by_role('link', name='Meetings', exact=True).click()
+            page.locator('.legacy-meeting-card').first.locator(':scope > a.button').click()
+            disclosure = page.locator('details.talk-abstract').first
+            self.assertFalse(disclosure.locator('.abstract-text').is_visible())
+            disclosure.locator('summary').click()
+            self.assertTrue(disclosure.locator('.abstract-text').is_visible())
+            self.assertEqual(page.locator('.talk-list > li .talk-authors').first.inner_text(), self.records[0]['talks'][0]['authors'])
+        finally:
+            context.close()
 
 
 if __name__ == '__main__':
