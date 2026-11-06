@@ -1,4 +1,4 @@
-"""Serve the latest public prototype branch without changing local files.
+"""Serve the latest public site branch without changing local files.
 
 Run: python3 scripts/preview_server.py
 Uses only Python and Git; never reads private Issues or publishes a website.
@@ -26,32 +26,44 @@ class PreviewError(Exception):
     pass
 
 
-def resource_path(url):
-    path = urllib.parse.unquote(urllib.parse.urlsplit(url).path)
+def url_path(url):
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme or parsed.netloc:
+        raise FileNotFoundError
+    path = urllib.parse.unquote(parsed.path)
     if not path.startswith("/") or path.startswith("//") or not re.fullmatch(r"/[A-Za-z0-9_./-]*", path):
         raise FileNotFoundError
     if any(part.startswith(".") for part in path.split("/") if part):
         raise FileNotFoundError
+    return path
+
+
+def resource_path(url):
+    path = url_path(url)
     if path.endswith("/"):
         path += "index.html"
-    if not path.endswith((".html", ".css")) and path != "/assets/meetings-list.js":
+    if path in {"/index.html", "/members/index.html"}:
+        return path.lstrip("/")
+    if not path.startswith("/prototype/"):
         raise FileNotFoundError
-    return "prototype/" + path.lstrip("/")
+    if not path.endswith((".html", ".css")) and path != "/prototype/assets/meetings-list.js":
+        raise FileNotFoundError
+    return path.lstrip("/")
 
 
 def canonical_url(url):
-    """Redirect the original file server's /prototype/ URLs to this server's root."""
-    path = urllib.parse.unquote(urllib.parse.urlsplit(url).path)
-    # Validate before issuing redirects, including encoded traversal and // hosts.
-    validation_path = path.removeprefix("/prototype") if path.startswith("/prototype/") else path
-    resource_path(validation_path + "/" if not validation_path.endswith(("/", ".html", ".css", ".js")) else validation_path)
+    """Match static-site URLs and retain old preview links as redirects."""
+    path = url_path(url)
     canonical = path
-    if path == "/prototype":
-        canonical = "/"
-    elif path.startswith("/prototype/"):
-        canonical = path.removeprefix("/prototype")
-    if re.fullmatch(r"/(?:meetings/(?:demo-001|meeting-[1-9][0-9]*)|legacy-meetings/legacy-[0-9]{8}-[0-9a-f]{12})", canonical):
+    if path in {"/members", "/prototype"}:
         canonical += "/"
+    elif path in {"/meetings", "/meetings/"}:
+        canonical = "/prototype/"
+    elif path.startswith(("/meetings/", "/legacy-meetings/", "/assets/")):
+        canonical = "/prototype" + path
+    if re.fullmatch(r"/prototype/(?:meetings/(?:demo-001|meeting-[1-9][0-9]*)|legacy-meetings/legacy-[0-9]{8}-[0-9a-f]{12})", canonical):
+        canonical += "/"
+    resource_path(canonical)
     return canonical if canonical != path else None
 
 
@@ -124,7 +136,7 @@ class GitSource:
 
     def read(self, path, revision=None):
         # Restrict reads even when called directly rather than by the HTTP handler.
-        if not path.startswith("prototype/") or resource_path("/" + path.removeprefix("prototype/")) != path:
+        if resource_path("/" + path) != path:
             raise FileNotFoundError
         revision = revision or self.latest(force=path.endswith('.html'))
         if not re.fullmatch(r"[0-9a-f]{40,64}", revision):
@@ -138,7 +150,7 @@ class GitSource:
         try:
             stylesheet = self.read("prototype/assets/style.css", revision)
         except FileNotFoundError:
-            raise PreviewError("The prototype stylesheet is missing from GitHub; the preview cannot display it correctly.") from None
+            raise PreviewError("The shared stylesheet is missing from GitHub; the preview cannot display it correctly.") from None
         javascript = None
         if LIST_SCRIPT.encode() in content:
             try:

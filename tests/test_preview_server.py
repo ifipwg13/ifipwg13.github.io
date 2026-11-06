@@ -42,6 +42,11 @@ class PreviewTests(unittest.TestCase):
         self.main = git(self.remote, "rev-parse", "main")
         git(self.remote, "switch", "-c", p.BRANCH)
         (self.remote / "prototype/assets").mkdir(parents=True)
+        (self.remote / "index.html").write_text(meeting_page("Group homepage", "prototype/assets/style.css"))
+        (self.remote / "members").mkdir()
+        (self.remote / "members/index.html").write_text(meeting_page("Group members", "../prototype/assets/style.css"))
+        (self.remote / "other-root.html").write_text("Restricted root file")
+        (self.remote / "members/private.html").write_text("Restricted member file")
         (self.remote / "prototype/index.html").write_text(meeting_page("First meeting"))
         (self.remote / "prototype/assets/style.css").write_text("h1 {color: navy}")
         (self.remote / "prototype-secret.html").write_text("Outside prototype")
@@ -78,7 +83,7 @@ class PreviewTests(unittest.TestCase):
         self.addCleanup(server.shutdown)
         return server
 
-    def request(self, server, path="/", method="GET"):
+    def request(self, server, path="/prototype/", method="GET"):
         connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=10)
         try:
             connection.request(method, path)
@@ -86,6 +91,38 @@ class PreviewTests(unittest.TestCase):
             return response.status, dict(response.getheaders()), response.read()
         finally:
             connection.close()
+
+    def documented_command(self, variable):
+        readme = (Path(p.__file__).resolve().parents[1] / "README.md").read_text()
+        blocks = re.findall(r"```sh\n(.*?)```", readme, flags=re.DOTALL)
+        command = textwrap.dedent(next(block for block in blocks if variable + "=" in block))
+        command = command.replace("--port 8001", "--port 0")
+        for prefix in ["meeting-preview.", "group-preview."]:
+            command = command.replace("/tmp/" + prefix, str(Path(self.directory.name) / prefix))
+        return command.replace('python3 "$' + variable + '"', 'exec python3 "$' + variable + '"')
+
+    def check_documented_server(self, command, expected):
+        process = subprocess.Popen(["bash", "-c", command], cwd=self.checkout,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            readable, _, _ = select.select([process.stdout], [], [], 20)
+            self.assertTrue(readable, "Preview did not start")
+            line = process.stdout.readline().decode()
+            match = re.search(r"LIVE PREVIEW on port ([0-9]+)", line)
+            self.assertIsNotNone(match, line)
+            connection = http.client.HTTPConnection("127.0.0.1", int(match[1]), timeout=10)
+            try:
+                connection.request("GET", "/")
+                response = connection.getresponse()
+                self.assertEqual(response.status, 200)
+                content = response.read()
+                self.assertIn(expected, content)
+                self.assertIn(b"Live preview", content)
+            finally:
+                connection.close()
+        finally:
+            process.terminate()
+            process.communicate(timeout=10)
 
     def test_refresh_fetches_new_commit_without_restart_pull_or_local_file_changes(self):
         server = self.server()
@@ -100,7 +137,7 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(updated[0], 200)
         self.assertIn(b"First and new meeting", updated[2])
         self.assertEqual(updated[1]["Cache-Control"], "no-store")
-        self.assertIn(b"New meeting", self.request(server, "/meetings/meeting-12/")[2])
+        self.assertIn(b"New meeting", self.request(server, "/prototype/meetings/meeting-12/")[2])
         self.assertEqual(git(self.checkout, "rev-parse", "HEAD"), head)
         self.assertEqual((self.checkout / "prototype/index.html").read_text(), "Local work in progress")
         self.assertEqual(git(self.remote, "rev-parse", "main"), self.main)
@@ -110,21 +147,35 @@ class PreviewTests(unittest.TestCase):
         server = self.server()
         for path in ["/README.md", "/../README.md", "/%2e%2e/prototype-secret.html", "/.git/config",
                      "/.hidden.html", "/%2ehidden.html", "/meetings/../../prototype-secret.html", "/assets/style.css%00",
-                     "/prototype-secret.html", "/anything.js", "/assets/other.js", "/data/legacy-meetings.json"]:
+                     "/prototype-secret.html", "/anything.js", "/assets/other.js", "/data/legacy-meetings.json",
+                     "/other-root.html", "/members/private.html", "/members/../index.html", "/prototype/data/legacy-meetings.json"]:
             with self.subTest(path=path):
                 status, _, content = self.request(server, path)
                 self.assertEqual(status, 404)
                 self.assertNotIn(b"Unrelated repository file", content)
                 self.assertNotIn(b"Outside prototype", content)
                 self.assertNotIn(b"Hidden", content)
+                self.assertNotIn(b"Restricted root file", content)
+                self.assertNotIn(b"Restricted member file", content)
         with self.assertRaises(FileNotFoundError):
             self.source.read("README.md")
         # Git returns a symlink's text; it cannot follow it outside the tree.
         self.assertEqual(self.source.read("prototype/link.html"), b"../README.md")
 
+    def test_direct_reads_cannot_bypass_the_root_allowlist(self):
+        for path in ['other-root.html', 'members/private.html', 'members/../index.html',
+                     '../index.html', 'prototype/../index.html', '/index.html',
+                     'prototype/.git/config.html']:
+            with self.subTest(path=path), self.assertRaises(FileNotFoundError):
+                self.source.read(path)
+        for path in ['//example.com/index.html', 'https://example.com/index.html',
+                     '/%2f%2fexample.com/index.html']:
+            with self.subTest(path=path), self.assertRaises(FileNotFoundError):
+                p.canonical_url(path)
+
     def test_head_stylesheet_and_query_string(self):
         server = self.server()
-        status, headers, content = self.request(server, "/assets/style.css")
+        status, headers, content = self.request(server, "/prototype/assets/style.css")
         self.assertEqual(status, 200)
         self.assertEqual(headers["Content-Type"], "text/css; charset=utf-8")
         self.assertIn(b"color: navy", content)
@@ -149,11 +200,12 @@ class PreviewTests(unittest.TestCase):
     def test_legacy_and_slashless_urls_redirect_to_a_styled_current_page(self):
         self.publish()
         server = self.server()
-        for old, new in [("/prototype", "/"), ("/prototype/", "/"),
-                         ("/prototype/index.html", "/index.html"),
-                         ("/prototype/assets/style.css", "/assets/style.css"),
-                         ("/prototype/meetings/meeting-12", "/meetings/meeting-12/"),
-                         ("/meetings/meeting-12", "/meetings/meeting-12/")]:
+        for old, new in [("/prototype", "/prototype/"), ("/members", "/members/"),
+                         ("/meetings", "/prototype/"), ("/meetings/", "/prototype/"),
+                         ("/assets/style.css", "/prototype/assets/style.css"),
+                         ("/prototype/meetings/meeting-12", "/prototype/meetings/meeting-12/"),
+                         ("/meetings/meeting-12", "/prototype/meetings/meeting-12/"),
+                         ("/meetings/meeting-12/", "/prototype/meetings/meeting-12/")]:
             with self.subTest(old=old):
                 status, headers, content = self.request(server, old)
                 self.assertEqual(status, 307)
@@ -167,6 +219,19 @@ class PreviewTests(unittest.TestCase):
                 else:
                     self.assertIn(b"Live preview", content)
                     self.assertIn(b"<style>", content)
+
+    def test_home_members_and_meetings_have_distinct_canonical_paths(self):
+        server = self.server()
+        for path, title in [("/", b"Group homepage"), ("/index.html", b"Group homepage"),
+                            ("/members/", b"Group members"), ("/members/index.html", b"Group members"),
+                            ("/prototype/", b"First meeting"), ("/prototype/index.html", b"First meeting")]:
+            with self.subTest(path=path):
+                status, headers, content = self.request(server, path)
+                self.assertEqual(status, 200)
+                self.assertIn(title, content)
+                self.assertIn(b"<style>", content)
+                self.assertEqual(headers['Cache-Control'], 'no-store')
+                self.assertNotIn('Location', headers)
 
     def test_html_style_and_sorter_use_the_same_revision_during_a_concurrent_update(self):
         self.publish_sorter()
@@ -211,13 +276,13 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b'<script>\nconst revision = "first";\n</script>', content)
         self.assertNotIn(p.LIST_SCRIPT.encode(), content)
-        status, headers, content = self.request(server, "/assets/meetings-list.js")
+        status, headers, content = self.request(server, "/prototype/assets/meetings-list.js")
         self.assertEqual(status, 200)
         self.assertEqual(headers["Content-Type"], "text/javascript; charset=utf-8")
         self.assertEqual(content, b'const revision = "first";')
-        status, headers, _ = self.request(server, "/prototype/assets/meetings-list.js")
+        status, headers, _ = self.request(server, "/assets/meetings-list.js")
         self.assertEqual(status, 307)
-        self.assertEqual(headers["Location"], "/assets/meetings-list.js")
+        self.assertEqual(headers["Location"], "/prototype/assets/meetings-list.js")
 
     def test_missing_sorter_returns_an_uncached_error_instead_of_unsorted_meetings(self):
         self.publish_sorter()
@@ -242,8 +307,8 @@ class PreviewTests(unittest.TestCase):
         for url in (path, "/prototype" + path):
             status, headers, _ = self.request(server, url)
             self.assertEqual(status, 307)
-            self.assertEqual(headers["Location"], path + "/")
-        status, _, content = self.request(server, path + "/")
+            self.assertEqual(headers["Location"], '/prototype' + path + "/")
+        status, _, content = self.request(server, '/prototype' + path + "/")
         self.assertEqual(status, 200)
         self.assertIn(b"Historical meeting", content)
         self.assertIn(b"color: navy", content)
@@ -292,39 +357,29 @@ class PreviewTests(unittest.TestCase):
         self.assertNotEqual(initial, latest)
         git(self.checkout, "fetch", "origin", p.BRANCH)
         self.assertEqual(git(self.checkout, "rev-parse", "origin/" + p.BRANCH), initial)
-        readme = (Path(p.__file__).resolve().parents[1] / "README.md").read_text()
-        blocks = re.findall(r"```sh\n(.*?)```", readme, flags=re.DOTALL)
-        command = textwrap.dedent(next(block for block in blocks if "meeting_preview_script=" in block))
-        command = command.replace("--port 8001", "--port 0")
-        command = command.replace("/tmp/meeting-preview.", str(Path(self.directory.name) / "meeting-preview."))
         (self.checkout / "prototype/index.html").write_text("Preserved local changes")
         head = git(self.checkout, "rev-parse", "HEAD")
-        # exec keeps the server as this process, so teardown cannot orphan it.
-        command = command.replace('python3 "$meeting_preview_script"', 'exec python3 "$meeting_preview_script"')
-        process = subprocess.Popen(["bash", "-c", command], cwd=self.checkout,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        try:
-            readable, _, _ = select.select([process.stdout], [], [], 20)
-            self.assertTrue(readable, "Preview did not start")
-            line = process.stdout.readline().decode()
-            match = re.search(r"LIVE PREVIEW on port ([0-9]+)", line)
-            self.assertIsNotNone(match, line)
-            connection = http.client.HTTPConnection("127.0.0.1", int(match[1]), timeout=10)
-            try:
-                connection.request("GET", "/")
-                response = connection.getresponse()
-                self.assertEqual(response.status, 200)
-                content = response.read()
-                self.assertIn(b"First meeting", content)
-                self.assertIn(b"Live preview", content)
-            finally:
-                connection.close()
-            self.assertEqual(git(self.checkout, "rev-parse", "HEAD"), head)
-            self.assertEqual(git(self.checkout, "rev-parse", "origin/" + p.BRANCH), latest)
-            self.assertEqual((self.checkout / "prototype/index.html").read_text(), "Preserved local changes")
-        finally:
-            process.terminate()
-            process.communicate(timeout=10)
+        self.check_documented_server(self.documented_command('meeting_preview_script'), b"Group homepage")
+        self.assertEqual(git(self.checkout, "rev-parse", "HEAD"), head)
+        self.assertEqual(git(self.checkout, "rev-parse", "origin/" + p.BRANCH), latest)
+        self.assertEqual((self.checkout / "prototype/index.html").read_text(), "Preserved local changes")
+
+    def test_existing_codespace_review_command_selects_the_feature_without_altering_local_work(self):
+        prototype = git(self.remote, "rev-parse", p.BRANCH)
+        git(self.remote, "switch", "-c", "feature/group-home-members-presenters")
+        (self.remote / "index.html").write_text(meeting_page("Review group homepage", "prototype/assets/style.css"))
+        (self.remote / "scripts").mkdir()
+        (self.remote / "scripts/preview_server.py").write_text(Path(p.__file__).read_text())
+        git(self.remote, "add", ".")
+        git(self.remote, "commit", "-m", "Review-only group homepage")
+        git(self.checkout, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main")
+        (self.checkout / "index.html").write_text("Preserved local homepage")
+        head = git(self.checkout, "rev-parse", "HEAD")
+        self.check_documented_server(self.documented_command('group_preview_script'), b"Review group homepage")
+        self.assertEqual(git(self.checkout, "rev-parse", "HEAD"), head)
+        self.assertEqual(git(self.remote, "rev-parse", p.BRANCH), prototype)
+        self.assertEqual(git(self.remote, "rev-parse", "main"), self.main)
+        self.assertEqual((self.checkout / "index.html").read_text(), "Preserved local homepage")
 
     def test_failed_update_does_not_silently_serve_stale_page_or_echo_git_output(self):
         server = self.server()

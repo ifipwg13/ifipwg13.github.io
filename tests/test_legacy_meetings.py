@@ -11,7 +11,8 @@ spec = importlib.util.spec_from_file_location('legacy_builder', ROOT / 'scripts/
 b = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(b)
 RECORD = {'name': 'Meeting in Example', 'start_date': '2016-03-31', 'end_date': '2016-04-01',
-          'location': 'Example room', 'talks': [{'title': 'A talk', 'abstract': 'First paragraph.\n\nSecond paragraph.'}]}
+          'location': 'Example room', 'talks': [{'title': 'A talk', 'authors': 'Example presenter',
+                                                'abstract': 'First paragraph.\n\nSecond paragraph.'}]}
 INDEX = '''<!doctype html><html><head><link rel="stylesheet" href="assets/style.css"></head><body>
 <section aria-label="Meetings"><!-- generated-meetings:start --><!-- generated-meetings:end --></section>
 </body></html>'''
@@ -23,7 +24,31 @@ class LegacyTests(unittest.TestCase):
         validated = b.validate(records)
         self.assertEqual(len(validated), 38)
         self.assertEqual(sum(len(r['talks']) for r in validated), 227)
-        self.assertEqual(sum(bool(t['abstract']) for r in validated for t in r['talks']), 196)
+        self.assertEqual(sum(bool(t['abstract']) for r in validated for t in r['talks']), 212)
+        self.assertTrue(all(t['authors'].strip() for r in validated for t in r['talks']))
+
+    def test_source_presenter_is_the_author_and_collaborators_stay_in_the_abstract(self):
+        records = json.loads((ROOT / 'prototype/data/legacy-meetings.json').read_text())
+        talks = [t for r in records for t in r['talks']]
+        talk = next(t for t in talks if t['title'] == 'Axiomatising relative entropy')
+        self.assertEqual(talk['authors'], 'Fabio Zanasi')
+        self.assertEqual(talk['abstract'], 'Based on https://arxiv.org/pdf/2603.04530\n\nJoint work with: Ralph Sarkis')
+        title_only = next(t for t in talks if t['title'] == 'A logic for abstract (hyper)properties')
+        self.assertEqual(title_only['authors'], 'Paolo Baldan')
+        self.assertEqual(title_only['abstract'], 'Joint work with: Roberto Bruni, Francesco Ranzato, Diletta Rigo')
+
+    def test_legacy_talks_are_plain_text_and_the_presenter_is_escaped(self):
+        record = copy.deepcopy(RECORD)
+        record['talks'][0]['authors'] = 'Name <script>unsafe</script>'
+        for source in [b.talks_html(record), b.card(record)]:
+            self.assertIn('by <span class="talk-authors">Name &lt;script&gt;unsafe&lt;/script&gt;</span>', source)
+            self.assertNotIn('<script>', source)
+        self.assertNotIn('<a ', b.talks_html(record))
+        self.assertNotIn('legacy-meetings/', b.talks_html(record))
+        for authors in ['', None, ['Example presenter']]:
+            record['talks'][0]['authors'] = authors
+            with self.subTest(authors=authors), self.assertRaises(ValueError):
+                b.validate([record])
 
     def test_extra_metadata_or_invented_fields_are_rejected(self):
         for key in ('source_url', 'coverage_notes', 'id', 'description', 'authors'):
@@ -112,6 +137,8 @@ class SynchronizerCompatibilityTests(unittest.TestCase):
         m.prepare(api,m.authorize(api,api.merge_setup(10),'pull_request_target'))
         files=api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)
         files['prototype/index.html']=b.update_index(files['prototype/index.html'],[RECORD])
+        site_pages = {path: (ROOT/path).read_text() for path in ['index.html','members/index.html']}
+        files.update(site_pages)
         legacy_path='prototype/legacy-meetings/'+b.meeting_key(RECORD)+'/index.html'
         files[legacy_path]=b.page(RECORD)
         expected=b.card(RECORD)
@@ -122,6 +149,8 @@ class SynchronizerCompatibilityTests(unittest.TestCase):
             files=api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)
             self.assertIn(expected,files['prototype/index.html'])
             self.assertEqual(files[legacy_path],b.page(RECORD))
+            for path, source in site_pages.items():
+                self.assertEqual(files[path], source)
             record={'id':'meeting-4','manifest':m.load_manifest(api,'meeting-4','main'),'status':'active','approved':True,
                     'talks':m.public_talks(api,'meeting-4'),'page':files['prototype/meetings/meeting-4/index.html']}
             self.assertEqual(contract.check_documents(files['prototype/index.html'],[record]),(1,1))
