@@ -1,10 +1,11 @@
 # Meetings website
 
-A plain HTML/CSS website listing meeting details and related talk Issues.
-Registration and discussion use the private GitHub repository. No content from
-the existing group website has been migrated.
+A static website listing meeting details and related talks.
+Registration and discussion use the private GitHub repository. Historical
+meetings use public-only content stored in this repository.
 
-The prototype uses plain HTML and CSS, with no dependencies or build step.
+The prototype uses plain HTML/CSS and a small local script to sort the list,
+with no runtime dependencies or external services.
 Participation and discussion belong in the private `ifipwg13/meetings` repository.
 The website displays each talk's title, entered authors, and expandable abstract.
 
@@ -28,16 +29,17 @@ The website displays each talk's title, entered authors, and expandable abstract
    globe icon. If the port is missing, choose **Add Port** and enter `8001`.
 6. The prototype opens in a new Firefox tab with a **Live preview** bar at the
    top. That bar confirms this is the server receiving GitHub updates. Choose **View meeting** to inspect
-   the fictitious event. Allow the popup if Firefox blocks the new tab.
+   a meeting. Allow the popup if Firefox blocks the new tab.
 
 Keep port visibility **Private**. This preview is separate from GitHub Pages:
 opening it does not merge the pull request or publish the website. The Python
-server serves only HTML and CSS from `prototype/` on the latest public PR branch,
-never the repository root or private records. It fetches the branch when a page
+server serves only HTML, CSS, and the meeting-list script from `prototype/` on
+the latest public PR branch, never the repository root or private records. It fetches the branch when a page
 is requested, so refreshing Firefox receives generated meeting updates without
 another terminal command. Your local files and branches are not changed.
-The server includes the stylesheet in each preview page, using the same Git
-version for both. Styling does not depend on a second browser request. The
+The server includes the stylesheet and list sorter in each preview page, using
+the same Git version for all three. Styling and sorting do not depend on a
+second browser request. The
 **Live preview** bar shows the retrieved version and time (Europe/Berlin).
 Port **8001** distinguishes this preview from an older server on port 8000.
 
@@ -92,6 +94,9 @@ an error rather than silently displaying an old meeting list.
 
 `prototype/index.html` lists meetings. Each event has its own directory under
 `prototype/meetings/`; `prototype/assets/style.css` supplies the shared styling.
+`prototype/assets/meetings-list.js` puts all cards in descending start-date order
+in the same list, including historical meetings interleaved with Issue-backed
+meetings. It moves existing elements without fetching data or duplicating cards.
 Links within the site are relative, so they work in the Codespaces preview and
 under `/prototype/` on a future Pages deployment.
 
@@ -100,15 +105,39 @@ or date ranges, **Where:** shows the location, and descriptions remain unlabeled
 paragraphs. Hours and timezones are not displayed. Matching talk Issues appear
 on the cards and meeting pages as **title by authors**, with the title linking to
 its private Issue. Automatic meeting prefixes and Issue-number labels are omitted.
-Each meeting page shows an initially collapsed **Abstract** disclosure under its
-talks. Abstracts are escaped text with paragraph breaks; index cards omit them.
+Each Issue-backed meeting page shows an initially collapsed **Abstract** disclosure
+under its talks. Abstracts are escaped text with paragraph breaks; Issue-backed
+index cards omit them.
 Comments, registration accounts, and unrelated private content remain private.
 Talks labeled `talk-hidden` are omitted completely, including their links. Meeting
 Hide takes precedence over talk visibility. Closed talks retain a closed marker;
 archived talks remain synchronized, with late submissions excluded by the private
 archive cutoff. Hide/restore preserves individual talk settings.
-The `generated-meetings` markers reserve the list
-area for generated updates; the rest of the index is preserved.
+The `generated-meetings` markers reserve the Issue-backed portion of the list
+for generated updates; the rest of the index is preserved. Card actions
+**View meeting | Archive | Hide** share a row when space permits and wrap on
+small screens.
+
+### Historical meeting content
+
+`prototype/data/legacy-meetings.json` contains only meeting names, start/end dates,
+locations, talk titles, and abstracts. It has no private-repository records or
+administrative state. Dates are stored as ISO dates and displayed as DD-MM-YYYY.
+The Python standard-library renderer writes static cards inside the same meeting
+list and detail pages under `prototype/legacy-meetings/`:
+
+```sh
+python3 scripts/build_legacy_meetings.py
+python3 scripts/build_legacy_meetings.py --check
+```
+
+The renderer preserves the `generated-meetings` region exactly. Its own
+`legacy-meetings` markers are ownership boundaries inside the same section,
+without a separate visible group. Historical cards use the same styling and
+provide **View meeting** and expandable talks/abstracts where present. They have
+no registration, submission, archive, hide, or talk-management controls. Native
+disclosures work without JavaScript. The list sorter only orders existing cards;
+historical pages make no requests to another website or private repository.
 
 The private README explains how to create, archive, hide, and restore meetings.
 Meeting metadata, talk titles, entered authors, and abstracts belong in public files. Never
@@ -135,16 +164,17 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/public-talk-abstracts-visibility --port 8001
+python3 scripts/preview_server.py --branch feature/legacy-meetings-unified-list --port 8001
 ```
 
 Open port **8001** using **Ports → Open in Browser**. Firefox displays the review
-branch and refreshes it from GitHub, with HTML and styling from the same commit.
+branch and refreshes it from GitHub, with HTML, styling, and the list sorter from
+the same commit.
 This optional branch selection leaves the existing prototype preview default
-unchanged. Generated pages in this feature draft are a review snapshot. Real
-event synchronization requires the separately approved private implementation
-merge; the workflow always runs trusted private `main`. No PR is merged or Pages
-website published by starting a preview.
+unchanged. Issue-backed pages in this feature draft are a review snapshot. The
+separate private reactivation fix runs only after approval and integration into
+trusted private `main`. Historical content and card layout are public-only changes.
+No PR is merged or Pages website published by starting a preview.
 
 The public feature PR targets the existing prototype branch. Public website PR
 #1 stays draft and unmerged. After both feature PRs are separately approved and
@@ -159,5 +189,15 @@ or Pages configuration is introduced here.
 
 The preview server uses the Git authentication already provided by Codespaces.
 It needs no extra token or secret and reads no private Issues. The static site
-remains plain HTML/CSS. To test preview synchronization without credentials or
-network access, run `python3 -m unittest discover -s tests -v`.
+remains HTML/CSS with the local list sorter. To test rendering and preview
+synchronization without credentials or internet access, run
+`python3 -m unittest discover -s tests -v`. A read-only integration test also runs
+when the private checkout is available as a sibling directory; otherwise that
+test is skipped. It uses in-memory fixtures and does not write private records.
+
+If Playwright and Chromium are already installed, run the optional browser
+regressions with `python3 tests/browser_meetings.py`. These exercise the actual
+HTML/CSS/JavaScript at desktop, 375 px, and 320 px widths, using local HTTP only.
+They check sorting across both card types, repeated sorting without duplicates,
+all historical detail pages, exact abstract text, native keyboard disclosures,
+button alignment, and overflow. They add no site dependencies.

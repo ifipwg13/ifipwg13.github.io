@@ -63,6 +63,13 @@ class PreviewTests(unittest.TestCase):
         git(self.remote, "add", "prototype")
         git(self.remote, "commit", "-m", "Add a meeting")
 
+    def publish_sorter(self):
+        index = self.remote / "prototype/index.html"
+        index.write_text(index.read_text().replace("</body>", p.LIST_SCRIPT + "</body>"))
+        (self.remote / "prototype/assets/meetings-list.js").write_text('const revision = "first";')
+        git(self.remote, "add", "prototype")
+        git(self.remote, "commit", "-m", "Add the meeting-list sorter")
+
     def server(self):
         server = p.make_server(self.source, host="127.0.0.1", port=0)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -103,7 +110,7 @@ class PreviewTests(unittest.TestCase):
         server = self.server()
         for path in ["/README.md", "/../README.md", "/%2e%2e/prototype-secret.html", "/.git/config",
                      "/.hidden.html", "/%2ehidden.html", "/meetings/../../prototype-secret.html", "/assets/style.css%00",
-                     "/prototype-secret.html", "/anything.js"]:
+                     "/prototype-secret.html", "/anything.js", "/assets/other.js", "/data/legacy-meetings.json"]:
             with self.subTest(path=path):
                 status, _, content = self.request(server, path)
                 self.assertEqual(status, 404)
@@ -161,7 +168,8 @@ class PreviewTests(unittest.TestCase):
                     self.assertIn(b"Live preview", content)
                     self.assertIn(b"<style>", content)
 
-    def test_html_and_style_use_the_same_revision_during_a_concurrent_update(self):
+    def test_html_style_and_sorter_use_the_same_revision_during_a_concurrent_update(self):
+        self.publish_sorter()
         first = git(self.remote, "rev-parse", p.BRANCH).decode().strip()
         original = self.source.read
         switched = False
@@ -173,7 +181,10 @@ class PreviewTests(unittest.TestCase):
                 switched = True
                 self.publish()
                 (self.remote / "prototype/assets/style.css").write_text("h1 {color: green}")
-                git(self.remote, "add", "prototype/assets/style.css")
+                index = self.remote / "prototype/index.html"
+                index.write_text(index.read_text().replace("</body>", p.LIST_SCRIPT + "</body>"))
+                (self.remote / "prototype/assets/meetings-list.js").write_text('const revision = "second";')
+                git(self.remote, "add", "prototype")
                 git(self.remote, "commit", "-m", "Update styling")
                 self.source.latest(force=True)
             return content
@@ -184,11 +195,58 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(headers["X-Preview-Revision"], first)
         self.assertIn(b"First meeting", content)
         self.assertIn(b"color: navy", content)
+        self.assertIn(b'const revision = "first";', content)
+        self.assertNotIn(b'const revision = "second";', content)
         self.assertNotIn(b"color: green", content)
         _, headers, content = self.request(server)
         self.assertIn(b"First and new meeting", content)
         self.assertIn(b"color: green", content)
+        self.assertIn(b'const revision = "second";', content)
         self.assertNotEqual(headers["X-Preview-Revision"], first)
+
+    def test_sorter_is_inlined_and_its_only_allowed_asset_url_has_correct_mime(self):
+        self.publish_sorter()
+        server = self.server()
+        status, headers, content = self.request(server)
+        self.assertEqual(status, 200)
+        self.assertIn(b'<script>\nconst revision = "first";\n</script>', content)
+        self.assertNotIn(p.LIST_SCRIPT.encode(), content)
+        status, headers, content = self.request(server, "/assets/meetings-list.js")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "text/javascript; charset=utf-8")
+        self.assertEqual(content, b'const revision = "first";')
+        status, headers, _ = self.request(server, "/prototype/assets/meetings-list.js")
+        self.assertEqual(status, 307)
+        self.assertEqual(headers["Location"], "/assets/meetings-list.js")
+
+    def test_missing_sorter_returns_an_uncached_error_instead_of_unsorted_meetings(self):
+        self.publish_sorter()
+        (self.remote / "prototype/assets/meetings-list.js").unlink()
+        git(self.remote, "add", "prototype")
+        git(self.remote, "commit", "-m", "Simulate missing sorter")
+        server = self.server()
+        with patch("builtins.print"):
+            status, headers, content = self.request(server)
+        self.assertEqual(status, 503)
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertNotIn(b"First meeting", content)
+
+    def test_slashless_historical_page_redirects_to_styled_page(self):
+        path = "/legacy-meetings/legacy-20160331-012345abcdef"
+        directory = self.remote / "prototype" / path.lstrip("/")
+        directory.mkdir(parents=True)
+        (directory / "index.html").write_text(meeting_page("Historical meeting", "../../assets/style.css"))
+        git(self.remote, "add", "prototype")
+        git(self.remote, "commit", "-m", "Add historical meeting")
+        server = self.server()
+        for url in (path, "/prototype" + path):
+            status, headers, _ = self.request(server, url)
+            self.assertEqual(status, 307)
+            self.assertEqual(headers["Location"], path + "/")
+        status, _, content = self.request(server, path + "/")
+        self.assertEqual(status, 200)
+        self.assertIn(b"Historical meeting", content)
+        self.assertIn(b"color: navy", content)
 
     def test_missing_stylesheet_returns_uncached_error_instead_of_unstyled_page(self):
         (self.remote / "prototype/assets/style.css").unlink()

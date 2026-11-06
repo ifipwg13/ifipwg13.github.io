@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 BRANCH = "prototype/meeting-management"
 REF = "refs/remotes/origin/" + BRANCH
 REPOSITORY = "ifipwg13/ifipwg13.github.io"
+LIST_SCRIPT = '<script src="assets/meetings-list.js" defer></script>'
 
 
 class PreviewError(Exception):
@@ -33,7 +34,7 @@ def resource_path(url):
         raise FileNotFoundError
     if path.endswith("/"):
         path += "index.html"
-    if not path.endswith((".html", ".css")):
+    if not path.endswith((".html", ".css")) and path != "/assets/meetings-list.js":
         raise FileNotFoundError
     return "prototype/" + path.lstrip("/")
 
@@ -42,18 +43,19 @@ def canonical_url(url):
     """Redirect the original file server's /prototype/ URLs to this server's root."""
     path = urllib.parse.unquote(urllib.parse.urlsplit(url).path)
     # Validate before issuing redirects, including encoded traversal and // hosts.
-    resource_path(path + "/" if not path.endswith(("/", ".html", ".css")) else path)
+    validation_path = path.removeprefix("/prototype") if path.startswith("/prototype/") else path
+    resource_path(validation_path + "/" if not validation_path.endswith(("/", ".html", ".css", ".js")) else validation_path)
     canonical = path
     if path == "/prototype":
         canonical = "/"
     elif path.startswith("/prototype/"):
         canonical = path.removeprefix("/prototype")
-    if re.fullmatch(r"/meetings/(?:demo-001|meeting-[1-9][0-9]*)", canonical):
+    if re.fullmatch(r"/(?:meetings/(?:demo-001|meeting-[1-9][0-9]*)|legacy-meetings/legacy-[0-9]{8}-[0-9a-f]{12})", canonical):
         canonical += "/"
     return canonical if canonical != path else None
 
 
-def styled_preview(content, stylesheet, revision):
+def styled_preview(content, stylesheet, revision, javascript=None):
     """Deliver a complete styled page even if a browser's CSS request would fail."""
     page = content.decode("utf-8")
     style = "<style>\n" + stylesheet.decode("utf-8").replace("</", "<\\/") + "\n</style>"
@@ -61,6 +63,11 @@ def styled_preview(content, stylesheet, revision):
     page, replacements = re.subn(pattern, lambda _: style, page, flags=re.IGNORECASE)
     if replacements != 1 or page.lower().count("<body>") != 1:
         raise PreviewError("The preview page needs its stylesheet and body markers. Ask the organizer to review it.")
+    if LIST_SCRIPT in page:
+        if javascript is None:
+            raise PreviewError("The meeting-list script is missing; the preview cannot sort the combined list.")
+        script = '<script>\n' + javascript.decode('utf-8').replace('</', '<\\/') + '\n</script>'
+        page = page.replace(LIST_SCRIPT, script)
     fetched = dt.datetime.now(ZoneInfo("Europe/Berlin")).strftime("%d-%m-%Y %H:%M:%S %Z")
     banner = ('<aside aria-label="Live preview" style="background:#edf3fa;color:#202b3c;'
               'border-bottom:1px solid #d6dee8;padding:.65rem 1rem;font-size:.9rem">'
@@ -125,14 +132,20 @@ class GitSource:
         return self.git("show", f"{revision}:{path}", missing_ok=True)
 
     def page(self, path):
-        # HTML and CSS must come from the same commit even during an update.
+        # HTML, CSS, and the list sorter must share a commit during an update.
         revision = self.latest(force=True)
         content = self.read(path, revision)
         try:
             stylesheet = self.read("prototype/assets/style.css", revision)
         except FileNotFoundError:
             raise PreviewError("The prototype stylesheet is missing from GitHub; the preview cannot display it correctly.") from None
-        return styled_preview(content, stylesheet, revision), revision
+        javascript = None
+        if LIST_SCRIPT.encode() in content:
+            try:
+                javascript = self.read('prototype/assets/meetings-list.js', revision)
+            except FileNotFoundError:
+                raise PreviewError("The meeting-list script is missing; the preview cannot sort the combined list.") from None
+        return styled_preview(content, stylesheet, revision, javascript), revision
 
 
 def make_server(source, host="0.0.0.0", port=8001):
@@ -166,7 +179,8 @@ def make_server(source, host="0.0.0.0", port=8001):
                 self.send_error(503, "Preview could not update from GitHub. Check the Codespaces terminal and refresh again.")
                 return
             self.send_response(200)
-            self.send_header("Content-Type", "text/css; charset=utf-8" if path.endswith(".css") else "text/html; charset=utf-8")
+            mime = 'text/javascript' if path.endswith('.js') else ('text/css' if path.endswith('.css') else 'text/html')
+            self.send_header("Content-Type", mime + "; charset=utf-8")
             self.send_header("Content-Length", str(len(content)))
             self.send_header("X-Preview-Revision", revision)
             self.end_headers()
