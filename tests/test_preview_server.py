@@ -429,8 +429,10 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual((self.checkout / "prototype/index.html").read_text(), "Preserved local changes")
 
     def test_existing_codespace_review_command_selects_the_feature_without_altering_local_work(self):
+        command = self.documented_command('group_preview_script')
+        branch = re.search(r'--branch ([\w/-]+)', command)[1]
         prototype = git(self.remote, "rev-parse", p.BRANCH)
-        git(self.remote, "switch", "-c", "feature/preview-source-leadership")
+        git(self.remote, "switch", "-c", branch)
         (self.remote / "index.html").write_text(meeting_page("Review group homepage", "prototype/assets/style.css"))
         (self.remote / "scripts").mkdir()
         (self.remote / "scripts/preview_server.py").write_text(Path(p.__file__).read_text())
@@ -439,7 +441,7 @@ class PreviewTests(unittest.TestCase):
         git(self.checkout, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main")
         (self.checkout / "index.html").write_text("Preserved local homepage")
         head = git(self.checkout, "rev-parse", "HEAD")
-        self.check_documented_server(self.documented_command('group_preview_script'), b"Review group homepage")
+        self.check_documented_server(command, b"Review group homepage")
         self.assertEqual(git(self.checkout, "rev-parse", "HEAD"), head)
         self.assertEqual(git(self.remote, "rev-parse", p.BRANCH), prototype)
         self.assertEqual(git(self.remote, "rev-parse", "main"), self.main)

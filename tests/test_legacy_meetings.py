@@ -81,7 +81,7 @@ class LegacyTests(unittest.TestCase):
             with self.assertRaises(ValueError): b.validate([record])
         self.assertIn('31-03-2016', b.schedule(RECORD)); self.assertIn('01-04-2016', b.schedule(RECORD))
 
-    def test_same_list_preserves_private_region_and_has_only_view_button(self):
+    def test_same_list_preserves_private_region_and_uses_meeting_name_without_buttons(self):
         canonical = '<!-- meeting:meeting-38:start --><article class="meeting-card">Existing</article><!-- meeting:meeting-38:end -->'
         source = INDEX.replace('<!-- generated-meetings:end -->', canonical + '<!-- generated-meetings:end -->')
         rendered = b.update_index(source, [RECORD])
@@ -90,10 +90,10 @@ class LegacyTests(unittest.TestCase):
         self.assertLess(rendered.index(b.START), rendered.index('</section>'))
         self.assertEqual(b.update_index(rendered, [RECORD]), rendered)
         card = b.card(RECORD)
-        self.assertEqual(card.count('class="button"'), 1)
-        self.assertIn('View meeting', card)
+        self.assertNotIn('class="button"', card)
+        self.assertIn(f'<h3 id="{b.meeting_key(RECORD)}-title"><a href="legacy-meetings/{b.meeting_key(RECORD)}/">Meeting in Example</a></h3>', card)
         self.assertNotIn('github.com', card)
-        for unwanted in ('organizer-controls','talk-hide','Register','Archive','Past meetings','Source:'):
+        for unwanted in ('View meeting','organizer-controls','talk-hide','Register','Archive','Hide','Past meetings','Source:'):
             self.assertNotIn(unwanted, card)
 
     def test_abstracts_are_exact_escaped_and_collapsed_without_placeholders(self):
