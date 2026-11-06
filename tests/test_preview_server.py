@@ -106,7 +106,7 @@ class PreviewTests(unittest.TestCase):
         readme = (Path(p.__file__).resolve().parents[1] / "README.md").read_text()
         blocks = re.findall(r"```sh\n(.*?)```", readme, flags=re.DOTALL)
         command = textwrap.dedent(next(block for block in blocks if variable + "=" in block))
-        command = command.replace("--port 8001", "--port 0")
+        command = re.sub(r"--port [0-9]+", "--port 0", command)
         for prefix in ["meeting-preview.", "group-preview."]:
             command = command.replace("/tmp/" + prefix, str(Path(self.directory.name) / prefix))
         return command.replace('python3 "$' + variable + '"', 'exec python3 "$' + variable + '"')
