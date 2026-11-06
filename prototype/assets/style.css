@@ -18,7 +18,7 @@ body { margin: 0; overflow-wrap: anywhere; }
 .container { width: calc(100% - 2rem); max-width: var(--content-width); margin-inline: auto; padding: 1.5rem; }
 .site-header { margin-block: 1.25rem; }
 .site-header > .container { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: .5rem 1.25rem; align-items: center; background: #fff; border-radius: .7rem; }
-.brand-logo { grid-row: 1 / span 2; }
+.brand-logo { grid-row: 1 / span 2; text-decoration: none; }
 .brand-logo img { display: block; width: 3rem; height: auto; }
 main.container { background: #fff; border-radius: .7rem; margin-block: 1.25rem; }
 .site-header p:last-child { margin-bottom: 0; }
@@ -76,11 +76,6 @@ span.talk-title, span.talk-authors { cursor: text; }
 .talk-abstract summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .abstract-text { display: block; white-space: pre-wrap; margin-block: .5rem .75rem; padding: .75rem 1rem; border-left: 3px solid var(--heading); background: var(--surface); }
 .help { color: #46566a; }
-.organizer-controls { margin-top: 1rem; border-top: 1px solid #d6dee8; padding-top: .75rem; }
-.meeting-card > .button { vertical-align: middle; margin-right: .75rem; }
-.meeting-card > .organizer-controls { display: inline-flex; vertical-align: middle; margin: 0; border: 0; padding: 0; }
-.meeting-card > .organizer-controls > .actions { margin: 0; flex-direction: row; }
-.meeting-card > .button, .meeting-card > .organizer-controls { margin-block: .25rem; }
 .instructions { padding-left: 1.5rem; }
 .instructions li { margin-block: .75rem; }
 .site-footer { background: #fff; border-radius: .7rem; margin-block: 1.25rem; color: #46566a; font-size: .9rem; }

@@ -127,7 +127,7 @@ class BrowserTests(unittest.TestCase):
                     self.page.get_by_role('navigation').get_by_role('link', name='Meetings', exact=True).click()
                     self.assertEqual(self.page.url, base + '/prototype/')
                     self.ordered_dates()
-                    self.page.locator('.meeting-card').first.locator(':scope > a.button').click()
+                    self.page.locator('.meeting-card').first.locator(':scope > h3 > a').click()
                     self.assertEqual(self.page.locator('h1').evaluate('node => [getComputedStyle(node).color, getComputedStyle(document.body).color]'), colors)
                     self.page.get_by_role('link', name='All meetings', exact=True).click()
                     self.assertEqual(self.page.url, base + '/prototype/')
@@ -141,6 +141,44 @@ class BrowserTests(unittest.TestCase):
             'cards => cards.map(card => card.querySelector(".meeting-summary time").dateTime.slice(0, 10))')
         self.assertEqual(values, sorted(values, reverse=True))
         return values
+
+    def test_home_ifip_links_have_exact_destinations_restrained_styling_and_keyboard_access(self):
+        destination = 'https://www.ifip.org/technical-committees-and-working-groups/'
+        self.context.route(destination, lambda route: route.fulfill(status=200, content_type='text/html', body='<title>IFIP destination fixture</title>'))
+        selectors = ('.brand-logo', '.site-brand a', '.affiliation a')
+        for server in (self.static, self.preview):
+            for width in (1100, 375, 320):
+                self.page.set_viewport_size({'width': width, 'height': 950})
+                for selector in selectors:
+                    with self.subTest(preview=server is self.preview, width=width, selector=selector):
+                        self.open(server, '/')
+                        logo, brand, tc1 = [self.page.locator(value) for value in selectors]
+                        self.assertEqual(tc1.inner_text(), 'IFIP TC1')
+                        self.assertEqual(brand.inner_text(), 'IFIP WG1.3')
+                        self.assertEqual(logo.get_attribute('aria-label'), 'IFIP technical committees and working groups')
+                        for link in (logo, brand):
+                            self.assertEqual(link.evaluate('node => getComputedStyle(node).textDecorationLine'), 'none')
+                            link.hover()
+                            self.assertEqual(link.evaluate('node => getComputedStyle(node).textDecorationLine'), 'none')
+                        self.assertEqual(brand.evaluate('node => getComputedStyle(node).color'), self.page.locator('h1').evaluate('node => getComputedStyle(node).color'))
+                        self.assertIn('underline', tc1.evaluate('node => getComputedStyle(node).textDecorationLine'))
+                        self.assertEqual(tc1.evaluate('node => getComputedStyle(node).color'), self.page.locator('.site-nav a[href="members/"]').evaluate('node => getComputedStyle(node).color'))
+                        link = self.page.locator(selector)
+                        self.assertEqual(link.get_attribute('href'), destination)
+                        self.assertIsNone(link.get_attribute('target'))
+                        self.page.keyboard.press('Tab')
+                        link.focus()
+                        self.assertTrue(link.evaluate('node => node.matches(":focus-visible") && getComputedStyle(node).outlineStyle === "solid" && parseFloat(getComputedStyle(node).outlineWidth) > 0'))
+                        self.no_overflow()
+                        if os.environ.get('MEETINGS_SCREENSHOTS') and selector == '.affiliation a':
+                            directory = Path(os.environ['MEETINGS_SCREENSHOTS'])
+                            directory.mkdir(parents=True, exist_ok=True)
+                            self.page.screenshot(path=str(directory / f'home-{width}.png'), full_page=True)
+                        self.page.keyboard.press('Enter')
+                        self.page.wait_for_url(destination)
+                        self.assertEqual(len(self.context.pages), 1)
+        self.assertFalse(self.external)
+        self.assertFalse(self.errors)
 
     def test_review_toolbar_switches_to_synchronized_view_and_keeps_navigation(self):
         for width in (1100, 375, 320):
@@ -160,7 +198,7 @@ class BrowserTests(unittest.TestCase):
             self.page.get_by_role('navigation').get_by_role('link', name='Meetings', exact=True).click()
             self.assertEqual(self.page.url, prefix + 'prototype/')
             self.ordered_dates()
-            self.page.locator('.meeting-card').first.locator(':scope > a.button').click()
+            self.page.locator('.meeting-card').first.locator(':scope > h3 > a').click()
             self.assertIn(prefix + 'prototype/meetings/', self.page.url)
             self.page.get_by_role('link', name='All meetings', exact=True).click()
             self.assertEqual(self.page.url, prefix + 'prototype/')
@@ -177,19 +215,24 @@ class BrowserTests(unittest.TestCase):
         self.assertTrue(logo.evaluate('node => node.complete && node.naturalWidth === 75 && node.naturalHeight === 142'))
         if server is self.preview:
             self.assertTrue(logo.get_attribute('src').startswith('data:image/png;base64,'))
+        for selector in ('.brand-logo', '.site-brand a'):
+            self.assertEqual(self.page.locator(selector).evaluate('node => node.pathname'), '/')
 
     def test_compact_current_talks_keep_links_and_expand_full_width_without_hide_shortcuts(self):
         for server in (self.static, self.preview):
             for width in (1100, 375, 320):
                 self.page.set_viewport_size({'width': width, 'height': 950})
                 self.open(server)
-                links = [card.locator(':scope > a.button').get_attribute('href') for card in self.page.locator('.meeting-card').all()]
+                links = [card.locator(':scope > h3 > a').get_attribute('href') for card in self.page.locator('.meeting-card').all()]
                 for link in links:
                     self.open(server, '/prototype/' + link)
                     self.check_logo(server)
                     self.assertEqual(self.page.locator('.talk-hide').count(), 0)
-                    self.assertEqual(self.page.locator('.meeting-actions .button').count(), 4)
-                    self.assertEqual(self.page.locator('.meeting-actions').get_by_role('link', name='Hide', exact=True).count(), 1)
+                    self.assertEqual(self.page.locator('.meeting-actions .button').count(), 2)
+                    actions = self.page.locator('.meeting-actions')
+                    self.assertEqual(actions.get_by_role('link', name='Hide', exact=True).count(), 0)
+                    self.assertEqual(actions.get_by_role('button', name='Archive', exact=True).count(), 0)
+                    self.assertEqual(actions.get_by_role('link', name='Archive', exact=True).count(), 0)
                     rows = self.page.locator('.public-talks li').all()
                     for row in rows:
                         title = row.locator('.talk-title')
@@ -244,24 +287,21 @@ class BrowserTests(unittest.TestCase):
         self.assertFalse(self.external)
         self.assertFalse(self.errors)
 
-    def test_card_actions_share_desktop_row_and_wrap_without_overflow_on_mobile(self):
+    def test_cards_use_meeting_names_and_have_no_redundant_buttons_on_desktop_or_mobile(self):
         for width in (1100, 375, 320):
             self.page.set_viewport_size({'width': width, 'height': 950})
             self.open(self.preview)
             self.no_overflow()
             cards = self.page.locator('.meeting-card')
             for card in cards.all():
-                actions = card.locator(':scope > .button, :scope > .organizer-controls .button')
-                self.assertEqual(actions.all_text_contents(), ['View meeting', 'Archive', 'Hide'])
-                boxes = [action.bounding_box() for action in actions.all()]
-                if width == 1100:
-                    self.assertLessEqual(max(box['y'] for box in boxes) - min(box['y'] for box in boxes), 1)
-                elif boxes[1]['y'] > boxes[0]['y'] + 1:
-                    self.assertGreaterEqual(boxes[1]['y'] - boxes[0]['y'] - boxes[0]['height'], 8)
+                self.assertEqual(card.locator('.button, button, .organizer-controls').count(), 0)
+                self.assertEqual(card.locator(':scope > h3 > a').count(), 1)
+                self.assertTrue(card.locator(':scope > h3 > a').get_attribute('href').startswith('meetings/'))
                 self.assertEqual(card.get_by_text('Manage meeting', exact=True).count(), 0)
             reference = cards.first.evaluate('node => [getComputedStyle(node).border, getComputedStyle(node).padding, getComputedStyle(node).font]')
             for card in self.page.locator('.legacy-meeting-card').all():
-                self.assertEqual(card.locator('.button').all_text_contents(), ['View meeting'])
+                self.assertEqual(card.locator('.button').count(), 0)
+                self.assertEqual(card.locator(':scope > h3 > a').count(), 1)
                 self.assertEqual(card.locator('.organizer-controls, .talk-hide, button, [href*="github.com"]').count(), 0)
                 self.assertEqual(card.evaluate('node => [getComputedStyle(node).border, getComputedStyle(node).padding, getComputedStyle(node).font]'), reference)
             if os.environ.get('MEETINGS_SCREENSHOTS'):
@@ -273,7 +313,7 @@ class BrowserTests(unittest.TestCase):
     def test_every_historical_page_has_only_approved_content_and_exact_abstract_text(self):
         self.open(self.static)
         cards = self.page.locator('.legacy-meeting-card')
-        links = [card.locator(':scope > a.button').get_attribute('href') for card in cards.all()]
+        links = [card.locator(':scope > h3 > a').get_attribute('href') for card in cards.all()]
         for record, link in zip(self.records, links):
             with self.subTest(meeting=record['name']):
                 self.open(self.static, '/prototype/' + link)
@@ -339,7 +379,7 @@ class BrowserTests(unittest.TestCase):
             self.assertTrue(text.is_visible())
             self.no_overflow()
             self.assertEqual(overview.locator('.talk-list a').count(), 0)
-            view = card.locator(':scope > a.button')
+            view = card.locator(':scope > h3 > a')
             target = view.get_attribute('href')
             view.click()
             self.assertTrue(self.page.url.endswith('/prototype/' + target))
@@ -357,7 +397,7 @@ class BrowserTests(unittest.TestCase):
             page.get_by_role('navigation').get_by_role('link', name='Members', exact=True).click()
             self.assertEqual(page.locator('.member-list > li').count(), 70)
             page.get_by_role('navigation').get_by_role('link', name='Meetings', exact=True).click()
-            page.locator('.legacy-meeting-card').first.locator(':scope > a.button').click()
+            page.locator('.legacy-meeting-card').first.locator(':scope > h3 > a').click()
             disclosure = page.locator('details.talk-abstract').first
             self.assertFalse(disclosure.locator('.abstract-text').is_visible())
             disclosure.locator('summary').click()

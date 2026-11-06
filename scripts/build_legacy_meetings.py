@@ -89,7 +89,6 @@ def card(record):
           <p><strong>Where:</strong> {html.escape(record['location'])}</p>
         </div>
         {disclosure}
-        <a class="button" href="legacy-meetings/{key}/">View meeting</a>
       </article>'''
     return '\n'.join(line.rstrip() for line in result.split('\n'))
 

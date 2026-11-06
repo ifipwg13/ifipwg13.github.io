@@ -29,7 +29,7 @@ The website displays each talk's title, entered authors, and expandable abstract
    globe icon. If the port is missing, choose **Add Port** and enter `8001`.
 6. The group homepage opens in a new Firefox tab with a **Synchronized preview** bar.
    Use **Members** and **Meetings** in its navigation. On the meetings page,
-   choose **View meeting** to inspect a meeting.
+   click a meeting's name to inspect it.
 
 Keep port visibility **Private**. This preview is separate from GitHub Pages:
 opening it does not merge the pull request or publish the website. The Python
@@ -124,6 +124,10 @@ The homepage, members page, and meeting list share Home / Members / Meetings
 navigation. Meeting detail pages link back to the list. Relative paths are the
 same in the preview and static site. Neither the homepage nor the roster depends
 on JavaScript, a login, or another website at page-load time.
+On Home, the logo, WG brand, and IFIP TC1 text link in the same tab to
+<https://www.ifip.org/technical-committees-and-working-groups/>. Only IFIP TC1 has
+ordinary link styling; all three links retain keyboard focus outlines. On other
+pages, the logo and WG brand continue to link back to the local Home page.
 
 ### Synchronized meetings
 
@@ -153,9 +157,8 @@ Hide takes precedence over talk visibility. Closed talks retain a closed marker;
 archived talks remain synchronized, with late submissions excluded by the private
 archive cutoff. Hide/restore preserves individual talk settings.
 The `generated-meetings` markers reserve the Issue-backed portion of the list
-for generated updates; the rest of the index is preserved. Card actions
-**View meeting | Archive | Hide** share a row when space permits and wrap on
-small screens.
+for generated updates; the rest of the index is preserved. A meeting's name
+opens its detail page. Cards have no View meeting, Archive, or Hide buttons.
 
 ### Historical meeting content
 
@@ -180,8 +183,8 @@ are not links. The **Abstract** disclosure contains the full abstract value.
 
 The renderer preserves the `generated-meetings` region exactly. Its own
 `legacy-meetings` markers are ownership boundaries inside the same section,
-without a separate visible group. Historical cards use the same styling and
-provide **View meeting** and expandable talks/abstracts where present. They have
+without a separate visible group. Historical cards use the same styling, with
+clickable meeting names and expandable talks/abstracts where present. They have
 no registration, submission, archive, hide, or talk-management controls. Native
 disclosures work without JavaScript. The list sorter only orders existing cards;
 historical pages make no requests to another website or private repository.
@@ -196,12 +199,13 @@ artifacts, external caches, screenshots, or downloaded copies. The private Issue
 and its discussion remain retained. Administrator instructions are in the private
 README; ordinary members retain Read access and cannot manage visibility labels.
 
-Meeting pages place **View participants and register | Add talk | Archive | Hide**
-in a single responsive group. These links remain visible on the static site;
-GitHub enforces private-repository access and administrative permissions. Active
-members need Read access or higher; Archive/Hide require Admin under the current
-Admin/Read role model. Archived pages disable Add talk and Archive, retain a
-registration-record link, and allow Hide. Hidden meetings have no public page.
+Meeting pages place **View participants and register | Add talk** in a single
+responsive group. These links remain visible on the static site; GitHub enforces
+private-repository access. Active members need Read access or higher. Archived
+pages disable Add talk and retain a registration-record link. Hidden meetings
+have no public page. Meeting administration uses `archived` and `hidden` on the
+private registration Issue, under the existing Admin/Read role model. The private
+README gives the Labels-menu steps. There are no public administrative buttons.
 There is no talk-level Hide shortcut. An Admin opens the talk's private Issue
 from its title or the repository Issues list and applies/removes `talk-hidden`.
 This label still controls publication on both meeting cards and detail pages.
@@ -214,7 +218,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/preview-source-leadership --port 8001
+python3 scripts/preview_server.py --branch feature/simplify-meeting-controls --port 8001
 ```
 
 Open port **8001** using **Ports → Open in Browser**. Firefox displays the review
@@ -225,9 +229,9 @@ unchanged. Issue-backed pages in this feature draft are a review snapshot.
 The bar must say **Review snapshot**, name this feature branch, and offer
 **Switch to synchronized preview**. Use the review view for unmerged presentation
 changes and the synchronized view for label tests. Before integration, the
-synchronized view shows currently merged content; unmerged leadership and talk
-separator changes remain in the review view. The public preview/data-source fix and leadership edits are
-public changes; the separate private PR removes the talk separator at its source.
+synchronized view shows currently merged content; the simplified controls and
+Home links remain in the review view. The separate private PR updates the
+meeting generator so future synchronizations keep the simplified controls.
 Label synchronization and permissions use the existing workflow unchanged.
 No PR is merged or Pages website published by starting a preview.
 
@@ -237,10 +241,10 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/preview-source-leadership:refs/remotes/origin/feature/preview-source-leadership &&
+git fetch origin refs/heads/feature/simplify-meeting-controls:refs/remotes/origin/feature/simplify-meeting-controls &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/preview-source-leadership:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/preview-source-leadership --port 8001
+git show origin/feature/simplify-meeting-controls:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/simplify-meeting-controls --port 8001
 ```
 
 Open port **8001** from **Ports**, keeping it **Private**. The first page must be
@@ -281,6 +285,7 @@ HTML/CSS/JavaScript at desktop, 375 px, and 320 px widths, using local HTTP only
 They check sorting across both card types, repeated sorting without duplicates,
 all historical detail pages, exact presenter/abstract text, native keyboard
 disclosures, inline abstract alignment, underlined noninteractive legacy text,
-button alignment, and overflow. They also check Home / Members /
+removed meeting shortcuts, Home link destinations and keyboard focus, and
+overflow. They also check Home / Members /
 Meetings navigation through detail pages, the roster on desktop/mobile, and
 group-page/abstract use with JavaScript disabled. They add no site dependencies.
