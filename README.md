@@ -14,14 +14,14 @@ The website displays each talk's title, entered authors, and expandable abstract
 1. Sign in to GitHub in Firefox and open the feature pull request for this change.
 2. On the pull request, click **Code**, choose **Codespaces**, and select the
    option to create a codespace for the pull request branch. If that option is
-   unavailable, open the repository, select the `feature/group-home-members-presenters`
+   unavailable, open the repository, select the `feature/classic-style-compact-talks`
    branch, then choose **Code → Codespaces → Create codespace**.
 3. Wait for the browser editor to open. If there is no terminal panel, use the
    top-left menu **☰ → Terminal → New Terminal**.
 4. Paste this command into the terminal and press Enter:
 
    ```sh
-   python3 scripts/preview_server.py --branch feature/group-home-members-presenters --port 8001
+   python3 scripts/preview_server.py --branch feature/classic-style-compact-talks --port 8001
    ```
 
 5. When **Open in Browser** appears, click it. Otherwise, open the **Ports** tab
@@ -33,13 +33,13 @@ The website displays each talk's title, entered authors, and expandable abstract
 
 Keep port visibility **Private**. This preview is separate from GitHub Pages:
 opening it does not merge the pull request or publish the website. The Python
-server serves the root homepage, `members/index.html`, and the allowed HTML/CSS
-and meeting-list script under `prototype/` on the selected public branch. Other
+server serves the root homepage, `members/index.html`, and the allowed HTML/CSS,
+meeting-list script, and exact IFIP logo path under `prototype/` on the selected public branch. Other
 root files, hidden files, and private records cannot be served. It fetches the
 branch when a page is requested, so refreshing Firefox receives updates without
 another terminal command. Your local files and branches are not changed.
-The server includes the stylesheet and list sorter in each preview page, using
-the same Git version for all three. Styling and sorting do not depend on a
+The server includes the stylesheet, list sorter, and IFIP logo in each preview
+page, using the same Git version for all assets. Styling, sorting, and the logo do not depend on a
 second browser request. The **Live preview** bar shows the retrieved version
 and time (Europe/Berlin).
 Port **8001** distinguishes this preview from an older server on port 8000.
@@ -102,7 +102,9 @@ an error rather than silently displaying an old meeting list.
   This public roster does not grant or remove private GitHub repository access.
 - `prototype/assets/style.css`: the shared stylesheet for every page. The
   variables at the top control the main colours and content width. Navigation
-  and member columns wrap for small screens without a framework.
+  and member columns wrap for small screens without a framework. The purple
+  background, white panels, green navigation, and rounded corners follow the
+  original site's appearance; `prototype/assets/ifip-logo.png` is the local logo.
 - `prototype/data/legacy-meetings.json`: historical meeting/talk content; edit
   this dataset and rerun the renderer described below.
 
@@ -127,7 +129,11 @@ paragraphs. Hours and timezones are not displayed. Matching talk Issues appear
 on the cards and meeting pages as **title by authors**, with the title linking to
 its private Issue. Automatic meeting prefixes and Issue-number labels are omitted.
 Each Issue-backed meeting page shows an initially collapsed **Abstract** disclosure
-under its talks. Abstracts are escaped text with paragraph breaks; Issue-backed
+beside each talk that has supplied abstract text. Its collapsed row reads
+**Title by Presenter · ▸ Abstract** when space permits. Long titles and small
+screens wrap naturally. Opening Abstract places the full text below that row.
+Titles and presenter names are underlined; only Issue-backed titles are links.
+Abstracts are escaped text with paragraph breaks; Issue-backed
 index cards omit them.
 Comments, registration accounts, and unrelated private content remain private.
 Talks labeled `talk-hidden` are omitted completely, including their links. Meeting
@@ -184,8 +190,11 @@ GitHub enforces private-repository access and administrative permissions. Active
 members need Read access or higher; Archive/Hide require Admin under the current
 Admin/Read role model. Archived pages disable Add talk and Archive, retain a
 registration-record link, and allow Hide. Hidden meetings have no public page.
-A talk's Hide shortcut opens its private Issue; Admins apply/remove `talk-hidden`
-there. Show is managed privately so hidden talks have no identifying placeholder.
+There is no talk-level Hide shortcut. An Admin opens the talk's private Issue
+from its title or the repository Issues list and applies/removes `talk-hidden`.
+This label still controls publication on both meeting cards and detail pages.
+The meeting-level `hidden` label remains separate. Hidden talks have no public
+identifying placeholder.
 
 ## Preview this feature draft
 
@@ -193,7 +202,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/group-home-members-presenters --port 8001
+python3 scripts/preview_server.py --branch feature/classic-style-compact-talks --port 8001
 ```
 
 Open port **8001** using **Ports → Open in Browser**. Firefox displays the review
@@ -201,7 +210,9 @@ branch and refreshes it from GitHub, with HTML, styling, and the list sorter fro
 the same commit.
 This optional branch selection leaves the existing prototype preview default
 unchanged. Issue-backed pages in this feature draft are a review snapshot.
-The group pages, presenter additions, and navigation are public-only changes.
+The shared design and legacy rows are public changes. The separate private PR
+updates generated meeting headers, talk rows, the acceptance checker, and docs;
+label synchronization and permissions use the existing workflow unchanged.
 No PR is merged or Pages website published by starting a preview.
 
 In an existing Codespace with older local scripts, press **Ctrl+C** to stop its
@@ -210,19 +221,24 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/group-home-members-presenters:refs/remotes/origin/feature/group-home-members-presenters &&
+git fetch origin refs/heads/feature/classic-style-compact-talks:refs/remotes/origin/feature/classic-style-compact-talks &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/group-home-members-presenters:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/group-home-members-presenters --port 8001
+git show origin/feature/classic-style-compact-talks:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/classic-style-compact-talks --port 8001
 ```
 
 Open port **8001** from **Ports**, keeping it **Private**. The first page must be
 the group homepage with Home / Members / Meetings navigation and a Live preview
 bar. This block does not change local HTML, Git branches, or the published site.
 
+After separate approval, integrate the public feature before the private
+generator so the referenced logo and stylesheet exist. Then run **Prepare
+meeting** once from the private repository's Actions page to refresh all meeting
+pages consistently. These operations still require separate merge approval.
+
 The public feature PR targets the existing prototype branch. Public website PR
-#1 stays draft and unmerged. After this public feature PR is separately approved
-and integrated into the prototype branch, use
+#1 stays draft and unmerged. After both feature PRs are separately approved and
+integrated (public design to the prototype branch, private generator to `main`), use
 the normal preview command without `--branch` for real event synchronization.
 The isolated feature branch remains a review snapshot until it is updated again.
 
@@ -244,6 +260,7 @@ regressions with `python3 tests/browser_meetings.py`. These exercise the actual
 HTML/CSS/JavaScript at desktop, 375 px, and 320 px widths, using local HTTP only.
 They check sorting across both card types, repeated sorting without duplicates,
 all historical detail pages, exact presenter/abstract text, native keyboard
-disclosures, button alignment, and overflow. They also check Home / Members /
+disclosures, inline abstract alignment, underlined noninteractive legacy text,
+button alignment, and overflow. They also check Home / Members /
 Meetings navigation through detail pages, the roster on desktop/mobile, and
 group-page/abstract use with JavaScript disabled. They add no site dependencies.

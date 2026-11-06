@@ -5,6 +5,7 @@ Uses only Python and Git; never reads private Issues or publishes a website.
 """
 
 import argparse
+import base64
 import datetime as dt
 import html
 import http.server
@@ -20,6 +21,8 @@ BRANCH = "prototype/meeting-management"
 REF = "refs/remotes/origin/" + BRANCH
 REPOSITORY = "ifipwg13/ifipwg13.github.io"
 LIST_SCRIPT = '<script src="assets/meetings-list.js" defer></script>'
+LOGO_PATH = 'prototype/assets/ifip-logo.png'
+LOGO_IMAGE = re.compile(r'''(<img\b[^>]*\bsrc=["'])(?:(?:\.\./){1,2}|prototype/)?assets/ifip-logo\.png(["'])''', re.IGNORECASE)
 
 
 class PreviewError(Exception):
@@ -46,7 +49,7 @@ def resource_path(url):
         return path.lstrip("/")
     if not path.startswith("/prototype/"):
         raise FileNotFoundError
-    if not path.endswith((".html", ".css")) and path != "/prototype/assets/meetings-list.js":
+    if not path.endswith((".html", ".css")) and path not in {"/prototype/assets/meetings-list.js", '/' + LOGO_PATH}:
         raise FileNotFoundError
     return path.lstrip("/")
 
@@ -67,7 +70,7 @@ def canonical_url(url):
     return canonical if canonical != path else None
 
 
-def styled_preview(content, stylesheet, revision, javascript=None):
+def styled_preview(content, stylesheet, revision, javascript=None, logo=None):
     """Deliver a complete styled page even if a browser's CSS request would fail."""
     page = content.decode("utf-8")
     style = "<style>\n" + stylesheet.decode("utf-8").replace("</", "<\\/") + "\n</style>"
@@ -80,6 +83,11 @@ def styled_preview(content, stylesheet, revision, javascript=None):
             raise PreviewError("The meeting-list script is missing; the preview cannot sort the combined list.")
         script = '<script>\n' + javascript.decode('utf-8').replace('</', '<\\/') + '\n</script>'
         page = page.replace(LIST_SCRIPT, script)
+    if LOGO_IMAGE.search(page):
+        if logo is None or not logo.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise PreviewError('The IFIP logo is missing or invalid; the preview cannot display this version correctly.')
+        data_url = 'data:image/png;base64,' + base64.b64encode(logo).decode('ascii')
+        page = LOGO_IMAGE.sub(lambda match: match[1] + data_url + match[2], page)
     fetched = dt.datetime.now(ZoneInfo("Europe/Berlin")).strftime("%d-%m-%Y %H:%M:%S %Z")
     banner = ('<aside aria-label="Live preview" style="background:#edf3fa;color:#202b3c;'
               'border-bottom:1px solid #d6dee8;padding:.65rem 1rem;font-size:.9rem">'
@@ -157,7 +165,13 @@ class GitSource:
                 javascript = self.read('prototype/assets/meetings-list.js', revision)
             except FileNotFoundError:
                 raise PreviewError("The meeting-list script is missing; the preview cannot sort the combined list.") from None
-        return styled_preview(content, stylesheet, revision, javascript), revision
+        logo = None
+        if LOGO_IMAGE.search(content.decode('utf-8')):
+            try:
+                logo = self.read(LOGO_PATH, revision)
+            except FileNotFoundError:
+                raise PreviewError('The IFIP logo is missing from GitHub; the preview cannot display it correctly.') from None
+        return styled_preview(content, stylesheet, revision, javascript, logo), revision
 
 
 def make_server(source, host="0.0.0.0", port=8001):
@@ -191,8 +205,9 @@ def make_server(source, host="0.0.0.0", port=8001):
                 self.send_error(503, "Preview could not update from GitHub. Check the Codespaces terminal and refresh again.")
                 return
             self.send_response(200)
-            mime = 'text/javascript' if path.endswith('.js') else ('text/css' if path.endswith('.css') else 'text/html')
-            self.send_header("Content-Type", mime + "; charset=utf-8")
+            mime = ('image/png' if path.endswith('.png') else 'text/javascript' if path.endswith('.js')
+                    else 'text/css' if path.endswith('.css') else 'text/html')
+            self.send_header("Content-Type", mime + ('' if mime == 'image/png' else "; charset=utf-8"))
             self.send_header("Content-Length", str(len(content)))
             self.send_header("X-Preview-Revision", revision)
             self.end_headers()

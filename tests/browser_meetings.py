@@ -32,7 +32,7 @@ class LocalSource:
 
     def page(self, path):
         return p.styled_preview(self.read(path), self.read('prototype/assets/style.css'), self.commit,
-                                self.read('prototype/assets/meetings-list.js')), self.commit
+                                self.read('prototype/assets/meetings-list.js'), self.read(p.LOGO_PATH)), self.commit
 
 
 class QuietFiles(http.server.SimpleHTTPRequestHandler):
@@ -127,6 +127,51 @@ class BrowserTests(unittest.TestCase):
     def no_overflow(self):
         self.assertTrue(self.page.evaluate('document.documentElement.scrollWidth <= innerWidth'))
 
+    def check_logo(self, server):
+        logo = self.page.locator('.brand-logo img')
+        self.assertEqual(logo.count(), 1)
+        self.assertTrue(logo.evaluate('node => node.complete && node.naturalWidth === 75 && node.naturalHeight === 142'))
+        if server is self.preview:
+            self.assertTrue(logo.get_attribute('src').startswith('data:image/png;base64,'))
+
+    def test_compact_current_talks_keep_links_and_expand_full_width_without_hide_shortcuts(self):
+        for server in (self.static, self.preview):
+            for width in (1100, 375, 320):
+                self.page.set_viewport_size({'width': width, 'height': 950})
+                self.open(server)
+                links = [card.locator(':scope > a.button').get_attribute('href') for card in self.page.locator('.meeting-card').all()]
+                for link in links:
+                    self.open(server, '/prototype/' + link)
+                    self.check_logo(server)
+                    self.assertEqual(self.page.locator('.talk-hide').count(), 0)
+                    self.assertEqual(self.page.locator('.meeting-actions .button').count(), 4)
+                    self.assertEqual(self.page.locator('.meeting-actions').get_by_role('link', name='Hide', exact=True).count(), 1)
+                    rows = self.page.locator('.public-talks li').all()
+                    for row in rows:
+                        title = row.locator('.talk-title')
+                        self.assertEqual(row.locator('a').count(), 1)
+                        self.assertTrue(title.get_attribute('href').startswith('https://github.com/ifipwg13/meetings/issues/'))
+                        self.assertEqual(title.get_attribute('target'), '_blank')
+                        self.assertIn('underline', row.locator('.talk-authors').evaluate('node => getComputedStyle(node).textDecorationLine'))
+                    disclosures = [row for row in rows if row.locator('.talk-abstract').count()]
+                    if disclosures:
+                        row = min(disclosures, key=lambda r: len(r.locator('.talk-title').inner_text() + r.locator('.talk-authors').inner_text()))
+                        disclosure = row.locator('.talk-abstract')
+                        summary = disclosure.locator('summary')
+                        content = disclosure.locator('.abstract-text')
+                        self.assertFalse(content.is_visible())
+                        if width == 1100:
+                            self.assertLess(abs(row.locator('.talk-title').bounding_box()['y'] - summary.bounding_box()['y']), 2)
+                        summary.click()
+                        self.assertTrue(content.is_visible())
+                        self.assertGreater(content.bounding_box()['y'], row.locator('.talk-title').bounding_box()['y'])
+                        self.assertGreaterEqual(content.bounding_box()['width'], row.bounding_box()['width'] - 2)
+                        summary.focus(); self.page.keyboard.press('Enter')
+                        self.assertFalse(content.is_visible())
+                    self.no_overflow()
+        self.assertFalse(self.external)
+        self.assertFalse(self.errors)
+
     def test_single_sorted_list_survives_interleaved_old_issue_meetings_and_repeated_sort(self):
         for server in (self.static, self.preview):
             with self.subTest(preview=server is self.preview):
@@ -196,6 +241,8 @@ class BrowserTests(unittest.TestCase):
                     self.assertEqual(row.locator('.talk-title').text_content(), talk['title'])
                     self.assertEqual(row.locator('.talk-authors').text_content(), talk['authors'])
                     self.assertEqual(row.locator('a').count(), 0)
+                    for name in ['.talk-title', '.talk-authors']:
+                        self.assertIn('underline', row.locator(name).evaluate('node => getComputedStyle(node).textDecorationLine'))
                     disclosure = row.locator('.talk-abstract')
                     self.assertEqual(disclosure.count(), int(bool(talk['abstract'])))
                     if talk['abstract']:
@@ -215,11 +262,26 @@ class BrowserTests(unittest.TestCase):
             abstract = overview.locator('details.talk-abstract').first
             self.assertFalse(abstract.is_visible())
             overview.locator(':scope > summary').click()
+            for control in overview.locator('details.talk-abstract > summary').all():
+                # Inline summaries expose separate arrow/text fragments. They
+                # must share a visual line, even when the whole control wraps.
+                self.assertEqual(control.evaluate('node => new Set(Array.from(node.getClientRects()).filter(r => r.width > 0).map(r => Math.round(r.y))).size'), 1)
             text = abstract.locator('.abstract-text')
             self.assertFalse(text.is_visible())
             summary = abstract.locator('summary')
+            row = overview.locator('.talk-list > li').first
+            title = row.locator('.talk-title')
+            if width == 1100:
+                self.assertLess(abs(title.bounding_box()['y'] - summary.bounding_box()['y']), 2)
+            title.click()
+            row.locator('.talk-authors').click()
+            self.assertFalse(text.is_visible())
+            self.assertEqual(title.evaluate('node => node.tagName'), 'SPAN')
+            self.assertIsNone(title.get_attribute('role'))
+            self.assertIsNone(title.get_attribute('tabindex'))
             summary.click()
             self.assertTrue(text.is_visible())
+            self.assertGreaterEqual(text.bounding_box()['width'], row.bounding_box()['width'] - 2)
             summary.focus()
             self.page.keyboard.press('Enter')
             self.assertFalse(text.is_visible())
