@@ -263,7 +263,9 @@ class BrowserTests(unittest.TestCase):
             self.assertFalse(abstract.is_visible())
             overview.locator(':scope > summary').click()
             for control in overview.locator('details.talk-abstract > summary').all():
-                self.assertEqual(control.evaluate('node => node.getClientRects().length'), 1)
+                # Inline summaries expose separate arrow/text fragments. They
+                # must share a visual line, even when the whole control wraps.
+                self.assertEqual(control.evaluate('node => new Set(Array.from(node.getClientRects()).filter(r => r.width > 0).map(r => Math.round(r.y))).size'), 1)
             text = abstract.locator('.abstract-text')
             self.assertFalse(text.is_visible())
             summary = abstract.locator('summary')
