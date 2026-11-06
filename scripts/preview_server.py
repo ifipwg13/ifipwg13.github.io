@@ -23,6 +23,7 @@ REPOSITORY = "ifipwg13/ifipwg13.github.io"
 LIST_SCRIPT = '<script src="assets/meetings-list.js" defer></script>'
 LOGO_PATH = 'prototype/assets/ifip-logo.png'
 LOGO_IMAGE = re.compile(r'''(<img\b[^>]*\bsrc=["'])(?:(?:\.\./){1,2}|prototype/)?assets/ifip-logo\.png(["'])''', re.IGNORECASE)
+SYNCHRONIZED_VIEW = '/__preview/synchronized/'
 
 
 class PreviewError(Exception):
@@ -70,7 +71,7 @@ def canonical_url(url):
     return canonical if canonical != path else None
 
 
-def styled_preview(content, stylesheet, revision, javascript=None, logo=None):
+def styled_preview(content, stylesheet, revision, javascript=None, logo=None, branch=BRANCH):
     """Deliver a complete styled page even if a browser's CSS request would fail."""
     page = content.decode("utf-8")
     style = "<style>\n" + stylesheet.decode("utf-8").replace("</", "<\\/") + "\n</style>"
@@ -89,10 +90,15 @@ def styled_preview(content, stylesheet, revision, javascript=None, logo=None):
         data_url = 'data:image/png;base64,' + base64.b64encode(logo).decode('ascii')
         page = LOGO_IMAGE.sub(lambda match: match[1] + data_url + match[2], page)
     fetched = dt.datetime.now(ZoneInfo("Europe/Berlin")).strftime("%d-%m-%Y %H:%M:%S %Z")
-    banner = ('<aside aria-label="Live preview" style="background:#edf3fa;color:#202b3c;'
+    synchronized = branch == BRANCH
+    mode = 'Synchronized preview' if synchronized else 'Review snapshot'
+    explanation = ('Issue changes appear after synchronization succeeds and you refresh.' if synchronized else
+                   'This review branch does not receive Issue updates. '
+                   f'<a href="{SYNCHRONIZED_VIEW}">Switch to synchronized preview</a>.')
+    banner = ('<aside aria-label="Preview status" style="background:#edf3fa;color:#202b3c;'
               'border-bottom:1px solid #d6dee8;padding:.65rem 1rem;font-size:.9rem">'
-              '<strong>Live preview</strong> · Updates from GitHub on refresh · '
-              f'Version {html.escape(revision[:7])} · Retrieved {fetched}</aside>')
+              f'<strong>{mode}</strong> · Source: <code>{html.escape(branch)}</code> · '
+              f'Version {html.escape(revision[:7])} · Retrieved {fetched}<br>{explanation}</aside>')
     return re.sub(r"<body>", lambda _: "<body>\n" + banner, page, count=1, flags=re.IGNORECASE).encode("utf-8")
 
 
@@ -128,7 +134,7 @@ class GitSource:
             if missing_ok:
                 raise FileNotFoundError
             # Git output can contain credential-bearing remote URLs. Never echo it.
-            raise PreviewError("The preview could not update from GitHub. Check access to the prototype branch and refresh again.")
+            raise PreviewError("The preview could not update from GitHub. Check access to the selected preview branch and refresh again.")
         return result.stdout
 
     def latest(self, force=False):
@@ -137,7 +143,7 @@ class GitSource:
                 self.git("fetch", "--quiet", "origin", f"refs/heads/{self.branch}:{self.ref}")
                 commit = self.git("rev-parse", "--verify", self.ref).decode().strip()
                 if not re.fullmatch(r"[0-9a-f]{40,64}", commit):
-                    raise PreviewError("The prototype branch could not be read. Refresh again.")
+                    raise PreviewError("The selected preview branch could not be read. Refresh again.")
                 self.commit = commit
                 self.last_fetch = time.monotonic()
             return self.commit
@@ -150,6 +156,15 @@ class GitSource:
         if not re.fullmatch(r"[0-9a-f]{40,64}", revision):
             raise PreviewError("The preview revision could not be read.")
         return self.git("show", f"{revision}:{path}", missing_ok=True)
+
+    def synchronized(self):
+        """Return a reader for the public branch maintained by Issue automation."""
+        if self.branch == BRANCH:
+            return self
+        reader = GitSource(self.repository, self.interval, branch=BRANCH)
+        # Both views fetch into one checkout; serialize their Git fetches.
+        reader.lock = self.lock
+        return reader
 
     def page(self, path):
         # HTML, CSS, and the list sorter must share a commit during an update.
@@ -171,10 +186,20 @@ class GitSource:
                 logo = self.read(LOGO_PATH, revision)
             except FileNotFoundError:
                 raise PreviewError('The IFIP logo is missing from GitHub; the preview cannot display it correctly.') from None
-        return styled_preview(content, stylesheet, revision, javascript, logo), revision
+        return styled_preview(content, stylesheet, revision, javascript, logo, self.branch), revision
 
 
 def make_server(source, host="0.0.0.0", port=8001):
+    synchronized_source = None
+    selection_lock = threading.Lock()
+
+    def synchronized_reader():
+        nonlocal synchronized_source
+        with selection_lock:
+            if synchronized_source is None:
+                synchronized_source = source.synchronized()
+            return synchronized_source
+
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             self.serve(head=False)
@@ -184,19 +209,25 @@ def make_server(source, host="0.0.0.0", port=8001):
 
         def serve(self, head):
             try:
-                redirect = canonical_url(self.path)
-                if redirect:
-                    self.send_response(307)
-                    self.send_header("Location", redirect)
-                    self.send_header("Content-Length", "0")
-                    self.end_headers()
+                request_path = url_path(self.path)
+                if request_path == SYNCHRONIZED_VIEW.rstrip('/'):
+                    self.redirect(SYNCHRONIZED_VIEW)
                     return
-                path = resource_path(self.path)
+                selected_source, view_prefix = source, ''
+                if request_path.startswith(SYNCHRONIZED_VIEW):
+                    selected_source = synchronized_reader()
+                    view_prefix = SYNCHRONIZED_VIEW.rstrip('/')
+                    request_path = '/' + request_path[len(SYNCHRONIZED_VIEW):]
+                redirect = canonical_url(request_path)
+                if redirect:
+                    self.redirect(view_prefix + redirect)
+                    return
+                path = resource_path(request_path)
                 if path.endswith(".html"):
-                    content, revision = source.page(path)
+                    content, revision = selected_source.page(path)
                 else:
-                    content = source.read(path)
-                    revision = source.commit
+                    content = selected_source.read(path)
+                    revision = selected_source.commit
             except (FileNotFoundError, ValueError):
                 self.send_error(404, "Page not found")
                 return
@@ -213,6 +244,12 @@ def make_server(source, host="0.0.0.0", port=8001):
             self.end_headers()
             if not head:
                 self.wfile.write(content)
+
+        def redirect(self, location):
+            self.send_response(307)
+            self.send_header("Location", location)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
 
         def end_headers(self):
             # Errors and redirects must not remain cached either.
@@ -238,8 +275,9 @@ def main():
         source = GitSource(args.repository, branch=args.branch)
         source.latest()
         with make_server(source, port=args.port) as server:
-            print(f"LIVE PREVIEW on port {server.server_port}. Open this port from Codespaces Ports. "
-                  "The page must show the Live preview label; HTML and styling update together from GitHub.", flush=True)
+            mode = 'SYNCHRONIZED PREVIEW' if source.branch == BRANCH else 'REVIEW SNAPSHOT'
+            print(f"{mode} on port {server.server_port}. Open this port from Codespaces Ports. "
+                  f"Source: {source.branch}. Check the Preview status bar for the source and version.", flush=True)
             server.serve_forever()
     except KeyboardInterrupt:
         pass

@@ -71,7 +71,7 @@ def talks_html(record):
         if talk['abstract']:
             escaped = html.escape(talk['abstract'])
             escaped = re.sub(r'[ \t]+$', lambda match: ''.join('&#32;' if c == ' ' else '&#9;' for c in match[0]), escaped, flags=re.MULTILINE)
-            content += (' · <details class="talk-abstract"><summary>Abstract</summary>'
+            content += (' <details class="talk-abstract"><summary>Abstract</summary>'
                         '<div class="abstract-text">' + escaped + '</div></details>')
         rows.append('<li id="' + ident + '">' + content + '</li>')
     return '<ul class="talk-list">' + ''.join(rows) + '</ul>'

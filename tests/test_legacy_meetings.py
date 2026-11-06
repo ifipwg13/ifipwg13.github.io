@@ -50,6 +50,15 @@ class LegacyTests(unittest.TestCase):
             with self.subTest(authors=authors), self.assertRaises(ValueError):
                 b.validate([record])
 
+    def test_separator_removal_keeps_punctuation_in_legacy_content(self):
+        record = copy.deepcopy(RECORD)
+        record['talks'][0].update(title='Values · types', authors='A. Example', abstract='Multiply x · y.')
+        source = b.talks_html(record)
+        self.assertIn('Values · types</span>', source)
+        self.assertIn('>A. Example</span> <details', source)
+        self.assertIn('Multiply x · y.', source)
+        self.assertNotIn('</span> · <details', source)
+
     def test_extra_metadata_or_invented_fields_are_rejected(self):
         for key in ('source_url', 'coverage_notes', 'id', 'description', 'authors'):
             record = copy.deepcopy(RECORD); record[key] = 'not permitted'

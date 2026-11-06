@@ -11,23 +11,23 @@ The website displays each talk's title, entered authors, and expandable abstract
 
 ## Preview in Firefox without publishing
 
-1. Sign in to GitHub in Firefox and open the feature pull request for this change.
-2. On the pull request, click **Code**, choose **Codespaces**, and select the
-   option to create a codespace for the pull request branch. If that option is
-   unavailable, open the repository, select the `feature/classic-style-compact-talks`
-   branch, then choose **Code → Codespaces → Create codespace**.
+1. Sign in to GitHub in Firefox and open this repository.
+2. Select `prototype/meeting-management`, then choose
+   **Code → Codespaces → Create codespace**. This is the branch maintained by
+   meeting synchronization. For unmerged changes, use **Preview this feature
+   draft** below instead.
 3. Wait for the browser editor to open. If there is no terminal panel, use the
    top-left menu **☰ → Terminal → New Terminal**.
 4. Paste this command into the terminal and press Enter:
 
    ```sh
-   python3 scripts/preview_server.py --branch feature/classic-style-compact-talks --port 8001
+   python3 scripts/preview_server.py --port 8001
    ```
 
 5. When **Open in Browser** appears, click it. Otherwise, open the **Ports** tab
    beside **Terminal**, find port **8001**, and click its **Open in Browser**
    globe icon. If the port is missing, choose **Add Port** and enter `8001`.
-6. The group homepage opens in a new Firefox tab with a **Live preview** bar.
+6. The group homepage opens in a new Firefox tab with a **Synchronized preview** bar.
    Use **Members** and **Meetings** in its navigation. On the meetings page,
    choose **View meeting** to inspect a meeting.
 
@@ -40,9 +40,18 @@ branch when a page is requested, so refreshing Firefox receives updates without
 another terminal command. Your local files and branches are not changed.
 The server includes the stylesheet, list sorter, and IFIP logo in each preview
 page, using the same Git version for all assets. Styling, sorting, and the logo do not depend on a
-second browser request. The **Live preview** bar shows the retrieved version
-and time (Europe/Berlin).
+second browser request. The **Preview status** bar shows the source branch,
+retrieved version, and time (Europe/Berlin).
 Port **8001** distinguishes this preview from an older server on port 8000.
+
+**Synchronized preview** follows `prototype/meeting-management`. After a private
+Issue changes, wait for **Prepare meeting** to succeed, then refresh Firefox.
+**Review snapshot** follows an explicitly selected feature branch. Refreshing
+that branch does not bring in Issue updates, including after its PR is merged.
+Use **Switch to synchronized preview** in its status bar to view current meeting
+states. The switch is read-only and keeps subsequent navigation in that view;
+its URL starts with `/__preview/synchronized/`. No branch is merged or modified.
+These status controls appear only in the Codespaces preview, not the static site.
 
 Use a personally billed, two-core codespace within your available free allowance.
 The creation dialog identifies who pays. A GitHub Free personal account includes
@@ -75,11 +84,11 @@ feature in an existing Codespace, use **Preview this feature draft** below.
    python3 "$meeting_preview_script" --repository "$PWD" --port 8001
    ```
 
-   The terminal must report **LIVE PREVIEW on port 8001**. If it reports an error,
+   The terminal must report **SYNCHRONIZED PREVIEW on port 8001**. If it reports an error,
    copy that error for diagnosis; the block stops rather than running older code.
 3. Close the old preview tab. In **Ports**, open **8001** using its globe icon.
    Add port `8001` if it is absent, keeping its visibility **Private**. Confirm
-   the new tab shows the **Live preview** bar, styled buttons, and the current
+   the new tab shows the **Synchronized preview** bar, styled buttons, and the current
    meetings. Subsequent updates need only a browser refresh.
 
 The preview uses the same paths as static hosting: `/` is the group homepage,
@@ -96,9 +105,12 @@ an error rather than silently displaying an old meeting list.
 
 ## Editing the site
 
-- `index.html`: group name, affiliation, Aims, and Scope; edit the HTML directly.
+- `index.html`: group name, affiliation, current/past chairs, Aims, and Scope;
+  edit the HTML directly. Corina Cirstea is first among the past chairs as
+  specified by the group. Do not infer appointment dates or terms.
 - `members/index.html`: the Members and Emeriti lists, with one entry per `<li>`.
-  Preserve country codes, roles, and deceased markers when updating entries.
+  Preserve names, country codes, categories, and deceased markers when updating
+  entries. Leadership roles are listed on Home rather than beside members.
   This public roster does not grant or remove private GitHub repository access.
 - `prototype/assets/style.css`: the shared stylesheet for every page. The
   variables at the top control the main colours and content width. Navigation
@@ -130,7 +142,7 @@ on the cards and meeting pages as **title by authors**, with the title linking t
 its private Issue. Automatic meeting prefixes and Issue-number labels are omitted.
 Each Issue-backed meeting page shows an initially collapsed **Abstract** disclosure
 beside each talk that has supplied abstract text. Its collapsed row reads
-**Title by Presenter · ▸ Abstract** when space permits. Long titles and small
+**Title by Presenter ▸ Abstract** when space permits. Long titles and small
 screens wrap naturally. Opening Abstract places the full text below that row.
 Titles and presenter names are underlined; only Issue-backed titles are links.
 Abstracts are escaped text with paragraph breaks; Issue-backed
@@ -202,7 +214,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/classic-style-compact-talks --port 8001
+python3 scripts/preview_server.py --branch feature/preview-source-leadership --port 8001
 ```
 
 Open port **8001** using **Ports → Open in Browser**. Firefox displays the review
@@ -210,9 +222,13 @@ branch and refreshes it from GitHub, with HTML, styling, and the list sorter fro
 the same commit.
 This optional branch selection leaves the existing prototype preview default
 unchanged. Issue-backed pages in this feature draft are a review snapshot.
-The shared design and legacy rows are public changes. The separate private PR
-updates generated meeting headers, talk rows, the acceptance checker, and docs;
-label synchronization and permissions use the existing workflow unchanged.
+The bar must say **Review snapshot**, name this feature branch, and offer
+**Switch to synchronized preview**. Use the review view for unmerged presentation
+changes and the synchronized view for label tests. Before integration, the
+synchronized view shows currently merged content; unmerged leadership and talk
+separator changes remain in the review view. The public preview/data-source fix and leadership edits are
+public changes; the separate private PR removes the talk separator at its source.
+Label synchronization and permissions use the existing workflow unchanged.
 No PR is merged or Pages website published by starting a preview.
 
 In an existing Codespace with older local scripts, press **Ctrl+C** to stop its
@@ -221,18 +237,21 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/classic-style-compact-talks:refs/remotes/origin/feature/classic-style-compact-talks &&
+git fetch origin refs/heads/feature/preview-source-leadership:refs/remotes/origin/feature/preview-source-leadership &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/classic-style-compact-talks:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/classic-style-compact-talks --port 8001
+git show origin/feature/preview-source-leadership:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/preview-source-leadership --port 8001
 ```
 
 Open port **8001** from **Ports**, keeping it **Private**. The first page must be
-the group homepage with Home / Members / Meetings navigation and a Live preview
-bar. This block does not change local HTML, Git branches, or the published site.
+the group homepage with Home / Members / Meetings navigation and a **Review
+snapshot** status bar. This block does not change local HTML, the checked-out
+branch, or the published site. For current Issue states, click **Switch to
+synchronized preview**; the status must then say **Synchronized preview** and
+name `prototype/meeting-management`.
 
 After separate approval, integrate the public feature before the private
-generator so the referenced logo and stylesheet exist. Then run **Prepare
+generator, then run **Prepare
 meeting** once from the private repository's Actions page to refresh all meeting
 pages consistently. These operations still require separate merge approval.
 
@@ -240,7 +259,8 @@ The public feature PR targets the existing prototype branch. Public website PR
 #1 stays draft and unmerged. After both feature PRs are separately approved and
 integrated (public design to the prototype branch, private generator to `main`), use
 the normal preview command without `--branch` for real event synchronization.
-The isolated feature branch remains a review snapshot until it is updated again.
+The isolated feature branch remains a review snapshot until it is updated again;
+merging it does not make it the synchronization target.
 
 GitHub Pages currently publishes `main` from the repository root. Keep this
 pull request unmerged throughout initial testing, including second-meeting tests.

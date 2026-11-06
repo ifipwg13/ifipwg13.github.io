@@ -26,13 +26,21 @@ spec.loader.exec_module(p)
 
 class LocalSource:
     commit = 'a' * 40
+    branch = p.BRANCH
 
     def read(self, path):
         return (ROOT / path).read_bytes()
 
     def page(self, path):
         return p.styled_preview(self.read(path), self.read('prototype/assets/style.css'), self.commit,
-                                self.read('prototype/assets/meetings-list.js'), self.read(p.LOGO_PATH)), self.commit
+                                self.read('prototype/assets/meetings-list.js'), self.read(p.LOGO_PATH), self.branch), self.commit
+
+    def synchronized(self):
+        return LocalSource()
+
+
+class ReviewSource(LocalSource):
+    branch = 'feature/review-fixture'
 
 
 class QuietFiles(http.server.SimpleHTTPRequestHandler):
@@ -49,7 +57,8 @@ class BrowserTests(unittest.TestCase):
         cls.static = http.server.ThreadingHTTPServer(('127.0.0.1', 0),
             functools.partial(QuietFiles, directory=str(ROOT)))
         cls.preview = p.make_server(LocalSource(), host='127.0.0.1', port=0)
-        for server in (cls.static, cls.preview):
+        cls.review = p.make_server(ReviewSource(), host='127.0.0.1', port=0)
+        for server in (cls.static, cls.preview, cls.review):
             threading.Thread(target=server.serve_forever, daemon=True).start()
         cls.playwright = sync_playwright().start()
         cls.browser = cls.playwright.chromium.launch(executable_path=shutil.which('chromium'), headless=True)
@@ -58,7 +67,7 @@ class BrowserTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.browser.close()
         cls.playwright.stop()
-        for server in (cls.static, cls.preview):
+        for server in (cls.static, cls.preview, cls.review):
             server.shutdown()
             server.server_close()
 
@@ -90,6 +99,12 @@ class BrowserTests(unittest.TestCase):
                     self.open(server, '/')
                     self.assertEqual(self.page.locator('h1').inner_text(), 'Foundations of System Specification')
                     self.assertEqual(self.page.locator('.affiliation').inner_text(), 'An IFIP TC1 Working Group')
+                    self.assertEqual(self.page.locator('[aria-labelledby="chairs-heading"] li').all_text_contents(),
+                                     ['Fabio Gadducci', 'Holger Schlingloff'])
+                    self.assertEqual(self.page.locator('[aria-labelledby="past-chairs-heading"] li').all_text_contents(),
+                                     ['Corina Cirstea', 'Markus Roggenbach', 'Lutz Schröder', 'Till Mossakowski',
+                                      'José Luiz Fiadeiro', 'Peter D. Mosses', 'Hans-Jörg Kreowski'])
+                    self.assertNotIn('Secretary', self.page.locator('body').inner_text())
                     nav = self.page.get_by_role('navigation', name='Main navigation')
                     self.assertEqual(nav.get_by_role('link').all_text_contents(), ['Home', 'Members', 'Meetings'])
                     self.assertEqual(nav.locator('a').evaluate_all('links => links.map(a => a.pathname)'), ['/', '/members/', '/prototype/'])
@@ -103,7 +118,10 @@ class BrowserTests(unittest.TestCase):
                     self.assertEqual(self.page.locator('[aria-labelledby="members-heading"] li').count(), 34)
                     self.assertEqual(self.page.locator('[aria-labelledby="emeriti-heading"] li').count(), 36)
                     self.assertEqual(self.page.locator('.member-list a').count(), 0)
-                    self.assertEqual(self.page.get_by_text('Cirstea, Corina (UK) Secretary', exact=True).count(), 1)
+                    self.assertEqual(self.page.get_by_text('Cirstea, Corina (UK)', exact=True).count(), 1)
+                    roster = self.page.locator('.members-grid').inner_text()
+                    self.assertNotIn('Secretary', roster)
+                    self.assertNotIn('Chairman', roster)
                     self.assertEqual(self.page.locator('h1').evaluate('node => [getComputedStyle(node).color, getComputedStyle(document.body).color]'), colors)
                     self.no_overflow()
                     self.page.get_by_role('navigation').get_by_role('link', name='Meetings', exact=True).click()
@@ -123,6 +141,32 @@ class BrowserTests(unittest.TestCase):
             'cards => cards.map(card => card.querySelector(".meeting-summary time").dateTime.slice(0, 10))')
         self.assertEqual(values, sorted(values, reverse=True))
         return values
+
+    def test_review_toolbar_switches_to_synchronized_view_and_keeps_navigation(self):
+        for width in (1100, 375, 320):
+            self.page.set_viewport_size({'width': width, 'height': 950})
+            self.open(self.review, '/')
+            status = self.page.get_by_label('Preview status', exact=True)
+            self.assertIn('Review snapshot', status.inner_text())
+            self.assertIn('feature/review-fixture', status.inner_text())
+            status.get_by_role('link', name='Switch to synchronized preview', exact=True).click()
+            prefix = f'http://127.0.0.1:{self.review.server_port}' + p.SYNCHRONIZED_VIEW
+            self.assertEqual(self.page.url, prefix)
+            self.assertIn('Synchronized preview', self.page.get_by_label('Preview status', exact=True).inner_text())
+            self.assertIn(p.BRANCH, self.page.get_by_label('Preview status', exact=True).inner_text())
+            self.page.get_by_role('navigation').get_by_role('link', name='Members', exact=True).click()
+            self.assertEqual(self.page.url, prefix + 'members/')
+            self.assertEqual(self.page.locator('.member-list li').count(), 70)
+            self.page.get_by_role('navigation').get_by_role('link', name='Meetings', exact=True).click()
+            self.assertEqual(self.page.url, prefix + 'prototype/')
+            self.ordered_dates()
+            self.page.locator('.meeting-card').first.locator(':scope > a.button').click()
+            self.assertIn(prefix + 'prototype/meetings/', self.page.url)
+            self.page.get_by_role('link', name='All meetings', exact=True).click()
+            self.assertEqual(self.page.url, prefix + 'prototype/')
+            self.no_overflow()
+        self.assertFalse(self.external)
+        self.assertFalse(self.errors)
 
     def no_overflow(self):
         self.assertTrue(self.page.evaluate('document.documentElement.scrollWidth <= innerWidth'))
@@ -157,11 +201,14 @@ class BrowserTests(unittest.TestCase):
                     if disclosures:
                         row = min(disclosures, key=lambda r: len(r.locator('.talk-title').inner_text() + r.locator('.talk-authors').inner_text()))
                         disclosure = row.locator('.talk-abstract')
+                        self.assertEqual(disclosure.evaluate("node => (node.previousSibling?.textContent || '').trim()"), '')
                         summary = disclosure.locator('summary')
                         content = disclosure.locator('.abstract-text')
                         self.assertFalse(content.is_visible())
                         if width == 1100:
                             self.assertLess(abs(row.locator('.talk-title').bounding_box()['y'] - summary.bounding_box()['y']), 2)
+                            author = row.locator('.talk-authors').bounding_box()
+                            self.assertGreaterEqual(summary.bounding_box()['x'] - author['x'] - author['width'], 3)
                         summary.click()
                         self.assertTrue(content.is_visible())
                         self.assertGreater(content.bounding_box()['y'], row.locator('.talk-title').bounding_box()['y'])
@@ -246,6 +293,7 @@ class BrowserTests(unittest.TestCase):
                     disclosure = row.locator('.talk-abstract')
                     self.assertEqual(disclosure.count(), int(bool(talk['abstract'])))
                     if talk['abstract']:
+                        self.assertEqual(disclosure.evaluate("node => (node.previousSibling?.textContent || '').trim()"), '')
                         self.assertIsNone(disclosure.get_attribute('open'))
                         self.assertEqual(disclosure.locator('.abstract-text').text_content(), talk['abstract'])
                 self.no_overflow()
@@ -256,7 +304,7 @@ class BrowserTests(unittest.TestCase):
         for width in (1100, 375, 320):
             self.page.set_viewport_size({'width': width, 'height': 950})
             self.open(self.preview)
-            self.assertTrue(self.page.get_by_label('Live preview', exact=True).is_visible())
+            self.assertTrue(self.page.get_by_label('Preview status', exact=True).is_visible())
             card = self.page.locator('.legacy-meeting-card').first
             overview = card.locator('details.talks-overview')
             abstract = overview.locator('details.talk-abstract').first
@@ -273,6 +321,8 @@ class BrowserTests(unittest.TestCase):
             title = row.locator('.talk-title')
             if width == 1100:
                 self.assertLess(abs(title.bounding_box()['y'] - summary.bounding_box()['y']), 2)
+                author = row.locator('.talk-authors').bounding_box()
+                self.assertGreaterEqual(summary.bounding_box()['x'] - author['x'] - author['width'], 3)
             title.click()
             row.locator('.talk-authors').click()
             self.assertFalse(text.is_visible())
@@ -313,6 +363,11 @@ class BrowserTests(unittest.TestCase):
             disclosure.locator('summary').click()
             self.assertTrue(disclosure.locator('.abstract-text').is_visible())
             self.assertEqual(page.locator('.talk-list > li .talk-authors').first.inner_text(), self.records[0]['talks'][0]['authors'])
+            page.goto(f'http://127.0.0.1:{self.review.server_port}/')
+            status = page.get_by_label('Preview status', exact=True)
+            self.assertIn('Review snapshot', status.inner_text())
+            status.get_by_role('link', name='Switch to synchronized preview', exact=True).click()
+            self.assertIn('Synchronized preview', page.get_by_label('Preview status', exact=True).inner_text())
         finally:
             context.close()
 

@@ -1,6 +1,7 @@
 """Exercise updates through real local Git repositories and HTTP; no credentials."""
 
 import base64
+import concurrent.futures
 import http.client
 import importlib.util
 import re
@@ -117,7 +118,7 @@ class PreviewTests(unittest.TestCase):
             readable, _, _ = select.select([process.stdout], [], [], 20)
             self.assertTrue(readable, "Preview did not start")
             line = process.stdout.readline().decode()
-            match = re.search(r"LIVE PREVIEW on port ([0-9]+)", line)
+            match = re.search(r"(?:SYNCHRONIZED PREVIEW|REVIEW SNAPSHOT) on port ([0-9]+)", line)
             self.assertIsNotNone(match, line)
             connection = http.client.HTTPConnection("127.0.0.1", int(match[1]), timeout=10)
             try:
@@ -126,7 +127,7 @@ class PreviewTests(unittest.TestCase):
                 self.assertEqual(response.status, 200)
                 content = response.read()
                 self.assertIn(expected, content)
-                self.assertIn(b"Live preview", content)
+                self.assertIn(b'aria-label="Preview status"', content)
             finally:
                 connection.close()
         finally:
@@ -200,7 +201,8 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b"<style>\nh1 {color: navy}\n</style>", content)
         self.assertNotIn(b'rel="stylesheet"', content)
-        self.assertIn(b"<strong>Live preview</strong>", content)
+        self.assertIn(b"<strong>Synchronized preview</strong>", content)
+        self.assertIn(p.BRANCH.encode(), content)
         revision = git(self.remote, "rev-parse", p.BRANCH).decode().strip()
         self.assertEqual(headers["X-Preview-Revision"], revision)
         self.assertIn(revision[:7].encode(), content)
@@ -226,7 +228,7 @@ class PreviewTests(unittest.TestCase):
                 if new.endswith(".css"):
                     self.assertIn(b"color: navy", content)
                 else:
-                    self.assertIn(b"Live preview", content)
+                    self.assertIn(b'aria-label="Preview status"', content)
                     self.assertIn(b"<style>", content)
 
     def test_home_members_and_meetings_have_distinct_canonical_paths(self):
@@ -428,7 +430,7 @@ class PreviewTests(unittest.TestCase):
 
     def test_existing_codespace_review_command_selects_the_feature_without_altering_local_work(self):
         prototype = git(self.remote, "rev-parse", p.BRANCH)
-        git(self.remote, "switch", "-c", "feature/classic-style-compact-talks")
+        git(self.remote, "switch", "-c", "feature/preview-source-leadership")
         (self.remote / "index.html").write_text(meeting_page("Review group homepage", "prototype/assets/style.css"))
         (self.remote / "scripts").mkdir()
         (self.remote / "scripts/preview_server.py").write_text(Path(p.__file__).read_text())
@@ -471,11 +473,98 @@ class PreviewTests(unittest.TestCase):
         status, headers, content = self.request(server)
         self.assertEqual(status, 200)
         self.assertIn(b"Review feature", content)
+        self.assertIn(b'<strong>Review snapshot</strong>', content)
+        self.assertIn(b'This review branch does not receive Issue updates.', content)
+        self.assertIn(p.SYNCHRONIZED_VIEW.encode(), content)
         self.assertEqual(headers["X-Preview-Revision"], git(self.remote, "rev-parse", "feature/review").decode().strip())
         self.assertEqual(git(self.remote, "rev-parse", p.BRANCH), prototype)
         self.assertEqual(git(self.remote, "rev-parse", "main"), main)
         default = p.GitSource(self.checkout)
         self.assertIn(b"First meeting", default.page("prototype/index.html")[0])
+        # Opening both views in separate tabs must not mix sources or race fetches.
+        cases = [('/prototype/', b'Review feature', b'Review snapshot'),
+                 (p.SYNCHRONIZED_VIEW.rstrip('/') + '/prototype/', b'First meeting', b'Synchronized preview')] * 3
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            responses = list(pool.map(lambda case: self.request(server, case[0]), cases))
+        for (_, title, mode), (status, _, content) in zip(cases, responses):
+            self.assertEqual(status, 200)
+            self.assertIn(title, content)
+            self.assertIn(mode, content)
+
+    def publish_meeting_states(self, archived, munich_visible):
+        cards = '<article id="bologna">Bologna ' + ('Archived' if archived else 'Active') + '</article>'
+        if munich_visible:
+            cards += '<article id="munich">Munich</article>'
+        (self.remote / 'prototype/index.html').write_text(meeting_page('Meetings').replace('</body>', cards + '</body>'))
+        git(self.remote, 'add', 'prototype')
+        git(self.remote, 'commit', '-m', 'Synchronize fixture meeting labels')
+
+    def test_switch_reproduces_and_resolves_bologna_munich_snapshot_mismatch(self):
+        self.publish_meeting_states(archived=True, munich_visible=True)
+        git(self.remote, 'switch', '-c', 'feature/stale-review')
+        snapshot = git(self.remote, 'rev-parse', 'HEAD').decode().strip()
+        git(self.remote, 'switch', p.BRANCH)
+        self.publish_meeting_states(archived=False, munich_visible=False)
+        self.source = p.GitSource(self.checkout, branch='feature/stale-review')
+        server = self.server()
+        status, headers, old = self.request(server)
+        self.assertEqual(status, 200)
+        self.assertIn(b'Bologna Archived', old)
+        self.assertIn(b'id="munich"', old)
+        self.assertIn(b'Review snapshot', old)
+        self.assertEqual(headers['X-Preview-Revision'], snapshot)
+        self.assertIn(('href="' + p.SYNCHRONIZED_VIEW + '"').encode(), old)
+        prefix = p.SYNCHRONIZED_VIEW.rstrip('/')
+        status, _, home = self.request(server, p.SYNCHRONIZED_VIEW)
+        self.assertEqual(status, 200)
+        self.assertIn(b'Group homepage', home)
+        self.assertIn(b'<strong>Synchronized preview</strong>', home)
+        self.assertIn(p.BRANCH.encode(), home)
+        status, headers, current = self.request(server, prefix + '/prototype/')
+        self.assertEqual(status, 200)
+        self.assertIn(b'Bologna Active', current)
+        self.assertNotIn(b'id="munich"', current)
+        self.assertEqual(headers['X-Preview-Revision'], git(self.remote, 'rev-parse', p.BRANCH).decode().strip())
+        # Removing hidden restores visibility; an archived meeting stays archived.
+        self.publish_meeting_states(archived=True, munich_visible=True)
+        refreshed = self.request(server, prefix + '/prototype/')[2]
+        self.assertIn(b'Bologna Archived', refreshed)
+        self.assertIn(b'id="munich"', refreshed)
+        self.assertIn(b'Review snapshot', self.request(server)[2])
+        self.assertEqual(git(self.remote, 'rev-parse', 'feature/stale-review').decode().strip(), snapshot)
+        self.assertEqual(git(self.remote, 'rev-parse', 'main'), self.main)
+
+    def test_synchronized_view_keeps_aliases_and_file_restrictions(self):
+        self.publish()
+        server = self.server()
+        prefix = p.SYNCHRONIZED_VIEW.rstrip('/')
+        self.assertEqual(self.request(server, prefix)[1]['Location'], p.SYNCHRONIZED_VIEW)
+        for old, new in [('/members', '/members/'), ('/meetings/meeting-12', '/prototype/meetings/meeting-12/'),
+                         ('/assets/style.css', '/prototype/assets/style.css')]:
+            status, headers, _ = self.request(server, prefix + old)
+            self.assertEqual(status, 307)
+            self.assertEqual(headers['Location'], prefix + new)
+            self.assertEqual(self.request(server, prefix + new)[0], 200)
+        self.assertEqual(self.request(server, p.SYNCHRONIZED_VIEW, method='HEAD')[2], b'')
+        for invalid in ['/README.md', '/.git/config', '/../index.html', '/%2e%2e/index.html',
+                        '/members/private.html', '/prototype/data/legacy-meetings.json']:
+            self.assertEqual(self.request(server, prefix + invalid)[0], 404)
+        # Query strings cannot select another repository or an arbitrary branch.
+        content = self.request(server, p.SYNCHRONIZED_VIEW + '?branch=main&repository=private')[2]
+        self.assertIn(p.BRANCH.encode(), content)
+        self.assertIn(b'Synchronized preview', content)
+
+    def test_failed_synchronized_fetch_cannot_fall_back_to_review_or_stale_data(self):
+        server = self.server()
+        path = p.SYNCHRONIZED_VIEW.rstrip('/') + '/prototype/'
+        self.assertEqual(self.request(server, path)[0], 200)
+        with patch.object(p.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, stderr=b'TEST-ONLY-CREDENTIAL')), patch('builtins.print') as log:
+            status, headers, content = self.request(server, path)
+        self.assertEqual(status, 503)
+        self.assertEqual(headers['Cache-Control'], 'no-store')
+        self.assertNotIn(b'First meeting', content)
+        self.assertNotIn(b'TEST-ONLY-CREDENTIAL', content)
+        self.assertNotIn('TEST-ONLY-CREDENTIAL', str(log.call_args_list))
 
     def test_invalid_review_branch_names_are_rejected(self):
         for branch in ["-main", "../main", "main:refs/heads/main", "feature/../main", "main\nprivate", "feature/"]:
