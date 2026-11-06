@@ -3,22 +3,28 @@
   --link: #1d3c8f;
   --heading: #5e5ca8;
   --surface: #f6f5fa;
+  --page: #666699;
+  --navigation: #c4ea54;
   --content-width: 54rem;
   color-scheme: light;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--text);
-  background: #fff;
+  background: var(--page);
   line-height: 1.6;
 }
 
 * { box-sizing: border-box; }
 body { margin: 0; overflow-wrap: anywhere; }
-.container { max-width: var(--content-width); margin-inline: auto; padding: 1.5rem; }
-.site-header { background: var(--surface); border-bottom: 1px solid #d6dee8; }
+.container { width: calc(100% - 2rem); max-width: var(--content-width); margin-inline: auto; padding: 1.5rem; }
+.site-header { margin-block: 1.25rem; }
+.site-header > .container { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: .5rem 1.25rem; align-items: center; background: #fff; border-radius: .7rem; }
+.brand-logo { grid-row: 1 / span 2; }
+.brand-logo img { display: block; width: 3rem; height: auto; }
+main.container { background: #fff; border-radius: .7rem; margin-block: 1.25rem; }
 .site-header p:last-child { margin-bottom: 0; }
-.site-brand { font-size: 1.25rem; font-weight: 700; margin: 0; }
+.site-brand { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 700; margin: 0; }
 .site-brand a { color: var(--heading); text-decoration: none; }
-.site-nav { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; margin-top: .75rem; }
+.site-nav { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; padding: .5rem .75rem; background: var(--navigation); border-radius: .3rem; }
 .site-nav a[aria-current="page"] { color: var(--text); font-weight: 700; }
 h1, h2, h3 { color: var(--heading); line-height: 1.25; }
 h1 { font-size: clamp(1.8rem, 5vw, 2.5rem); margin-top: .5rem; }
@@ -61,11 +67,14 @@ a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .talks-overview summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .talk-list { padding-left: 1.5rem; }
 .talk-list li + li { margin-top: .5rem; }
-.talk-abstract { margin-top: .5rem; }
-.talk-abstract summary { cursor: pointer; font-weight: 600; }
+.talk-title, .talk-authors { color: var(--link); text-decoration: underline; text-underline-offset: .18em; }
+span.talk-title, span.talk-authors { cursor: text; }
+.talk-abstract { display: inline; }
+.talk-abstract > summary { display: inline; white-space: nowrap; cursor: pointer; color: var(--link); font-weight: 600; }
+.talk-abstract > summary::before { content: "▸ "; }
+.talk-abstract[open] > summary::before { content: "▾ "; }
 .talk-abstract summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
-.abstract-text { white-space: pre-wrap; margin-top: .5rem; }
-.talk-hide { font-size: .9rem; }
+.abstract-text { display: block; white-space: pre-wrap; margin-block: .5rem .75rem; padding: .75rem 1rem; border-left: 3px solid var(--heading); background: var(--surface); }
 .help { color: #46566a; }
 .organizer-controls { margin-top: 1rem; border-top: 1px solid #d6dee8; padding-top: .75rem; }
 .meeting-card > .button { vertical-align: middle; margin-right: .75rem; }
@@ -74,7 +83,7 @@ a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .meeting-card > .button, .meeting-card > .organizer-controls { margin-block: .25rem; }
 .instructions { padding-left: 1.5rem; }
 .instructions li { margin-block: .75rem; }
-.site-footer { border-top: 1px solid #d6dee8; color: #46566a; font-size: .9rem; }
+.site-footer { background: #fff; border-radius: .7rem; margin-block: 1.25rem; color: #46566a; font-size: .9rem; }
 .members-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; margin-top: 1.5rem; }
 .members-grid h2 { margin-top: 0; }
 .member-list { list-style: none; padding: 0; }
@@ -89,6 +98,7 @@ a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 }
 
 @media print {
+  :root { background: #fff; }
   .site-header { background: none; }
   .button, .button-secondary { background: none; color: #202b3c; }
 }

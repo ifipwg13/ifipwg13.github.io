@@ -1,5 +1,6 @@
 """Exercise updates through real local Git repositories and HTTP; no credentials."""
 
+import base64
 import http.client
 import importlib.util
 import re
@@ -74,6 +75,14 @@ class PreviewTests(unittest.TestCase):
         (self.remote / "prototype/assets/meetings-list.js").write_text('const revision = "first";')
         git(self.remote, "add", "prototype")
         git(self.remote, "commit", "-m", "Add the meeting-list sorter")
+
+    def publish_logo(self):
+        index = self.remote / 'prototype/index.html'
+        index.write_text(index.read_text().replace('</body>', '<img src="assets/ifip-logo.png" alt="IFIP"></body>'))
+        (self.remote / p.LOGO_PATH).write_bytes(b'\x89PNG\r\n\x1a\nfirst-version')
+        (self.remote / 'prototype/assets/other.png').write_bytes(b'NOT-ALLOWED')
+        git(self.remote, 'add', 'prototype')
+        git(self.remote, 'commit', '-m', 'Add the local IFIP logo')
 
     def server(self):
         server = p.make_server(self.source, host="127.0.0.1", port=0)
@@ -233,6 +242,59 @@ class PreviewTests(unittest.TestCase):
                 self.assertEqual(headers['Cache-Control'], 'no-store')
                 self.assertNotIn('Location', headers)
 
+    def test_logo_is_inlined_and_only_its_exact_png_path_is_served(self):
+        self.publish_logo()
+        server = self.server()
+        _, _, content = self.request(server)
+        data = (self.remote / p.LOGO_PATH).read_bytes()
+        self.assertIn(b'data:image/png;base64,' + base64.b64encode(data), content)
+        status, headers, body = self.request(server, '/' + p.LOGO_PATH)
+        self.assertEqual(status, 200)
+        self.assertEqual(headers['Content-Type'], 'image/png')
+        self.assertEqual(body, data)
+        self.assertEqual(self.request(server, '/prototype/assets/other.png')[0], 404)
+        status, headers, _ = self.request(server, '/assets/ifip-logo.png')
+        self.assertEqual(status, 307)
+        self.assertEqual(headers['Location'], '/' + p.LOGO_PATH)
+
+    def test_missing_or_invalid_logo_returns_uncached_error(self):
+        self.publish_logo()
+        server = self.server()
+        for invalid in [None, b'INVALID-IMAGE']:
+            path = self.remote / p.LOGO_PATH
+            if invalid is None:
+                path.unlink()
+            else:
+                path.write_bytes(invalid)
+            git(self.remote, 'add', 'prototype')
+            git(self.remote, 'commit', '-m', 'Simulate unavailable logo')
+            with patch('builtins.print'):
+                status, headers, content = self.request(server)
+            self.assertEqual(status, 503)
+            self.assertEqual(headers['Cache-Control'], 'no-store')
+            self.assertNotIn(b'First meeting', content)
+
+    def test_logo_uses_the_html_revision_during_a_concurrent_update(self):
+        self.publish_logo()
+        original = self.source.read
+        changed = False
+        def advancing_read(path, revision=None):
+            nonlocal changed
+            content = original(path, revision)
+            if path.endswith('.html') and not changed:
+                changed = True
+                (self.remote / p.LOGO_PATH).write_bytes(b'\x89PNG\r\n\x1a\nsecond-version')
+                git(self.remote, 'add', 'prototype')
+                git(self.remote, 'commit', '-m', 'Update the logo')
+                self.source.latest(force=True)
+            return content
+        server = self.server()
+        with patch.object(self.source, 'read', side_effect=advancing_read):
+            _, _, content = self.request(server)
+        self.assertIn(base64.b64encode(b'\x89PNG\r\n\x1a\nfirst-version'), content)
+        self.assertNotIn(base64.b64encode(b'\x89PNG\r\n\x1a\nsecond-version'), content)
+        self.assertIn(base64.b64encode(b'\x89PNG\r\n\x1a\nsecond-version'), self.request(server)[2])
+
     def test_html_style_and_sorter_use_the_same_revision_during_a_concurrent_update(self):
         self.publish_sorter()
         first = git(self.remote, "rev-parse", p.BRANCH).decode().strip()
@@ -366,7 +428,7 @@ class PreviewTests(unittest.TestCase):
 
     def test_existing_codespace_review_command_selects_the_feature_without_altering_local_work(self):
         prototype = git(self.remote, "rev-parse", p.BRANCH)
-        git(self.remote, "switch", "-c", "feature/group-home-members-presenters")
+        git(self.remote, "switch", "-c", "feature/classic-style-compact-talks")
         (self.remote / "index.html").write_text(meeting_page("Review group homepage", "prototype/assets/style.css"))
         (self.remote / "scripts").mkdir()
         (self.remote / "scripts/preview_server.py").write_text(Path(p.__file__).read_text())
