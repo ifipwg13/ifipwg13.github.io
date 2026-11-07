@@ -229,6 +229,12 @@ class BrowserTests(unittest.TestCase):
                     self.check_logo(server)
                     self.assertEqual(self.page.locator('.talk-hide').count(), 0)
                     self.assertEqual(self.page.locator('.meeting-actions .button').count(), 2)
+                    archived = self.page.get_by_label('Registration status', exact=True).count() > 0
+                    if archived:
+                        self.assertTrue(self.page.get_by_role('button', name='Add talk', exact=True).is_disabled())
+                    else:
+                        self.assertEqual(self.page.get_by_role('link', name='Add talk', exact=True).count(), 1)
+                        self.assertNotIn('awaits approval', self.page.locator('body').inner_text())
                     actions = self.page.locator('.meeting-actions')
                     self.assertEqual(actions.get_by_role('link', name='Hide', exact=True).count(), 0)
                     self.assertEqual(actions.get_by_role('button', name='Archive', exact=True).count(), 0)
@@ -265,6 +271,69 @@ class BrowserTests(unittest.TestCase):
 
     @unittest.skipUnless((ROOT.parent / 'meetings/tests/test_meeting_setup.py').exists(),
                          'Requires the sibling private checkout for offline lifecycle integration')
+    def test_creation_and_talk_updates_work_without_setup_pr_or_fresh_listings(self):
+        spec = importlib.util.spec_from_file_location('creation_browser_fixture', ROOT.parent / 'meetings/tests/test_meeting_setup.py')
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        setup = fixture.m
+        class LaggedAPI(fixture.FakeGitHub):
+            def api(self, method, path, data=None, missing_ok=False):
+                if method == 'GET' and (path.startswith(f'repos/{setup.PRIVATE}/issues?')
+                        or path == f'repos/{setup.PRIVATE}/contents/meeting-config?ref=main'):
+                    return []
+                return super().api(method, path, data, missing_ok)
+        api = LaggedAPI()
+        before, generated = (ROOT / 'prototype/index.html').read_text().split('<!-- generated-meetings:start -->', 1)
+        _, after = generated.split('<!-- generated-meetings:end -->', 1)
+        api.branch_files(setup.PUBLIC, setup.PREVIEW_BRANCH)['prototype/index.html'] = (
+            before + '<!-- generated-meetings:start --><!-- generated-meetings:end -->' + after)
+        setup.prepare(api, setup.authorize(api, api.request(4), 'issues'))
+        self.assertEqual(api.prs, {})
+
+        class CreatedSource(LocalSource):
+            def read(self, path):
+                if path == 'prototype/index.html' or path.startswith('prototype/meetings/'):
+                    content = api.branch_files(setup.PUBLIC, setup.PREVIEW_BRANCH).get(path)
+                    if content is None:
+                        raise FileNotFoundError
+                    return content.encode()
+                return super().read(path)
+        server = p.make_server(CreatedSource(), host='127.0.0.1', port=0)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        for offset, width in enumerate((1100, 375, 320)):
+            self.page.set_viewport_size({'width': width, 'height': 950})
+            self.open(server)
+            self.page.locator('.meeting-card h3 a').click()
+            self.assertEqual(self.page.get_by_role('link', name='Add talk', exact=True).count(), 1)
+            self.assertNotIn('awaits approval', self.page.locator('body').inner_text())
+            number = 7 + offset
+            api.issues[number] = {'number': number, 'title': f'New talk {number}', 'state': 'open',
+                'labels': ['talk', 'meeting:meeting-4'],
+                'body': '### Authors\n\nExample presenter\n\n### Abstract\n\nOriginal abstract'}
+            event = {'repository': {'full_name': setup.PRIVATE}, 'sender': {'login': 'member'},
+                     'action': 'opened', 'issue': {'number': number}}
+            setup.prepare(api, setup.authorize(api, event, 'issues'))
+            self.page.reload()
+            self.assertEqual(self.page.locator('.public-talks li').count(), offset + 1)
+            row = self.page.locator(f'[data-talk-number="{number}"]')
+            self.assertEqual(row.locator('.talk-title').inner_text(), f'New talk {number}')
+            api.issues[number].update(title=f'Edited talk {number}', body='### Authors\n\nUpdated presenter\n\n### Abstract\n\nUpdated abstract')
+            event['action'] = 'edited'
+            setup.prepare(api, setup.authorize(api, event, 'issues'))
+            self.page.reload()
+            row = self.page.locator(f'[data-talk-number="{number}"]')
+            self.assertEqual(row.locator('.talk-authors').inner_text(), 'Updated presenter')
+            row.get_by_text('Abstract', exact=True).click()
+            self.assertEqual(row.locator('.abstract-text').inner_text(), 'Updated abstract')
+            self.no_overflow()
+        self.assertEqual(api.prs, {})
+        self.assertFalse(self.external)
+        self.assertFalse(self.errors)
+
+    @unittest.skipUnless((ROOT.parent / 'meetings/tests/test_meeting_setup.py').exists(),
+                         'Requires the sibling private checkout for offline lifecycle integration')
     def test_label_restoration_updates_live_cards_and_details_without_changing_talk_states(self):
         spec = importlib.util.spec_from_file_location('lifecycle_browser_fixture', ROOT.parent / 'meetings/tests/test_meeting_setup.py')
         fixture = importlib.util.module_from_spec(spec)
@@ -277,7 +346,6 @@ class BrowserTests(unittest.TestCase):
         api.branch_files(setup.PUBLIC, setup.PREVIEW_BRANCH)['prototype/index.html'] = (
             before + '<!-- generated-meetings:start --><!-- generated-meetings:end -->' + after)
         setup.prepare(api, setup.authorize(api, api.request(4), 'issues'))
-        setup.prepare(api, setup.authorize(api, api.merge_setup(10), 'pull_request_target'))
         for number, state in [(7, 'open'), (8, 'closed'), (9, 'open')]:
             api.issues[number] = {'number': number, 'title': f'Example talk {number}', 'state': state,
                 'labels': ['talk', 'meeting:meeting-4'] + ([setup.TALK_HIDDEN] if number == 9 else []),
