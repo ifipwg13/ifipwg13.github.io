@@ -153,7 +153,7 @@ Abstracts are escaped text with paragraph breaks; Issue-backed
 index cards omit them.
 Comments, registration accounts, and unrelated private content remain private.
 Talks labeled `talk-hidden` are omitted completely, including their links. Meeting
-Hide takes precedence over talk visibility. Closed talks retain a closed marker;
+Hide takes precedence over talk visibility. Closed talks have no added status suffix;
 archived talks remain synchronized, with late submissions excluded by the private
 archive cutoff. Hide/restore preserves individual talk settings.
 The `generated-meetings` markers reserve the Issue-backed portion of the list
@@ -218,10 +218,10 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/simplify-meeting-controls --port 8001
+python3 scripts/preview_server.py --branch feature/clean-talk-status --port 8003
 ```
 
-Open port **8001** using **Ports → Open in Browser**. Firefox displays the review
+Open port **8003** using **Ports → Open in Browser**. Firefox displays the review
 branch and refreshes it from GitHub, with HTML, styling, and the list sorter from
 the same commit.
 This optional branch selection leaves the existing prototype preview default
@@ -229,10 +229,11 @@ unchanged. Issue-backed pages in this feature draft are a review snapshot.
 The bar must say **Review snapshot**, name this feature branch, and offer
 **Switch to synchronized preview**. Use the review view for unmerged presentation
 changes and the synchronized view for label tests. Before integration, the
-synchronized view shows currently merged content; the simplified controls and
-Home links remain in the review view. The separate private PR updates the
-meeting generator so future synchronizations keep the simplified controls.
-Label synchronization and permissions use the existing workflow unchanged.
+synchronized view shows currently merged content; the removal of generated talk
+status suffixes remains in the review view. The separate private PR updates
+the generator and meeting form, preserves talk states during archiving, and
+repairs reactivation from current labels. It also queues label updates so they
+are not replaced by later pending runs. Permissions remain unchanged.
 No PR is merged or Pages website published by starting a preview.
 
 In an existing Codespace with older local scripts, press **Ctrl+C** to stop its
@@ -241,13 +242,13 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/simplify-meeting-controls:refs/remotes/origin/feature/simplify-meeting-controls &&
+git fetch origin refs/heads/feature/clean-talk-status:refs/remotes/origin/feature/clean-talk-status &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/simplify-meeting-controls:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/simplify-meeting-controls --port 8001
+git show origin/feature/clean-talk-status:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/clean-talk-status --port 8003
 ```
 
-Open port **8001** from **Ports**, keeping it **Private**. The first page must be
+Open port **8003** from **Ports**, keeping it **Private**. The first page must be
 the group homepage with Home / Members / Meetings navigation and a **Review
 snapshot** status bar. This block does not change local HTML, the checked-out
 branch, or the published site. For current Issue states, click **Switch to

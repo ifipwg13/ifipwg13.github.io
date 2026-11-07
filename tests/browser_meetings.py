@@ -235,6 +235,7 @@ class BrowserTests(unittest.TestCase):
                     self.assertEqual(actions.get_by_role('link', name='Archive', exact=True).count(), 0)
                     rows = self.page.locator('.public-talks li').all()
                     for row in rows:
+                        self.assertEqual(row.locator('span.help').count(), 0)
                         title = row.locator('.talk-title')
                         self.assertEqual(row.locator('a').count(), 1)
                         self.assertTrue(title.get_attribute('href').startswith('https://github.com/ifipwg13/meetings/issues/'))
@@ -259,6 +260,79 @@ class BrowserTests(unittest.TestCase):
                         summary.focus(); self.page.keyboard.press('Enter')
                         self.assertFalse(content.is_visible())
                     self.no_overflow()
+        self.assertFalse(self.external)
+        self.assertFalse(self.errors)
+
+    @unittest.skipUnless((ROOT.parent / 'meetings/tests/test_meeting_setup.py').exists(),
+                         'Requires the sibling private checkout for offline lifecycle integration')
+    def test_label_restoration_updates_live_cards_and_details_without_changing_talk_states(self):
+        spec = importlib.util.spec_from_file_location('lifecycle_browser_fixture', ROOT.parent / 'meetings/tests/test_meeting_setup.py')
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        setup, api = fixture.m, fixture.FakeGitHub()
+        # Keep the actual page shell, assets, sorter, and historical region;
+        # replace only its Issue-backed cards with the fictitious meeting.
+        before, generated = (ROOT / 'prototype/index.html').read_text().split('<!-- generated-meetings:start -->', 1)
+        _, after = generated.split('<!-- generated-meetings:end -->', 1)
+        api.branch_files(setup.PUBLIC, setup.PREVIEW_BRANCH)['prototype/index.html'] = (
+            before + '<!-- generated-meetings:start --><!-- generated-meetings:end -->' + after)
+        setup.prepare(api, setup.authorize(api, api.request(4), 'issues'))
+        setup.prepare(api, setup.authorize(api, api.merge_setup(10), 'pull_request_target'))
+        for number, state in [(7, 'open'), (8, 'closed'), (9, 'open')]:
+            api.issues[number] = {'number': number, 'title': f'Example talk {number}', 'state': state,
+                'labels': ['talk', 'meeting:meeting-4'] + ([setup.TALK_HIDDEN] if number == 9 else []),
+                'body': '### Authors\n\nExample presenter\n\n### Abstract\n\nExample abstract'}
+
+        def event(action, label=None, command=None):
+            value = {'repository': {'full_name': setup.PRIVATE}, 'sender': {'login': 'manager'},
+                     'issue': {'number': 4}, 'action': action}
+            if label:
+                value['label'] = {'name': label}
+            if command:
+                value['comment'] = {'body': command}
+            setup.prepare(api, setup.authorize(api, value, 'issue_comment' if command else 'issues'))
+
+        class LifecycleSource(LocalSource):
+            def read(self, path):
+                if path == 'prototype/index.html' or path.startswith('prototype/meetings/'):
+                    content = api.branch_files(setup.PUBLIC, setup.PREVIEW_BRANCH).get(path)
+                    if content is None:
+                        raise FileNotFoundError
+                    return content.encode()
+                return super().read(path)
+
+        server = p.make_server(LifecycleSource(), host='127.0.0.1', port=0)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        for width in (1100, 375, 320):
+            with self.subTest(width=width):
+                self.page.set_viewport_size({'width': width, 'height': 950})
+                event('created', command='/archive-meeting')
+                self.open(server)
+                self.assertIn('Archived —', self.page.locator('.meeting-card').inner_text())
+                self.page.locator('.meeting-card h3 a').click()
+                self.assertIn('This meeting is archived', self.page.get_by_label('Registration status').inner_text())
+                self.assertTrue(self.page.get_by_role('button', name='Add talk', exact=True).is_disabled())
+                self.assertEqual(self.page.locator('.public-talks li').count(), 2)
+                self.assertEqual(self.page.locator('.public-talks li span.help').count(), 0)
+
+                event('created', command='/hide-meeting')
+                self.assertEqual(self.page.reload().status, 404)
+                api.issues[4]['labels'] = [label for label in api.issues[4]['labels'] if label not in {'hidden', 'archived'}]
+                event('unlabeled', label='hidden')  # The event that previously re-added archived.
+                self.assertEqual(self.page.reload().status, 200)
+                self.assertEqual(self.page.get_by_label('Registration status').count(), 0)
+                self.assertEqual(self.page.get_by_role('link', name='View participants and register', exact=True).count(), 1)
+                self.assertEqual(self.page.get_by_role('link', name='Add talk', exact=True).count(), 1)
+                self.assertEqual([api.issues[number]['state'] for number in (7, 8, 9)], ['open', 'closed', 'open'])
+                self.assertEqual(self.page.locator('.public-talks li').count(), 2)
+                self.assertEqual(self.page.locator('[data-talk-number="9"]').count(), 0)
+                self.no_overflow()
+                self.page.get_by_role('link', name='All meetings', exact=True).click()
+                self.assertNotIn('Archived —', self.page.locator('.meeting-card').inner_text())
+                self.assertEqual(self.page.locator('.meeting-card .button').count(), 0)
+                self.no_overflow()
         self.assertFalse(self.external)
         self.assertFalse(self.errors)
 
