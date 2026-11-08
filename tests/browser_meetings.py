@@ -334,6 +334,68 @@ class BrowserTests(unittest.TestCase):
 
     @unittest.skipUnless((ROOT.parent / 'meetings/tests/test_meeting_setup.py').exists(),
                          'Requires the sibling private checkout for offline lifecycle integration')
+    def test_meeting_issue_edits_replace_all_public_fields_and_survive_reactivation(self):
+        spec = importlib.util.spec_from_file_location('meeting_edit_fixture', ROOT.parent / 'meetings/tests/test_meeting_setup.py')
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        setup, api = fixture.m, fixture.FakeGitHub()
+        before, generated = (ROOT / 'prototype/index.html').read_text().split('<!-- generated-meetings:start -->', 1)
+        _, after = generated.split('<!-- generated-meetings:end -->', 1)
+        api.branch_files(setup.PUBLIC, setup.PREVIEW_BRANCH)['prototype/index.html'] = (
+            before + '<!-- generated-meetings:start --><!-- generated-meetings:end -->' + after)
+        api.issues[4].update(title='Original fictitious meeting',
+            body='### Start date\n\n02-01-27\n\n### End date\n\n04-01-2027\n\n### Location\n\nOriginal place\n\n### Description\n\nOriginal description')
+        def run(action='edited', label=None):
+            event = {'repository': {'full_name': setup.PRIVATE}, 'sender': {'login': 'manager'},
+                     'action': action, 'issue': {'number': 4}}
+            if label:
+                event['label'] = {'name': label}
+            setup.prepare(api, setup.authorize(api, event, 'issues'))
+        run('opened')
+        class EditedSource(LocalSource):
+            def read(self, path):
+                if path == 'prototype/index.html' or path.startswith('prototype/meetings/'):
+                    content = api.branch_files(setup.PUBLIC, setup.PREVIEW_BRANCH).get(path)
+                    if content is None:
+                        raise FileNotFoundError
+                    return content.encode()
+                return super().read(path)
+        server = p.make_server(EditedSource(), host='127.0.0.1', port=0)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        for width in (1100, 375, 320):
+            self.page.set_viewport_size({'width': width, 'height': 950})
+            api.issues[4].update(title='[meeting 4] Updated meeting',
+                body=f'### Start date\n\n02-01-29\n\n### End date\n\n05-01-2029\n\n### Location\n\nUpdated place\n\n### Description\n\nFresh description {width}')
+            run()
+            self.open(server)
+            card = self.page.locator('[aria-labelledby="meeting-4-title"]')
+            self.assertEqual(card.locator('h3').inner_text(), 'Updated meeting')
+            self.assertEqual(card.locator('time').all_text_contents(), ['02-01-2029', '05-01-2029'])
+            self.assertIn('Where: Updated place', card.inner_text())
+            self.assertEqual(card.locator('.meeting-description').inner_text(), f'Fresh description {width}')
+            card.locator('h3 a').click()
+            self.assertEqual(self.page.locator('h1').inner_text(), 'Updated meeting')
+            self.assertEqual(self.page.locator('.meeting-description').inner_text(), f'Fresh description {width}')
+            api.issues[4]['labels'].append('archived')
+            run('labeled', 'archived')
+            api.issues[4]['body'] = api.issues[4]['body'].replace(f'Fresh description {width}', f'Historical correction {width}')
+            run()
+            self.page.reload()
+            self.assertEqual(self.page.locator('.meeting-description').inner_text(), f'Historical correction {width}')
+            self.assertTrue(self.page.get_by_role('button', name='Add talk', exact=True).is_disabled())
+            api.issues[4]['labels'].remove('archived')
+            run('unlabeled', 'archived')
+            self.page.reload()
+            self.assertEqual(self.page.locator('.meeting-description').inner_text(), f'Historical correction {width}')
+            self.assertEqual(self.page.get_by_role('link', name='Add talk', exact=True).count(), 1)
+            self.no_overflow()
+        self.assertFalse(self.external)
+        self.assertFalse(self.errors)
+
+    @unittest.skipUnless((ROOT.parent / 'meetings/tests/test_meeting_setup.py').exists(),
+                         'Requires the sibling private checkout for offline lifecycle integration')
     def test_label_restoration_updates_live_cards_and_details_without_changing_talk_states(self):
         spec = importlib.util.spec_from_file_location('lifecycle_browser_fixture', ROOT.parent / 'meetings/tests/test_meeting_setup.py')
         fixture = importlib.util.module_from_spec(spec)
