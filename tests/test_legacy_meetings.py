@@ -146,7 +146,6 @@ class SynchronizerCompatibilityTests(unittest.TestCase):
         m,api=fixture.m,fixture.FakeGitHub()
         api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)['prototype/index.html']=INDEX
         m.prepare(api,m.authorize(api,api.request(4),'issues'))
-        m.prepare(api,m.authorize(api,api.merge_setup(10),'pull_request_target'))
         files=api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)
         files['prototype/index.html']=b.update_index(files['prototype/index.html'],[RECORD])
         site_pages = {path: (ROOT/path).read_text() for path in ['index.html','members/index.html']}

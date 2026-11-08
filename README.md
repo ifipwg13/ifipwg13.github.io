@@ -131,6 +131,14 @@ pages, the logo and WG brand continue to link back to the local Home page.
 
 ### Synchronized meetings
 
+For functional testing, use **Synchronized preview** on
+`prototype/meeting-management`, without a `--branch` option. A successful
+administrator submission creates its registration and working talk form in one
+run. No per-meeting setup PR is required. Wait for **Meeting ready** and refresh.
+The private automation verifies the committed meeting card, detail page, and
+talk-form link before reporting success. Read members can participate; the
+creation and repair paths remain restricted to administrators.
+
 `prototype/index.html` lists meetings. Each event has its own directory under
 `prototype/meetings/`; `prototype/assets/style.css` supplies the shared styling.
 `prototype/assets/meetings-list.js` puts all cards in descending start-date order
@@ -218,7 +226,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/clean-talk-status --port 8003
+python3 scripts/preview_server.py --branch feature/meeting-activation-preview --port 8003
 ```
 
 Open port **8003** using **Ports → Open in Browser**. Firefox displays the review
@@ -228,12 +236,11 @@ This optional branch selection leaves the existing prototype preview default
 unchanged. Issue-backed pages in this feature draft are a review snapshot.
 The bar must say **Review snapshot**, name this feature branch, and offer
 **Switch to synchronized preview**. Use the review view for unmerged presentation
-changes and the synchronized view for label tests. Before integration, the
-synchronized view shows currently merged content; the removal of generated talk
-status suffixes remains in the review view. The separate private PR updates
-the generator and meeting form, preserves talk states during archiving, and
-repairs reactivation from current labels. It also queues label updates so they
-are not replaced by later pending runs. Permissions remain unchanged.
+changes and the synchronized view for creation, talk, and label tests. The
+separate private PR makes valid administrator submissions immediately ready,
+includes newly created Issues despite delayed listings, and verifies output
+before reporting success. It reads current talk details and visibility directly.
+Permissions and publication settings remain unchanged.
 No PR is merged or Pages website published by starting a preview.
 
 In an existing Codespace with older local scripts, press **Ctrl+C** to stop its
@@ -242,10 +249,10 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/clean-talk-status:refs/remotes/origin/feature/clean-talk-status &&
+git fetch origin refs/heads/feature/meeting-activation-preview:refs/remotes/origin/feature/meeting-activation-preview &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/clean-talk-status:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/clean-talk-status --port 8003
+git show origin/feature/meeting-activation-preview:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/meeting-activation-preview --port 8003
 ```
 
 Open port **8003** from **Ports**, keeping it **Private**. The first page must be
@@ -255,10 +262,11 @@ branch, or the published site. For current Issue states, click **Switch to
 synchronized preview**; the status must then say **Synchronized preview** and
 name `prototype/meeting-management`.
 
-After separate approval, integrate the public feature before the private
-generator, then run **Prepare
-meeting** once from the private repository's Actions page to refresh all meeting
-pages consistently. These operations still require separate merge approval.
+After separate approval, integrate the private automation first, then this
+documentation/test change. No new public interface code is needed. Run
+**Prepare meeting** once from the private repository's Actions page to verify
+all active meeting resources and pages. These operations still require separate
+merge approval.
 
 The public feature PR targets the existing prototype branch. Public website PR
 #1 stays draft and unmerged. After both feature PRs are separately approved and
