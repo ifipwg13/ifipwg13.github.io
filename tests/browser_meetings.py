@@ -231,6 +231,8 @@ class BrowserTests(unittest.TestCase):
                     self.assertEqual(self.page.locator('.meeting-actions .button').count(), 2)
                     archived = self.page.get_by_label('Registration status', exact=True).count() > 0
                     if archived:
+                        self.assertEqual(self.page.get_by_label('Registration status', exact=True).inner_text(),
+                            'This meeting is archived, registration and talk submission are closed.')
                         self.assertTrue(self.page.get_by_role('button', name='Add talk', exact=True).is_disabled())
                     else:
                         self.assertEqual(self.page.get_by_role('link', name='Add talk', exact=True).count(), 1)
@@ -344,7 +346,7 @@ class BrowserTests(unittest.TestCase):
         api.branch_files(setup.PUBLIC, setup.PREVIEW_BRANCH)['prototype/index.html'] = (
             before + '<!-- generated-meetings:start --><!-- generated-meetings:end -->' + after)
         api.issues[4].update(title='Original fictitious meeting',
-            body='### Start date\n\n02-01-27\n\n### End date\n\n04-01-2027\n\n### Location\n\nOriginal place\n\n### Description\n\nOriginal description')
+            body='### Start date\n\n1-3-27\n\n### End date\n\n4-3-2027\n\n### Location\n\nOriginal place\n\n### Description\n\nOriginal description')
         def run(action='edited', label=None):
             event = {'repository': {'full_name': setup.PRIVATE}, 'sender': {'login': 'manager'},
                      'action': action, 'issue': {'number': 4}}
@@ -364,10 +366,13 @@ class BrowserTests(unittest.TestCase):
         threading.Thread(target=server.serve_forever, daemon=True).start()
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
+        self.open(server)
+        self.assertEqual(self.page.locator('[aria-labelledby="meeting-4-title"] time').all_text_contents(),
+                         ['01-03-2027', '04-03-2027'])
         for width in (1100, 375, 320):
             self.page.set_viewport_size({'width': width, 'height': 950})
             api.issues[4].update(title='[meeting 4] Updated meeting',
-                body=f'### Start date\n\n02-01-29\n\n### End date\n\n05-01-2029\n\n### Location\n\nUpdated place\n\n### Description\n\nFresh description {width}')
+                body=f'### Start date\n\n2-1-29\n\n### End date\n\n5-1-2029\n\n### Location\n\nUpdated place\n\n### Description\n\nFresh description {width}')
             run()
             self.open(server)
             card = self.page.locator('[aria-labelledby="meeting-4-title"]')
@@ -440,9 +445,10 @@ class BrowserTests(unittest.TestCase):
                 self.page.set_viewport_size({'width': width, 'height': 950})
                 event('created', command='/archive-meeting')
                 self.open(server)
-                self.assertIn('Archived —', self.page.locator('.meeting-card').inner_text())
+                self.assertNotIn('Archived —', self.page.locator('.meeting-card').inner_text())
                 self.page.locator('.meeting-card h3 a').click()
-                self.assertIn('This meeting is archived', self.page.get_by_label('Registration status').inner_text())
+                self.assertEqual(self.page.get_by_label('Registration status').inner_text(),
+                    'This meeting is archived, registration and talk submission are closed.')
                 self.assertTrue(self.page.get_by_role('button', name='Add talk', exact=True).is_disabled())
                 self.assertEqual(self.page.locator('.public-talks li').count(), 2)
                 self.assertEqual(self.page.locator('.public-talks li span.help').count(), 0)

@@ -143,9 +143,15 @@ Administrators edit meeting names in the canonical registration Issue's Title
 and edit dates, location, and description in its designated opening-post fields.
 Saving triggers synchronization of both the card and detail page; configuration
 is derived, so these values are entered once. Clearing Description removes it.
-DD-MM-YYYY and DD-MM-YY are accepted (YY means 20YY); display always uses the full
-year. Archived metadata can be corrected; hidden meetings stay absent until
+DD-MM-YYYY and DD-MM-YY are accepted (YY means 20YY), with optional leading zeros
+for day/month: `1-3-27` is displayed as `01-03-2027`. Archived metadata can be
+corrected; hidden meetings stay absent until
 restored, with individual talk visibility preserved.
+
+Meeting cards have no archive status paragraph. Archived detail pages say
+**This meeting is archived, registration and talk submission are closed.**
+Their Add talk control remains disabled. Talk visibility and the private record
+links retain their existing behavior.
 
 Synchronization runs on Issue events, with no periodic publication timer.
 Wait for **Prepare meeting** to succeed, then refresh: every HTML request fetches
@@ -241,7 +247,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/meeting-edit-regressions --port 8003
+python3 scripts/preview_server.py --branch feature/archive-date-browser-review --port 8003
 ```
 
 Open port **8003** using **Ports → Open in Browser**. Firefox displays the review
@@ -252,10 +258,10 @@ unchanged. Issue-backed pages in this feature draft are a review snapshot.
 The bar must say **Review snapshot**, name this feature branch, and offer
 **Switch to synchronized preview**. Use the review view for unmerged presentation
 changes and the synchronized view for creation, talk, and label tests. The
-separate private PR synchronizes edited meeting fields from registration Issues,
-accepts short years as 20YY, and limits ordinary updates to affected meetings.
-It verifies committed output before reporting success and preserves current
-talk visibility and meeting lifecycle rules.
+separate private PR accepts dates with optional leading zeros, shortens the
+archived detail notice, removes the list's archive paragraph, and simplifies
+input-correction guidance. Synchronization and meeting lifecycle rules continue
+to apply.
 Permissions and publication settings remain unchanged.
 No PR is merged or Pages website published by starting a preview.
 
@@ -265,10 +271,10 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/meeting-edit-regressions:refs/remotes/origin/feature/meeting-edit-regressions &&
+git fetch origin refs/heads/feature/archive-date-browser-review:refs/remotes/origin/feature/archive-date-browser-review &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/meeting-edit-regressions:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/meeting-edit-regressions --port 8003
+git show origin/feature/archive-date-browser-review:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/archive-date-browser-review --port 8003
 ```
 
 Open port **8003** from **Ports**, keeping it **Private**. The first page must be
