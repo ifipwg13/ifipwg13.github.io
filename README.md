@@ -248,7 +248,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/static-talk-form --port 8003
+python3 scripts/preview_server.py --branch fix/talk-form-preview-loading --port 8003
 ```
 
 Open port **8003** using **Ports → Open in Browser**. Firefox displays the review
@@ -258,12 +258,12 @@ This optional branch selection leaves the existing prototype preview default
 unchanged. Issue-backed pages in this feature draft are a review snapshot.
 The bar must say **Review snapshot**, name this feature branch, and offer
 **Switch to synchronized preview**. Use the review view for unmerged presentation
-changes and the synchronized view for creation, talk, and label tests. The
-separate private PR adds trusted intake for unlabeled website proposals.
-The review form can be inspected before integration, but live submissions need
-the private workflow activated and the form integrated into the synchronized
-prototype branch. Read-account token setup is documented in
-[the private testing guide](https://github.com/ifipwg13/meetings/blob/feature/static-web-talk-submissions/WEB_TALK_TESTING.md).
+changes. This repair makes the form self-contained for older running preview
+servers, fixes the meeting when opened through its Add talk link, and adds
+bounded loading/retry behavior. The private intake workflow is already merged;
+no private-repository change is needed for this repair. Read-account token setup
+is documented in
+[the private testing guide](https://github.com/ifipwg13/meetings/blob/main/WEB_TALK_TESTING.md).
 No PR is merged or Pages website published by starting a preview.
 
 In an existing Codespace with older local scripts, press **Ctrl+C** to stop its
@@ -272,10 +272,10 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/static-talk-form:refs/remotes/origin/feature/static-talk-form &&
+git fetch origin refs/heads/fix/talk-form-preview-loading:refs/remotes/origin/fix/talk-form-preview-loading &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/static-talk-form:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/static-talk-form --port 8003
+git show origin/fix/talk-form-preview-loading:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch fix/talk-form-preview-loading --port 8003
 ```
 
 Open port **8003** from **Ports**, keeping it **Private**. The first page must be
@@ -285,21 +285,18 @@ branch, or the published site. For current Issue states, click **Switch to
 synchronized preview**; the status must then say **Synchronized preview** and
 name `prototype/meeting-management`.
 
-After separate approval, integrate the private automation first, then this
-public form feature into the prototype branch. Run
-**Prepare meeting** once from the private repository's Actions page to verify
-all active meeting resources and pages. These operations still require separate
-merge approval.
+After approval, merge this repair into `prototype/meeting-management`, then
+refresh the existing **Synchronized preview** tab. No preview-server restart,
+private workflow change, or meeting regeneration is required for this fix.
 
 The public feature PR targets the existing prototype branch. Public website PR
-#1 stays draft and unmerged. After both feature PRs are separately approved and
-integrated (public design to the prototype branch, private generator to `main`), use
+#1 stays draft and unmerged. After this repair is approved and integrated, use
 the normal preview command without `--branch` for real event synchronization.
 The isolated feature branch remains a review snapshot until it is updated again;
 merging it does not make it the synchronization target.
 
-GitHub Pages currently publishes `main` from the repository root. Keep this
-pull request unmerged throughout initial testing, including second-meeting tests.
+GitHub Pages currently publishes `main` from the repository root. Keep publication
+PR #1 unmerged throughout initial testing, including second-meeting tests.
 Merging or publishing requires separate explicit approval; no deployment workflow
 or Pages configuration is introduced here.
 
@@ -326,11 +323,30 @@ group-page/abstract use with JavaScript disabled. They add no site dependencies.
 ## Own-site talk form
 
 `prototype/submit-talk.html` and `prototype/assets/talk-submission.js` provide
-meeting selection, required ASCII title/authors/abstract, and a masked personal
-GitHub token field. An active meeting's **Add talk** link selects that meeting
-and stays on our site. Public `data-meeting-id`/`data-meeting-status` card
-attributes populate the selector; archived, hidden, and historical meetings
-cannot be selected. Actions independently checks the authoritative private state.
+required ASCII title/authors/abstract and a masked personal GitHub token field.
+An active meeting's **Add talk** link fixes the meeting and displays its name;
+there is no second selection step. The generic form without a `meeting` query
+parameter retains a selector. Public `data-meeting-id`/`data-meeting-status` card
+attributes check availability; an unavailable meeting-specific link cannot fall
+back to a different event. Archived, hidden, and historical meetings cannot be
+selected. Actions independently checks the authoritative private state.
+
+The delivered HTML includes its script, authorized by an exact CSP SHA-256 hash.
+It needs no separate script request, so it also works with a running preview
+server whose older allowlist cannot serve the new JS path. The version bar
+identifies the fetched website content, not the running server executable.
+Keep the single editable script source in `prototype/assets/talk-submission.js`;
+after editing it, regenerate and check the served HTML:
+
+```sh
+python3 scripts/build_talk_form.py
+python3 scripts/build_talk_form.py --check
+```
+
+Unit tests reject stale generated HTML or a mismatched CSP hash. Meeting loading
+is bounded at 15 seconds, including the response body, and failures show
+**Retry loading** while fields remain disabled. Typed values are retained after
+a failed pre-submission availability check; no Issue is posted in that case.
 
 The token owner needs Read access to `ifipwg13/meetings`; repository Write is
 unnecessary. A fine-grained PAT needs only that repository and **Issues: Read
@@ -363,3 +379,12 @@ checkout, use `python3 tests/browser_talk_submission.py`. The fake token is sent
 only to intercepted GitHub API requests; no live Issues are created. Actual
 Read-account PAT acceptance, organization restrictions, and Firefox vault behavior
 remain manual checks after separately approved activation.
+
+
+The loading repair adds regressions using the actual preview HTTP handler and
+synchronized-view URL prefix, including an older script allowlist that returns
+404 for `talk-submission.js`. The browser follows a meeting's Add talk link,
+checks its fixed context, submits a fictitious talk through the private REST
+model, and returns to the correct meeting. Additional checks cover a stalled
+meeting request, HTTP failure/retry without lost input or duplicate POST, generic
+selection, inactive/invalid context, and the compiled script's CSP hash.
