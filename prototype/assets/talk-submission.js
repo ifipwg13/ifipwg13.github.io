@@ -5,6 +5,7 @@
   const REPO = '/repos/ifipwg13/meetings';
   const MARKER = '<!-- wg13-web-talk -->';
   const STATUS_MARKER = '<!-- wg13-web-talk-status ';
+  const requestedMeeting = new URLSearchParams(location.search).get('meeting');
   const $ = id => document.getElementById(id);
   const form = $('talk-form');
   const tokenField = $('github-token');
@@ -94,25 +95,52 @@
   }
 
   async function loadMeetings() {
-    const response = await fetch('index.html', {credentials: 'same-origin', cache: 'no-store'});
-    if (!response.ok) throw new Error('The meeting list could not be loaded. Refresh this page.');
-    const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
-    const found = new Map();
-    for (const card of doc.querySelectorAll('article.meeting-card[data-meeting-status="active"]')) {
-      const id = card.dataset.meetingId;
-      const title = card.querySelector('h3')?.textContent.trim();
-      if (/^(?:demo-001|meeting-[1-9][0-9]*)$/.test(id) && title) found.set(id, title);
-    }
-    meetings = found;
-    $('meeting').replaceChildren(new Option('Choose a meeting', ''));
-    for (const [id, title] of meetings) $('meeting').add(new Option(title, id));
-    const selected = new URLSearchParams(location.search).get('meeting');
-    if (meetings.has(selected)) $('meeting').value = selected;
-    $('talk-fields').disabled = !meetings.size;
-    $('credential-fields').disabled = !meetings.size;
-    $('form-status').textContent = meetings.size ? '' : 'No meetings are currently open for talk submissions.';
-    if (selected && !meetings.has(selected)) error('This meeting is no longer open. Choose another available meeting.');
+    const selected = requestedMeeting || $('meeting').value;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    meetings = new Map();
+    $('talk-fields').disabled = true;
+    $('credential-fields').disabled = true;
+    $('retry-meetings').hidden = true;
+    $('form-status').textContent = 'Loading meeting information…';
     buttons();
+    try {
+      const response = await fetch('index.html', {credentials: 'same-origin', cache: 'no-store', signal: controller.signal});
+      if (!response.ok) throw new Error('Meeting information unavailable');
+      const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+      for (const card of doc.querySelectorAll('article.meeting-card[data-meeting-status="active"]')) {
+        const id = card.dataset.meetingId;
+        const title = card.querySelector('h3')?.textContent.trim();
+        if (/^(?:demo-001|meeting-[1-9][0-9]*)$/.test(id) && title) meetings.set(id, title);
+      }
+      $('meeting').replaceChildren(new Option('Choose a meeting', ''));
+      for (const [id, title] of meetings) $('meeting').add(new Option(title, id));
+      if (meetings.has(selected)) $('meeting').value = selected;
+      const unavailable = requestedMeeting && !meetings.has(requestedMeeting);
+      const ready = meetings.size > 0 && !unavailable;
+      $('talk-fields').disabled = !ready;
+      $('credential-fields').disabled = !ready;
+      $('form-status').textContent = unavailable
+        ? 'This meeting is unavailable or closed for talk submissions. Return to all meetings.'
+        : ready ? '' : 'No meetings are currently open for talk submissions.';
+      if (unavailable) {
+        // Never silently switch a meeting-specific submission to another event.
+        meetings.clear();
+        $('meeting-name').textContent = 'Unavailable';
+      } else if (requestedMeeting) {
+        $('meeting-name').textContent = meetings.get(requestedMeeting);
+      }
+      $('retry-meetings').hidden = ready;
+    } catch {
+      meetings.clear();
+      if (requestedMeeting) $('meeting-name').textContent = 'Unavailable';
+      $('form-status').textContent = 'Meeting information could not be loaded. Click Retry loading to try again.';
+      $('retry-meetings').hidden = false;
+      throw new Error('Meeting information could not be loaded. Use Retry loading before submitting.');
+    } finally {
+      clearTimeout(timer);
+      buttons();
+    }
   }
 
   async function checkToken() {
@@ -296,7 +324,13 @@
     tokenField.value = '';
     resetIdentity();
   });
-  loadMeetings().catch(() => {
-    $('form-status').textContent = 'The meeting list could not be loaded. Refresh this page to try again.';
-  });
+  // A meeting-specific Add talk link fixes the event; the generic form still
+  // offers selection when opened without a meeting query parameter.
+  $('meeting-choice').hidden = !!requestedMeeting;
+  $('meeting-context').hidden = !requestedMeeting;
+  $('meeting').required = !requestedMeeting;
+  $('meeting').disabled = !!requestedMeeting;
+  if (requestedMeeting) $('meeting-name').textContent = 'Loading…';
+  $('retry-meetings').addEventListener('click', () => loadMeetings().catch(() => {}));
+  loadMeetings().catch(() => {});
 })();

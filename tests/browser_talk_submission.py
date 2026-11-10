@@ -6,6 +6,7 @@ No live GitHub writes or real tokens. Run with both repositories checked out:
 import copy
 import functools
 import http.server
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import sync_playwright
@@ -26,6 +28,28 @@ from test_meeting_setup import DETAILS  # noqa: E402
 
 TOKEN = "github_pat_FICTITIOUS_TEST_ONLY_123456"
 API = "https://api.github.com"
+preview_spec = importlib.util.spec_from_file_location('talk_preview', ROOT / 'scripts/preview_server.py')
+preview = importlib.util.module_from_spec(preview_spec)
+preview_spec.loader.exec_module(preview)
+
+
+class PreviewSource:
+    """Serve the same changing fixture through the actual Codespaces handler."""
+    branch = preview.BRANCH
+    commit = 'a' * 40
+
+    def __init__(self, directory):
+        self.directory = directory
+
+    def read(self, path):
+        return (self.directory / path).read_bytes()
+
+    def page(self, path):
+        return preview.styled_preview(self.read(path), self.read('prototype/assets/style.css'), self.commit,
+                                      self.read('prototype/assets/meetings-list.js'), self.read(preview.LOGO_PATH), self.branch), self.commit
+
+    def synchronized(self):
+        return self
 
 
 class QuietFiles(http.server.SimpleHTTPRequestHandler):
@@ -51,6 +75,9 @@ class FormBrowserTests(unittest.TestCase):
         shutil.copytree(ROOT / "prototype/assets", self.directory / "prototype/assets")
         shutil.copy(ROOT / "prototype/submit-talk.html", self.directory / "prototype/submit-talk.html")
         self.api = WebGitHub()
+        files = self.api.branch_files(m.PUBLIC, m.PREVIEW_BRANCH)
+        files['prototype/index.html'] = files['prototype/index.html'].replace('<html><body>',
+            '<html><head><link rel="stylesheet" href="assets/style.css"></head><body>')
         m.prepare(self.api, m.authorize(self.api, self.api.request(4), "issues"))
         m.prepare(self.api, m.authorize(self.api, self.api.request(10, DETAILS | {"name": "Second fictitious meeting"}), "issues"))
         self.flush_pages()
@@ -58,6 +85,10 @@ class FormBrowserTests(unittest.TestCase):
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
+        self.preview = preview.make_server(PreviewSource(self.directory), host='127.0.0.1', port=0)
+        threading.Thread(target=self.preview.serve_forever, daemon=True).start()
+        self.addCleanup(self.preview.server_close)
+        self.addCleanup(self.preview.shutdown)
         self.context = self.browser.new_context(viewport={"width": 1100, "height": 950})
         self.addCleanup(self.context.close)
         self.requests = []
@@ -152,9 +183,10 @@ class FormBrowserTests(unittest.TestCase):
         m.prepare(self.api, m.authorize(self.api, event, "issues"), reader=self.api)
         self.flush_pages()
 
-    def open_form(self, ident="meeting-4"):
-        self.page.goto(self.base + "/prototype/submit-talk.html?meeting=" + ident)
-        self.page.wait_for_function("() => !document.getElementById('talk-fields').disabled")
+    def open_form(self, ident="meeting-4", ready=True):
+        self.page.goto(self.base + "/prototype/submit-talk.html" + ("?meeting=" + ident if ident is not None else ""))
+        if ready:
+            self.page.wait_for_function("() => !document.getElementById('talk-fields').disabled")
         self.assertFalse(self.page.locator("#check-status").is_visible())
         self.assertFalse(self.page.locator("#meeting-link").is_visible())
 
@@ -253,6 +285,106 @@ class FormBrowserTests(unittest.TestCase):
         self.wait_published()
         self.assertEqual(self.api.permissions["member"], "read")
 
+    def test_meeting_link_submits_through_legacy_preview_without_a_script_request(self):
+        # Reproduce a server started before the form existed: HTML is fetched
+        # from the current branch, but its executable script allowlist is older.
+        current_resource_path = preview.resource_path
+        def old_resource_path(url):
+            path = current_resource_path(url)
+            if path == 'prototype/assets/talk-submission.js':
+                raise FileNotFoundError
+            return path
+        self.base = f'http://127.0.0.1:{self.preview.server_port}/__preview/synchronized'
+        script_requests = []
+        self.page.on('request', lambda request: script_requests.append(request.url) if request.url.endswith('.js') else None)
+        with patch.object(preview, 'resource_path', side_effect=old_resource_path):
+            self.assertEqual(self.page.request.get(self.base + '/prototype/assets/talk-submission.js').status, 404)
+            self.page.goto(self.base + '/prototype/meetings/meeting-4/')
+            self.page.get_by_role('link', name='Add talk', exact=True).click()
+            self.page.wait_for_function("() => !document.getElementById('talk-fields').disabled")
+            self.assertIn('?meeting=meeting-4', self.page.url)
+            self.assertEqual(self.page.locator('#meeting-name').inner_text(), DETAILS['name'])
+            self.assertFalse(self.page.locator('#meeting-choice').is_visible())
+            self.assertFalse(script_requests)
+            self.credentials()
+            self.fill_talk()
+            self.page.get_by_role('button', name='Submit talk', exact=True).click()
+            self.wait_published()
+            self.assertEqual(self.posts, 1)
+            self.assertEqual(m.web.parse(self.api.issues[self.last_number])['meeting_id'], 'meeting-4')
+            self.page.get_by_role('link', name='Return to meeting').click()
+            self.assertEqual(self.page.url, self.base + '/prototype/meetings/meeting-4/')
+            self.assertIn('Fictitious trees', self.page.locator('.public-talks').inner_text())
+        self.assertFalse(self.errors)
+
+    def test_generic_form_still_allows_explicit_meeting_selection(self):
+        self.open_form(None)
+        self.assertTrue(self.page.locator('#meeting-choice').is_visible())
+        self.assertFalse(self.page.locator('#meeting-context').is_visible())
+        self.page.locator('#meeting').select_option('meeting-10')
+        self.credentials()
+        self.fill_talk('Generic form talk')
+        self.page.get_by_role('button', name='Submit talk', exact=True).click()
+        self.wait_published()
+        self.assertEqual(m.web.parse(self.api.issues[self.last_number])['meeting_id'], 'meeting-10')
+
+    def test_unavailable_context_never_switches_to_another_active_meeting(self):
+        for ident in ('meeting-999', 'invalid', 'meeting-4'):
+            if ident == 'meeting-4':
+                m.manage_meeting(self.api, {'number': 4, 'id': 'meeting-4', 'action': 'archive'})
+                self.flush_pages()
+            self.open_form(ident, ready=False)
+            self.page.wait_for_function("() => document.getElementById('form-status').textContent.includes('unavailable or closed')")
+            self.assertFalse(self.page.locator('#meeting-choice').is_visible())
+            self.assertTrue(self.page.locator('#talk-title').is_disabled())
+            self.assertTrue(self.page.locator('#github-token').is_disabled())
+            self.assertTrue(self.page.locator('#submit-talk').is_disabled())
+        self.assertEqual(self.posts, 0)
+
+    def test_stalled_meeting_request_times_out_and_can_be_retried(self):
+        self.page.clock.install()
+        stalled = {'enabled': True}
+        routes = []
+        def index_request(route):
+            if not stalled['enabled']:
+                route.continue_()
+            else:
+                routes.append(route)
+            # An unhandled route remains pending until AbortController cancels it.
+        self.context.route('**/prototype/index.html', index_request)
+        self.open_form(ready=False)
+        self.page.wait_for_function("() => document.getElementById('form-status').textContent.startsWith('Loading')")
+        self.page.clock.fast_forward(15001)
+        self.page.wait_for_function("() => !document.getElementById('retry-meetings').hidden")
+        self.assertIn('could not be loaded', self.page.locator('#form-status').inner_text())
+        self.assertTrue(self.page.locator('#talk-title').is_disabled())
+        self.assertEqual(self.posts, 0)
+        for route in routes:
+            route.abort()
+        stalled['enabled'] = False
+        self.page.get_by_role('button', name='Retry loading').click()
+        self.page.wait_for_function("() => !document.getElementById('talk-fields').disabled")
+        self.assertFalse(self.page.locator('#retry-meetings').is_visible())
+        self.assertEqual(self.page.locator('#meeting-name').inner_text(), DETAILS['name'])
+
+    def test_failed_availability_refresh_keeps_input_and_never_posts_a_talk(self):
+        self.open_form()
+        self.credentials()
+        self.fill_talk()
+        self.context.route('**/prototype/index.html', lambda route: route.fulfill(status=503, body='Untrusted upstream response'))
+        self.page.get_by_role('button', name='Submit talk', exact=True).click()
+        self.page.wait_for_function("() => !document.getElementById('retry-meetings').hidden")
+        self.assertEqual(self.posts, 0)
+        self.assertNotIn('Untrusted upstream response', self.page.locator('#form-status').inner_text())
+        self.assertEqual(self.page.locator('#talk-title').input_value(), 'Fictitious trees')
+        self.assertTrue(self.page.locator('#submit-talk').is_disabled())
+        self.context.unroute('**/prototype/index.html')
+        self.page.get_by_role('button', name='Retry loading').click()
+        self.page.wait_for_function("() => !document.getElementById('submit-talk').disabled")
+        self.page.get_by_role('button', name='Submit talk', exact=True).click()
+        self.wait_published()
+        self.assertEqual(self.posts, 1)
+
     def test_expired_or_denied_tokens_and_rejected_post_allow_safe_correction(self):
         self.open_form()
         for code in ("401", "403", "404"):
@@ -285,7 +417,11 @@ class FormBrowserTests(unittest.TestCase):
         self.page.wait_for_function("() => document.getElementById('submission-status').textContent.includes('needs correction')")
         self.assertNotIn("talk", m.label_names(self.api.issues[self.last_number]))
         self.assertNotIn("Fictitious trees", (self.directory / "prototype/meetings/meeting-4/index.html").read_text())
-        self.open_form("legacy-20200101-000000000000")
+        self.open_form("legacy-20200101-000000000000", ready=False)
+        self.page.wait_for_function("() => document.getElementById('form-status').textContent.includes('unavailable or closed')")
+        self.assertTrue(self.page.locator('#talk-title').is_disabled())
+        self.assertFalse(self.page.locator('#meeting-choice').is_visible())
+        self.open_form(None)
         self.assertNotIn("meeting-4", self.page.locator("#meeting option").evaluate_all("nodes => nodes.map(n => n.value)"))
         self.assertEqual(self.page.locator("#meeting option").count(), 2)  # blank + active second meeting
 
@@ -294,6 +430,8 @@ class FormBrowserTests(unittest.TestCase):
             self.page.set_viewport_size({"width": width, "height": 950})
             self.open_form("meeting-10")
             self.assertEqual(self.page.locator("#meeting").input_value(), "meeting-10")
+            self.assertFalse(self.page.locator('#meeting-choice').is_visible())
+            self.assertEqual(self.page.locator('#meeting-name').inner_text(), 'Second fictitious meeting')
             self.assertTrue(self.page.evaluate("document.documentElement.scrollWidth <= innerWidth"))
         self.credentials()
         self.fill_talk("A second-meeting talk")
