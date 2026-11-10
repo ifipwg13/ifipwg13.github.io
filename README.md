@@ -5,10 +5,10 @@ Registration and discussion use the private GitHub repository. Group information
 the roster, and historical meetings use public-only content stored here.
 
 The prototype uses plain HTML/CSS and self-hosted scripts for list ordering and
-the own-site talk form, with no runtime dependencies or additional backend. The
-form calls GitHub directly using the member's personal token.
+the own-site talk and participation forms, with no runtime dependencies or
+additional backend. The forms call GitHub directly using the member's personal token.
 Participation and discussion belong in the private `ifipwg13/meetings` repository.
-The website displays each talk's title, entered authors, and expandable abstract.
+The website displays each talk's date/time, title, entered authors, and expandable abstract.
 
 ## Preview in Firefox without publishing
 
@@ -151,7 +151,7 @@ restored, with individual talk visibility preserved.
 
 Meeting cards have no archive status paragraph. Archived detail pages say
 **This meeting is archived, registration and talk submission are closed.**
-Their Add talk control remains disabled. Talk visibility and the private record
+Their Participation and Add talk controls remain disabled. Talk visibility and the private record
 links retain their existing behavior.
 
 Synchronization runs on Issue events, with no periodic publication timer.
@@ -171,12 +171,13 @@ under `/prototype/` on a future Pages deployment.
 
 Cards are ordered by start date, latest first. **When:** shows DD-MM-YYYY dates
 or date ranges, **Where:** shows the location, and descriptions remain unlabeled
-paragraphs. Hours and timezones are not displayed. Matching talk Issues appear
-on the cards and meeting pages as **title by authors**, with the title linking to
+paragraphs. Meeting hours and timezones are not displayed. Talk slots are local
+24-hour clock values. Matching talk Issues appear on cards and meeting pages as
+**09:00 — title by authors**, with the title linking to
 its private Issue. Automatic meeting prefixes and Issue-number labels are omitted.
 Each Issue-backed meeting page shows an initially collapsed **Abstract** disclosure
 beside each talk that has supplied abstract text. Its collapsed row reads
-**Title by Presenter ▸ Abstract** when space permits. Long titles and small
+**09:00 — Title by Presenter ▸ Abstract** when space permits. Long titles and small
 screens wrap naturally. Opening Abstract places the full text below that row.
 Titles and presenter names are underlined; only Issue-backed titles are links.
 Abstracts are escaped text with paragraph breaks; Issue-backed
@@ -229,10 +230,10 @@ artifacts, external caches, screenshots, or downloaded copies. The private Issue
 and its discussion remain retained. Administrator instructions are in the private
 README; ordinary members retain Read access and cannot manage visibility labels.
 
-Meeting pages place **View participants and register | Add talk** in a single
+Meeting pages place **Participation | Add talk** in a single
 responsive group. These links remain visible on the static site; GitHub enforces
 private-repository access. Active members need Read access or higher. Archived
-pages disable Add talk and retain a registration-record link. Hidden meetings
+pages disable both participation changes and Add talk. Hidden meetings
 have no public page. Meeting administration uses `archived` and `hidden` on the
 private registration Issue, under the existing Admin/Read role model. The private
 README gives the Labels-menu steps. There are no public administrative buttons.
@@ -248,7 +249,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch fix/talk-form-preview-loading --port 8003
+python3 scripts/preview_server.py --branch feature/participation-talk-schedule --port 8003
 ```
 
 Open port **8003** using **Ports → Open in Browser**. Firefox displays the review
@@ -258,12 +259,11 @@ This optional branch selection leaves the existing prototype preview default
 unchanged. Issue-backed pages in this feature draft are a review snapshot.
 The bar must say **Review snapshot**, name this feature branch, and offer
 **Switch to synchronized preview**. Use the review view for unmerged presentation
-changes. This repair makes the form self-contained for older running preview
-servers, fixes the meeting when opened through its Add talk link, and adds
-bounded loading/retry behavior. The private intake workflow is already merged;
-no private-repository change is needed for this repair. Read-account token setup
-is documented in
-[the private testing guide](https://github.com/ifipwg13/meetings/blob/main/WEB_TALK_TESTING.md).
+changes. This feature adds the Participation form and talk date/time scheduling,
+including first-day/09:00 defaults for existing Issue-backed proposals. The paired
+private parser must be integrated before real submissions from this form.
+Read-account testing and private editing instructions are in
+[the feature guide](https://github.com/ifipwg13/meetings/blob/feature/participation-talk-schedule/PARTICIPATION_AND_SCHEDULING.md).
 No PR is merged or Pages website published by starting a preview.
 
 In an existing Codespace with older local scripts, press **Ctrl+C** to stop its
@@ -272,10 +272,10 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/fix/talk-form-preview-loading:refs/remotes/origin/fix/talk-form-preview-loading &&
+git fetch origin refs/heads/feature/participation-talk-schedule:refs/remotes/origin/feature/participation-talk-schedule &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/fix/talk-form-preview-loading:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch fix/talk-form-preview-loading --port 8003
+git show origin/feature/participation-talk-schedule:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/participation-talk-schedule --port 8003
 ```
 
 Open port **8003** from **Ports**, keeping it **Private**. The first page must be
@@ -285,12 +285,14 @@ branch, or the published site. For current Issue states, click **Switch to
 synchronized preview**; the status must then say **Synchronized preview** and
 name `prototype/meeting-management`.
 
-After approval, merge this repair into `prototype/meeting-management`, then
-refresh the existing **Synchronized preview** tab. No preview-server restart,
-private workflow change, or meeting regeneration is required for this fix.
+After the paired implementation is approved, integrate the private parser first,
+then this public feature into `prototype/meeting-management`. Run the private
+**Prepare meeting** workflow once to regenerate mappings, schedules, and links.
+Refresh the existing **Synchronized preview** tab; no Codespace restart or new
+port is needed. Do not test new live submissions before both integrations.
 
 The public feature PR targets the existing prototype branch. Public website PR
-#1 stays draft and unmerged. After this repair is approved and integrated, use
+#1 stays draft and unmerged. After the paired feature is approved and integrated, use
 the normal preview command without `--branch` for real event synchronization.
 The isolated feature branch remains a review snapshot until it is updated again;
 merging it does not make it the synchronization target.
@@ -335,8 +337,11 @@ The delivered HTML includes its script, authorized by an exact CSP SHA-256 hash.
 It needs no separate script request, so it also works with a running preview
 server whose older allowlist cannot serve the new JS path. The version bar
 identifies the fetched website content, not the running server executable.
-Keep the single editable script source in `prototype/assets/talk-submission.js`;
-after editing it, regenerate and check the served HTML:
+Editable entries are `prototype/assets/talk-submission.js` and
+`prototype/assets/participation.js`; `prototype/assets/member-api.js` holds shared
+API, identity, calendar, and meeting-loading helpers. These are bundled into
+closure-scoped scripts in each HTML page, without external script requests.
+After editing any source, regenerate and check **both** served forms:
 
 ```sh
 python3 scripts/build_talk_form.py
@@ -364,12 +369,12 @@ A lost POST response triggers GET-only recovery by a per-submission UUID.
 The app uses no local/session storage or token URLs; password-manager
 saving/autofill is best effort via username/current-password hints. Tokens never
 enter the repo or an Issue. Only designated talk title, authors, and abstract
-are rendered publicly as escaped text. The token is not the administrator's
+and scheduling fields are rendered publicly as escaped text. The token is not the administrator's
 `MEETING_AUTOMATION_TOKEN` publishing secret. Native form submission is blocked
 by CSP, and fields remain disabled if JavaScript cannot load.
 
-Edits/withdrawals and participant registration still use GitHub's existing
-interface. New web-format Issues are revalidated on edits; invalid ones remain
+Talk edits/withdrawals still use GitHub's existing interface; Participation
+changes are submitted directly from our website. New web-format Issues are revalidated on edits; invalid ones remain
 private and are omitted publicly until corrected. Existing legacy-format Issues
 and imported meetings retain their current behavior. `talk-hidden`, meeting
 Hide, archive cutoffs, and historical closed-talk display continue unchanged.
@@ -388,3 +393,34 @@ checks its fixed context, submits a fictitious talk through the private REST
 model, and returns to the correct meeting. Additional checks cover a stalled
 meeting request, HTTP failure/retry without lost input or duplicate POST, generic
 selection, inactive/invalid context, and the compiled script's CSP hash.
+
+
+## Participation and talk scheduling
+
+The new Participation form fixes the meeting, checks the PAT owner and current
+private registration record, and adds/removes only that user's opening-post 👍.
+Repeated Register/Unregister choices preserve the desired state. A successful
+DELETE returns HTTP 204 without JSON; lost responses use read-only status checks
+instead of blindly repeating a mutation. Other reactions and users are untouched.
+Attendance and identity responses are neither published nor persisted.
+
+Public cards provide `data-registration-issue` from the canonical manifest; never
+construct the registration Issue number from the meeting counter. The form also
+checks its private registration/meeting labels and live open/locked/hidden/archive
+state before a change. GitHub enforces access and locked-conversation rules.
+
+Talk Time starts at 09:00. The date is automatic for a single-day meeting; a
+multi-day form asks for Talk date, initially the first day, using the existing
+day-first formats. Private Issues store optional `date`/`time` fields, with strict
+validation and no timezone conversion. Both public listings group multi-day talks
+by date and sort by date/time/actual creation time. Existing Issue-backed talks
+without fields default to the first day at 09:00, without bulk Issue rewrites.
+Explicit fields override defaults; imported historical records are unchanged.
+Existing slots invalidated by a meeting-date correction remain visible as
+Unscheduled talks and receive private correction guidance.
+
+With both checkouts and Playwright/Chromium installed, run
+`python3 tests/browser_participation.py` as well as the existing form and meeting
+browser tests. They use fictitious credentials and the actual preview handler.
+The private guide above supplies the real two-account Firefox checklist; local
+API models do not establish GitHub's actual authorization or browser vault behavior.

@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PRIVATE_ROOT = Path(os.environ.get("MEETINGS_CHECKOUT", ROOT.parent / "meetings"))
 sys.path.insert(0, str(PRIVATE_ROOT / "tests"))
 from test_web_talks import WebGitHub, proposal, m  # noqa: E402
-from test_meeting_setup import DETAILS  # noqa: E402
+from test_meeting_setup import DETAILS, form_body  # noqa: E402
 
 TOKEN = "github_pat_FICTITIOUS_TEST_ONLY_123456"
 API = "https://api.github.com"
@@ -57,7 +57,7 @@ class QuietFiles(http.server.SimpleHTTPRequestHandler):
         pass
 
 
-class FormBrowserTests(unittest.TestCase):
+class FormBrowserFixture(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.playwright = sync_playwright().start()
@@ -138,7 +138,7 @@ class FormBrowserTests(unittest.TestCase):
             if self.response_mode in {"401", "403", "404"}:
                 self.json_response(route, {}, int(self.response_mode))
             else:
-                self.json_response(route, {"login": "member"})
+                self.json_response(route, {"login": "member", "id": 11})
         elif path == "/repos/ifipwg13/meetings":
             repo = {"full_name": m.PRIVATE}
             if self.response_mode != "metadata-only":
@@ -203,6 +203,73 @@ class FormBrowserTests(unittest.TestCase):
 
     def wait_published(self):
         self.page.wait_for_function("() => document.getElementById('submission-status').textContent.includes('Your talk is published')")
+
+
+
+class FormBrowserTests(FormBrowserFixture):
+    def multi_day(self):
+        details = DETAILS | {'end_date': '2027-02-14'}
+        self.api.issues[4]['body'] = m.meeting_registration_intro('meeting-4', details) + form_body(details)
+        m.manage_meeting(self.api, {'number': 4, 'id': 'meeting-4', 'action': 'sync'})
+        self.flush_pages()
+
+    def test_default_time_and_automatic_single_day_date_are_sent(self):
+        self.open_form()
+        self.assertEqual(self.page.locator('#talk-time').input_value(), '09:00')
+        self.assertFalse(self.page.locator('#talk-date-field').is_visible())
+        self.credentials()
+        self.fill_talk()
+        self.page.get_by_role('button', name='Submit talk', exact=True).click()
+        self.wait_published()
+        data = m.web.parse(self.api.issues[self.last_number])
+        self.assertEqual((data['date'], data['time']), (DETAILS['date'], '09:00'))
+
+    def test_multi_day_date_and_time_normalization_then_public_display(self):
+        self.multi_day()
+        self.open_form()
+        self.assertTrue(self.page.locator('#talk-date-field').is_visible())
+        self.assertEqual(self.page.locator('#talk-date').input_value(), '12-02-2027')
+        self.page.locator('#talk-date').fill('14-2-27')
+        self.page.locator('#talk-time').fill('9:05')
+        self.credentials()
+        self.fill_talk()
+        self.page.get_by_role('button', name='Submit talk', exact=True).click()
+        self.wait_published()
+        data = m.web.parse(self.api.issues[self.last_number])
+        self.assertEqual((data['date'], data['time']), ('2027-02-14', '09:05'))
+        self.page.get_by_role('link', name='Return to meeting').click()
+        self.assertEqual(self.page.locator('.talk-date').inner_text(), '14-02-2027')
+        self.assertEqual(self.page.locator('.talk-time').inner_text(), '09:05')
+
+    def test_invalid_time_calendar_and_date_range_never_post(self):
+        self.multi_day()
+        self.open_form()
+        self.credentials()
+        self.fill_talk()
+        for time, date in [('24:00', '12-2-27'), ('9:0', '12-2-27'), ('09:60', '12-2-27'),
+                           ('09:00', '29-2-27'), ('09:00', '15-2-27'), ('09:00', '11-2-27')]:
+            self.page.locator('#talk-time').fill(time)
+            self.page.locator('#talk-date').fill(date)
+            self.page.get_by_role('button', name='Submit talk', exact=True).click()
+            self.assertEqual(self.posts, 0)
+            self.assertTrue(self.page.locator('#form-error').is_visible())
+
+    def test_calendar_and_clock_are_invariant_across_browser_timezones(self):
+        self.multi_day()
+        for zone in ('Europe/Berlin', 'America/Los_Angeles', 'Asia/Tokyo'):
+            context = self.browser.new_context(timezone_id=zone)
+            self.addCleanup(context.close)
+            context.route('**/*', self.route)
+            self.page = context.new_page()
+            self.open_form()
+            self.page.locator('#talk-time').fill('02:30')
+            self.page.locator('#talk-date').fill('13-2-27')
+            self.credentials()
+            self.fill_talk('Timezone independent ' + zone)
+            self.page.get_by_role('button', name='Submit talk', exact=True).click()
+            self.wait_published()
+            data = m.web.parse(self.api.issues[self.last_number])
+            self.assertEqual((data['date'], data['time']), ('2027-02-13', '02:30'))
 
     def test_full_read_user_submission_stays_on_site_and_renders_escaped_projection(self):
         self.open_form()

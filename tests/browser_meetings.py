@@ -367,7 +367,7 @@ class BrowserTests(unittest.TestCase):
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
         self.open(server)
-        self.assertEqual(self.page.locator('[aria-labelledby="meeting-4-title"] time').all_text_contents(),
+        self.assertEqual(self.page.locator('[aria-labelledby="meeting-4-title"] .meeting-summary time').all_text_contents(),
                          ['01-03-2027', '04-03-2027'])
         for width in (1100, 375, 320):
             self.page.set_viewport_size({'width': width, 'height': 950})
@@ -377,7 +377,7 @@ class BrowserTests(unittest.TestCase):
             self.open(server)
             card = self.page.locator('[aria-labelledby="meeting-4-title"]')
             self.assertEqual(card.locator('h3').inner_text(), 'Updated meeting')
-            self.assertEqual(card.locator('time').all_text_contents(), ['02-01-2029', '05-01-2029'])
+            self.assertEqual(card.locator('.meeting-summary time').all_text_contents(), ['02-01-2029', '05-01-2029'])
             self.assertIn('Where: Updated place', card.inner_text())
             self.assertEqual(card.locator('.meeting-description').inner_text(), f'Fresh description {width}')
             card.locator('h3 a').click()
@@ -459,7 +459,7 @@ class BrowserTests(unittest.TestCase):
                 event('unlabeled', label='hidden')  # The event that previously re-added archived.
                 self.assertEqual(self.page.reload().status, 200)
                 self.assertEqual(self.page.get_by_label('Registration status').count(), 0)
-                self.assertEqual(self.page.get_by_role('link', name='View participants and register', exact=True).count(), 1)
+                self.assertEqual(self.page.get_by_role('link', name='Participation', exact=True).count(), 1)
                 self.assertEqual(self.page.get_by_role('link', name='Add talk', exact=True).count(), 1)
                 self.assertEqual([api.issues[number]['state'] for number in (7, 8, 9)], ['open', 'closed', 'open'])
                 self.assertEqual(self.page.locator('.public-talks li').count(), 2)

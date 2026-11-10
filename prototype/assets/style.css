@@ -31,6 +31,8 @@ h1, h2, h3 { color: var(--heading); line-height: 1.25; }
 h1 { font-size: clamp(1.8rem, 5vw, 2.5rem); margin-top: .5rem; }
 h2 { margin-top: 2rem; font-size: 1.4rem; }
 h3 { font-size: 1.25rem; }
+.talk-date { color: var(--heading); margin-block: 1.25rem .5rem; }
+.talk-time { font-variant-numeric: tabular-nums; font-weight: 600; }
 a { color: var(--link); text-underline-offset: .18em; }
 a:hover { text-decoration-thickness: .15em; }
 a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
@@ -82,6 +84,8 @@ span.talk-title, span.talk-authors { cursor: text; }
 #talk-form label { display: block; font-weight: 600; margin-block: .8rem .25rem; }
 #talk-form input, #talk-form select, #talk-form textarea { display: block; width: 100%; max-width: 100%; font: inherit; padding: .5rem; border: 1px solid #6c7280; border-radius: .25rem; }
 #talk-form input:focus-visible, #talk-form select:focus-visible, #talk-form textarea:focus-visible { outline: 3px solid #875400; outline-offset: 2px; }
+#talk-form .participation-choices label { display: inline-flex; gap: .5rem; align-items: center; margin-right: 1.5rem; }
+#talk-form .participation-choices input { width: auto; }
 #form-error { color: #8a1722; border-left: 3px solid currentColor; padding-left: .75rem; }
 #identity:empty, #submission-status:empty, #form-status:empty { display: none; }
 .instructions { padding-left: 1.5rem; }
