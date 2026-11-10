@@ -360,6 +360,22 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(headers["Cache-Control"], "no-store")
         self.assertNotIn(b"First meeting", content)
 
+    def test_talk_form_script_is_allowed_with_correct_mime_and_no_other_scripts(self):
+        (self.remote / "prototype/submit-talk.html").write_text(meeting_page("Add talk"))
+        (self.remote / "prototype/assets/talk-submission.js").write_text("/* fictitious form asset */")
+        (self.remote / "prototype/assets/other.js").write_text("/* forbidden */")
+        git(self.remote, "add", "prototype")
+        git(self.remote, "commit", "-m", "Add talk form fixture")
+        server = self.server()
+        status, headers, content = self.request(server, "/prototype/submit-talk.html?meeting=meeting-4")
+        self.assertEqual(status, 200)
+        self.assertIn(b"Add talk", content)
+        status, headers, content = self.request(server, "/prototype/assets/talk-submission.js")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "text/javascript; charset=utf-8")
+        self.assertEqual(content, b"/* fictitious form asset */")
+        self.assertEqual(self.request(server, "/prototype/assets/other.js")[0], 404)
+
     def test_slashless_historical_page_redirects_to_styled_page(self):
         path = "/legacy-meetings/legacy-20160331-012345abcdef"
         directory = self.remote / "prototype" / path.lstrip("/")

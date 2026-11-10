@@ -50,7 +50,7 @@ def resource_path(url):
         return path.lstrip("/")
     if not path.startswith("/prototype/"):
         raise FileNotFoundError
-    if not path.endswith((".html", ".css")) and path not in {"/prototype/assets/meetings-list.js", '/' + LOGO_PATH}:
+    if not path.endswith((".html", ".css")) and path not in {"/prototype/assets/meetings-list.js", "/prototype/assets/talk-submission.js", '/' + LOGO_PATH}:
         raise FileNotFoundError
     return path.lstrip("/")
 

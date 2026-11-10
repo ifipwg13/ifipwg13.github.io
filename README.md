@@ -4,8 +4,9 @@ A static group homepage, public member list, and meeting website.
 Registration and discussion use the private GitHub repository. Group information,
 the roster, and historical meetings use public-only content stored here.
 
-The prototype uses plain HTML/CSS and a small local script to sort the list,
-with no runtime dependencies or external services.
+The prototype uses plain HTML/CSS and self-hosted scripts for list ordering and
+the own-site talk form, with no runtime dependencies or additional backend. The
+form calls GitHub directly using the member's personal token.
 Participation and discussion belong in the private `ifipwg13/meetings` repository.
 The website displays each talk's title, entered authors, and expandable abstract.
 
@@ -34,7 +35,7 @@ The website displays each talk's title, entered authors, and expandable abstract
 Keep port visibility **Private**. This preview is separate from GitHub Pages:
 opening it does not merge the pull request or publish the website. The Python
 server serves the root homepage, `members/index.html`, and the allowed HTML/CSS,
-meeting-list script, and exact IFIP logo path under `prototype/` on the selected public branch. Other
+meeting-list and talk-form scripts, and exact IFIP logo path under `prototype/` on the selected public branch. Other
 root files, hidden files, and private records cannot be served. It fetches the
 branch when a page is requested, so refreshing Firefox receives updates without
 another terminal command. Your local files and branches are not changed.
@@ -247,7 +248,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/archive-date-browser-review --port 8003
+python3 scripts/preview_server.py --branch feature/static-talk-form --port 8003
 ```
 
 Open port **8003** using **Ports → Open in Browser**. Firefox displays the review
@@ -258,11 +259,11 @@ unchanged. Issue-backed pages in this feature draft are a review snapshot.
 The bar must say **Review snapshot**, name this feature branch, and offer
 **Switch to synchronized preview**. Use the review view for unmerged presentation
 changes and the synchronized view for creation, talk, and label tests. The
-separate private PR accepts dates with optional leading zeros, shortens the
-archived detail notice, removes the list's archive paragraph, and simplifies
-input-correction guidance. Synchronization and meeting lifecycle rules continue
-to apply.
-Permissions and publication settings remain unchanged.
+separate private PR adds trusted intake for unlabeled website proposals.
+The review form can be inspected before integration, but live submissions need
+the private workflow activated and the form integrated into the synchronized
+prototype branch. Read-account token setup is documented in
+[the private testing guide](https://github.com/ifipwg13/meetings/blob/feature/static-web-talk-submissions/WEB_TALK_TESTING.md).
 No PR is merged or Pages website published by starting a preview.
 
 In an existing Codespace with older local scripts, press **Ctrl+C** to stop its
@@ -271,10 +272,10 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/archive-date-browser-review:refs/remotes/origin/feature/archive-date-browser-review &&
+git fetch origin refs/heads/feature/static-talk-form:refs/remotes/origin/feature/static-talk-form &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/archive-date-browser-review:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/archive-date-browser-review --port 8003
+git show origin/feature/static-talk-form:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/static-talk-form --port 8003
 ```
 
 Open port **8003** from **Ports**, keeping it **Private**. The first page must be
@@ -285,7 +286,7 @@ synchronized preview**; the status must then say **Synchronized preview** and
 name `prototype/meeting-management`.
 
 After separate approval, integrate the private automation first, then this
-documentation/test change. No new public interface code is needed. Run
+public form feature into the prototype branch. Run
 **Prepare meeting** once from the private repository's Actions page to verify
 all active meeting resources and pages. These operations still require separate
 merge approval.
@@ -304,7 +305,7 @@ or Pages configuration is introduced here.
 
 The preview server uses the Git authentication already provided by Codespaces.
 It needs no extra token or secret and reads no private Issues. The static site
-remains HTML/CSS with the local list sorter. To test rendering and preview
+remains HTML/CSS with self-hosted list and talk-form scripts. To test rendering and preview
 synchronization without credentials or internet access, run
 `python3 -m unittest discover -s tests -v`. A read-only integration test also runs
 when the private checkout is available as a sibling directory; otherwise that
@@ -320,3 +321,45 @@ removed meeting shortcuts, Home link destinations and keyboard focus, and
 overflow. They also check Home / Members /
 Meetings navigation through detail pages, the roster on desktop/mobile, and
 group-page/abstract use with JavaScript disabled. They add no site dependencies.
+
+
+## Own-site talk form
+
+`prototype/submit-talk.html` and `prototype/assets/talk-submission.js` provide
+meeting selection, required ASCII title/authors/abstract, and a masked personal
+GitHub token field. An active meeting's **Add talk** link selects that meeting
+and stays on our site. Public `data-meeting-id`/`data-meeting-status` card
+attributes populate the selector; archived, hidden, and historical meetings
+cannot be selected. Actions independently checks the authoritative private state.
+
+The token owner needs Read access to `ifipwg13/meetings`; repository Write is
+unnecessary. A fine-grained PAT needs only that repository and **Issues: Read
+and write** (Metadata Read is automatic). GitHub currently requires a classic
+`repo` PAT for an outside collaborator on an organization repository, if its
+policy allows that token type. Classic `repo` scope reaches other private repos
+the account can access; do not assume it is repository-scoped. The private guide
+above gives precise setup and testing steps for both account types.
+
+The browser verifies the token owner, then posts an unlabeled structured Issue
+directly to the fixed GitHub API origin. Trusted private Actions validates it,
+adds computed labels with its built-in token, and invokes publication in the
+same run. Private bot status distinguishes submission from verified publication.
+A lost POST response triggers GET-only recovery by a per-submission UUID.
+The app uses no local/session storage or token URLs; password-manager
+saving/autofill is best effort via username/current-password hints. Tokens never
+enter the repo or an Issue. Only designated talk title, authors, and abstract
+are rendered publicly as escaped text. The token is not the administrator's
+`MEETING_AUTOMATION_TOKEN` publishing secret. Native form submission is blocked
+by CSP, and fields remain disabled if JavaScript cannot load.
+
+Edits/withdrawals and participant registration still use GitHub's existing
+interface. New web-format Issues are revalidated on edits; invalid ones remain
+private and are omitted publicly until corrected. Existing legacy-format Issues
+and imported meetings retain their current behavior. `talk-hidden`, meeting
+Hide, archive cutoffs, and historical closed-talk display continue unchanged.
+
+To run credential-free browser/Python integration tests with a sibling private
+checkout, use `python3 tests/browser_talk_submission.py`. The fake token is sent
+only to intercepted GitHub API requests; no live Issues are created. Actual
+Read-account PAT acceptance, organization restrictions, and Firefox vault behavior
+remain manual checks after separately approved activation.
