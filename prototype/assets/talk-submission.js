@@ -127,7 +127,10 @@
         throw new Error('GitHub did not identify the token owner.');
       }
       const repo = await api(REPO, 'GET', undefined, candidate);
-      if (repo.full_name !== 'ifipwg13/meetings' || repo.permissions?.pull !== true) {
+      // Some API credentials omit the optional permissions object. A matching
+      // private-repository read is the preliminary check; Actions independently
+      // verifies the real author's membership before admission.
+      if (repo.full_name !== 'ifipwg13/meetings' || repo.permissions?.pull === false) {
         throw new Error('The token owner needs at least Read access to the private meeting repository.');
       }
       if (tokenField.value.trim() !== candidate) throw new Error('The token changed. Check it again.');

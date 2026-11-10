@@ -109,7 +109,10 @@ class FormBrowserTests(unittest.TestCase):
             else:
                 self.json_response(route, {"login": "member"})
         elif path == "/repos/ifipwg13/meetings":
-            self.json_response(route, {"full_name": m.PRIVATE, "permissions": {"pull": True, "push": False, "admin": False}})
+            repo = {"full_name": m.PRIVATE}
+            if self.response_mode != "metadata-only":
+                repo["permissions"] = {"pull": True, "push": False, "admin": False}
+            self.json_response(route, repo)
         elif path == "/repos/ifipwg13/meetings/issues" and request.method == "POST":
             self.posts += 1
             if self.response_mode == "post-403":
@@ -240,6 +243,15 @@ class FormBrowserTests(unittest.TestCase):
         self.page.get_by_role("button", name="Check submission status").click()
         self.wait_published()
         self.assertEqual(self.posts, 1)
+
+    def test_optional_repository_permissions_metadata_is_not_required(self):
+        self.response_mode = "metadata-only"
+        self.open_form()
+        self.credentials()
+        self.fill_talk()
+        self.page.get_by_role("button", name="Submit talk", exact=True).click()
+        self.wait_published()
+        self.assertEqual(self.api.permissions["member"], "read")
 
     def test_expired_or_denied_tokens_and_rejected_post_allow_safe_correction(self):
         self.open_form()
