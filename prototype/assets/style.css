@@ -14,6 +14,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; overflow-wrap: anywhere; }
 .container { width: calc(100% - 2rem); max-width: var(--content-width); margin-inline: auto; padding: 1.5rem; }
 .site-header { margin-block: 1.25rem; }
@@ -76,6 +77,13 @@ span.talk-title, span.talk-authors { cursor: text; }
 .talk-abstract summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
 .abstract-text { display: block; white-space: pre-wrap; margin-block: .5rem .75rem; padding: .75rem 1rem; border-left: 3px solid var(--heading); background: var(--surface); }
 .help { color: #46566a; }
+#talk-form fieldset { min-width: 0; border: 1px solid #d6dee8; border-radius: .35rem; margin-block: 1rem; padding: 1rem; }
+#talk-form legend { color: var(--heading); font-weight: 700; }
+#talk-form label { display: block; font-weight: 600; margin-block: .8rem .25rem; }
+#talk-form input, #talk-form select, #talk-form textarea { display: block; width: 100%; max-width: 100%; font: inherit; padding: .5rem; border: 1px solid #6c7280; border-radius: .25rem; }
+#talk-form input:focus-visible, #talk-form select:focus-visible, #talk-form textarea:focus-visible { outline: 3px solid #875400; outline-offset: 2px; }
+#form-error { color: #8a1722; border-left: 3px solid currentColor; padding-left: .75rem; }
+#identity:empty, #submission-status:empty, #form-status:empty { display: none; }
 .instructions { padding-left: 1.5rem; }
 .instructions li { margin-block: .75rem; }
 .site-footer { background: #fff; border-radius: .7rem; margin-block: 1.25rem; color: #46566a; font-size: .9rem; }

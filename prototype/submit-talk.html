@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>Add talk · IFIP WG1.3</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/talk-submission.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="container">
+    <a class="brand-logo" href="../" aria-label="IFIP WG1.3 home"><img src="assets/ifip-logo.png" alt="IFIP" width="75" height="142"></a>
+    <p class="site-brand"><a href="../">IFIP WG1.3</a></p>
+    <nav class="site-nav" aria-label="Main navigation"><a href="./">All meetings</a></nav>
+  </div></header>
+  <main id="main" class="container">
+    <h1>Add talk</h1>
+    <p>The title, authors, and abstract will appear on the public meeting page. Submitting a talk does not register you to attend.</p>
+    <noscript><p class="notice">Enable JavaScript to submit a talk. No information has been sent.</p></noscript>
+    <p id="form-status" role="status" aria-live="polite">Loading available meetings…</p>
+    <form id="talk-form" autocomplete="on">
+      <fieldset id="talk-fields" disabled>
+        <legend>Talk details</legend>
+        <label for="meeting">Meeting</label>
+        <select id="meeting" name="meeting" required><option value="">Choose a meeting</option></select>
+        <p class="help">Only meetings open for talk submissions are available.</p>
+        <label for="talk-title">Talk title</label>
+        <input id="talk-title" name="talk-title" type="text" required maxlength="200" aria-describedby="text-rules">
+        <label for="authors">Authors</label>
+        <input id="authors" name="authors" type="text" required maxlength="500" aria-describedby="text-rules">
+        <label for="abstract">Abstract</label>
+        <textarea id="abstract" name="abstract" required maxlength="20000" rows="9" aria-describedby="text-rules"></textarea>
+        <p id="text-rules" class="help">Use ASCII text only. Title: at most 200 characters; authors: 500; abstract: 20,000. Line breaks and tabs are allowed in the abstract. Enter the title without a meeting number.</p>
+      </fieldset>
+      <fieldset id="credential-fields" disabled>
+        <legend>Your GitHub access</legend>
+        <label for="github-username">GitHub username (optional, for your password manager)</label>
+        <input id="github-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false">
+        <label for="github-token">Personal access token</label>
+        <input id="github-token" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" aria-describedby="token-help" required>
+        <p id="token-help" class="help">Use your own token for the private meeting repository, with Issues read and write permission. Your repository role can remain Read. The token is sent directly to GitHub and is not saved by this website. Your password manager may offer to save it.</p>
+        <div class="actions">
+          <button id="check-token" class="button button-secondary" type="button">Check token</button>
+          <button id="clear-token" class="button button-secondary" type="button">Clear token</button>
+        </div>
+        <p id="identity" role="status" aria-live="polite"></p>
+      </fieldset>
+      <p id="form-error" role="alert" hidden></p>
+      <div class="actions">
+        <button id="submit-talk" class="button" type="submit" disabled>Submit talk</button>
+        <button id="check-status" class="button button-secondary" type="button" hidden>Check submission status</button>
+      </div>
+    </form>
+    <p id="submission-status" role="status" aria-live="polite"></p>
+    <p><a id="meeting-link" hidden>Return to meeting</a></p>
+  </main>
+  <footer class="container site-footer"><p><a href="./">Back to all meetings</a></p></footer>
+</body>
+</html>
