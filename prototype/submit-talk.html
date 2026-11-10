@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-QLMMNjCEIl2DZirWypCOi8BPtBgxoHHKVLuurQ6Fs1Y='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-X3PKg7oA4KGzdnRwYydM+LFy95YcpmDOIU7mrRpdu9Y='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Add talk · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -396,7 +396,10 @@
   $('meeting').required = !requestedMeeting;
   $('meeting').disabled = !!requestedMeeting;
   if (requestedMeeting) $('meeting-name').textContent = 'Loading…';
-  $('retry-meetings').addEventListener('click', () => loadMeetings().catch(() => {}));
+  $('retry-meetings').addEventListener('click', () => {
+    error();
+    loadMeetings().catch(() => {});
+  });
   loadMeetings().catch(() => {});
 })();
 </script>

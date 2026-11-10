@@ -381,6 +381,7 @@ class FormBrowserTests(unittest.TestCase):
         self.context.unroute('**/prototype/index.html')
         self.page.get_by_role('button', name='Retry loading').click()
         self.page.wait_for_function("() => !document.getElementById('submit-talk').disabled")
+        self.assertFalse(self.page.locator('#form-error').is_visible())
         self.page.get_by_role('button', name='Submit talk', exact=True).click()
         self.wait_published()
         self.assertEqual(self.posts, 1)

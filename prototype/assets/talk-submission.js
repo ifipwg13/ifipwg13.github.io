@@ -331,6 +331,9 @@
   $('meeting').required = !requestedMeeting;
   $('meeting').disabled = !!requestedMeeting;
   if (requestedMeeting) $('meeting-name').textContent = 'Loading…';
-  $('retry-meetings').addEventListener('click', () => loadMeetings().catch(() => {}));
+  $('retry-meetings').addEventListener('click', () => {
+    error();
+    loadMeetings().catch(() => {});
+  });
   loadMeetings().catch(() => {});
 })();
