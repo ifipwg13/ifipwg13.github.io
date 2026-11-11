@@ -5,6 +5,7 @@ No live GitHub writes or real tokens. Run with both repositories checked out:
 """
 import copy
 import functools
+import hashlib
 import http.server
 import importlib.util
 import json
@@ -27,6 +28,7 @@ from test_web_talks import WebGitHub, proposal, m  # noqa: E402
 from test_meeting_setup import DETAILS, form_body  # noqa: E402
 
 TOKEN = "github_pat_FICTITIOUS_TEST_ONLY_123456"
+SECOND_TOKEN = "github_pat_SECOND_FICTITIOUS_TEST_ONLY"
 API = "https://api.github.com"
 preview_spec = importlib.util.spec_from_file_location('talk_preview', ROOT / 'scripts/preview_server.py')
 preview = importlib.util.module_from_spec(preview_spec)
@@ -130,9 +132,10 @@ class FormBrowserFixture(unittest.TestCase):
             route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST",
                           "Access-Control-Allow-Headers": "authorization,content-type,x-github-api-version"})
             return
-        self.assertEqual(request.headers.get("authorization"), "Bearer " + TOKEN)
-        self.assertNotIn(TOKEN, request.url)
-        self.assertNotIn(TOKEN, request.post_data or "")
+        self.assertIn(request.headers.get("authorization"), {"Bearer " + TOKEN, "Bearer " + SECOND_TOKEN})
+        for credential in (TOKEN, SECOND_TOKEN):
+            self.assertNotIn(credential, request.url)
+            self.assertNotIn(credential, request.post_data or "")
         path = url.path
         if path == "/user":
             if self.response_mode in {"401", "403", "404"}:
@@ -190,11 +193,12 @@ class FormBrowserFixture(unittest.TestCase):
         self.assertFalse(self.page.locator("#check-status").is_visible())
         self.assertFalse(self.page.locator("#meeting-link").is_visible())
 
-    def credentials(self):
-        self.page.locator("#github-token").fill(TOKEN)
-        self.page.get_by_role("button", name="Check token", exact=True).click()
+    def credentials(self, username="assigned-member", credential=TOKEN):
+        self.page.locator("#github-username").fill(username)
+        self.page.locator("#github-token").fill(credential)
+        self.page.get_by_role("button", name="Check credentials", exact=True).click()
         self.page.wait_for_function("() => !document.getElementById('submit-talk').disabled")
-        self.assertIn("Submitting as member", self.page.locator("#identity").inner_text())
+        self.assertEqual("Credentials accepted.", self.page.locator("#identity").inner_text())
 
     def fill_talk(self, title="Fictitious trees", authors="A. Example", abstract="A fictitious abstract.\nSecond line."):
         self.page.locator("#talk-title").fill(title)
@@ -207,6 +211,61 @@ class FormBrowserFixture(unittest.TestCase):
 
 
 class FormBrowserTests(FormBrowserFixture):
+    def test_two_issued_credentials_share_author_but_keep_private_participant_metadata(self):
+        numbers = []
+        for username, credential in [('alice-private', TOKEN), ('bob-private', SECOND_TOKEN)]:
+            self.open_form(); self.credentials(username, credential)
+            self.fill_talk('A fictitious contribution')
+            self.page.get_by_role('button', name='Submit talk', exact=True).click()
+            self.wait_published()
+            numbers.append(self.last_number)
+            data = m.web.parse(self.api.issues[self.last_number])
+            self.assertEqual(data['participant'], {'username': username, 'credential_fingerprint': hashlib.sha256(credential.encode()).hexdigest()})
+        self.assertNotEqual(*numbers)
+        self.assertEqual(self.api.issues[numbers[0]]['user'], self.api.issues[numbers[1]]['user'])
+        public = '\n'.join(self.api.branch_files(m.PUBLIC, m.PREVIEW_BRANCH).values())
+        for value in ('alice-private', 'bob-private', 'credential_fingerprint', hashlib.sha256(TOKEN.encode()).hexdigest()):
+            self.assertNotIn(value, public)
+        self.assertNotIn('GitHub', self.page.locator('body').inner_text())
+
+    def test_assigned_username_is_required_and_autofill_changes_cannot_reuse_checked_credentials(self):
+        self.open_form(); self.page.locator('#github-token').fill(TOKEN)
+        for username in ('', 'René', '../member'):
+            self.page.locator('#github-username').fill(username)
+            self.page.get_by_role('button', name='Check credentials', exact=True).click()
+            self.page.wait_for_function("() => !document.getElementById('form-error').hidden")
+            self.assertTrue(self.page.locator('#submit-talk').is_disabled())
+            self.assertFalse(self.requests)
+        self.credentials(); self.fill_talk()
+        # Some password managers change values without emitting input events.
+        self.page.locator('#github-username').evaluate("node => { node.value = 'changed-label'; }")
+        self.page.get_by_role('button', name='Submit talk', exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('Check credentials')")
+        self.assertEqual(self.posts, 0)
+
+    def test_pending_talk_cannot_be_checked_with_another_password_on_same_account(self):
+        self.status_mode = 'pending'
+        self.open_form(); self.credentials(); self.fill_talk()
+        self.page.get_by_role('button', name='Submit talk', exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Submitted.')")
+        self.page.locator('#github-token').fill(SECOND_TOKEN)
+        self.page.get_by_role('button', name='Check credentials', exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('original username and password')")
+        self.assertEqual(self.posts, 1)
+        self.assertTrue(self.page.locator('#submit-talk').is_disabled())
+
+    def test_credentials_changed_during_availability_refresh_abort_before_post(self):
+        self.open_form(); self.credentials(); self.fill_talk()
+        def change_credentials(route):
+            self.page.locator('#github-token').evaluate("node => { node.value = 'changed-password'; node.dispatchEvent(new Event('input', {bubbles:true})); }")
+            route.fulfill(status=200, content_type='text/html', body=(self.directory / 'prototype/index.html').read_text())
+        self.context.route('**/prototype/index.html', change_credentials)
+        self.page.get_by_role('button', name='Submit talk', exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('Check credentials')")
+        self.assertEqual(self.posts, 0)
+        self.assertTrue(self.page.locator('#submit-talk').is_disabled())
+        self.assertFalse(self.errors)
+
     def multi_day(self):
         details = DETAILS | {'end_date': '2027-02-14'}
         self.api.issues[4]['body'] = m.meeting_registration_intro('meeting-4', details) + form_body(details)
@@ -288,7 +347,7 @@ class FormBrowserTests(FormBrowserFixture):
         self.assertNotIn(TOKEN, self.page.content())
         self.page.get_by_role("link", name="Return to meeting").click()
         self.assertEqual(self.page.locator("h1").inner_text(), DETAILS["name"])
-        self.assertEqual(self.page.locator(".talk-list a").inner_text(), "Fictitious trees")
+        self.assertEqual(self.page.locator(".talk-list .talk-title").inner_text(), "Fictitious trees")
         self.page.get_by_text("Abstract", exact=True).click()
         self.assertIn("<script>", self.page.locator(".abstract-text").inner_text())
         self.assertEqual(self.page.locator(".abstract-text script").count(), 0)
@@ -455,10 +514,11 @@ class FormBrowserTests(FormBrowserFixture):
 
     def test_expired_or_denied_tokens_and_rejected_post_allow_safe_correction(self):
         self.open_form()
+        self.page.locator("#github-username").fill("assigned-member")
         for code in ("401", "403", "404"):
             self.response_mode = code
             self.page.locator("#github-token").fill(TOKEN)
-            self.page.get_by_role("button", name="Check token", exact=True).click()
+            self.page.get_by_role("button", name="Check credentials", exact=True).click()
             self.page.wait_for_function("() => !document.getElementById('form-error').hidden")
             self.assertTrue(self.page.locator("#submit-talk").is_disabled())
             self.assertNotIn(TOKEN, self.page.locator("#form-error").inner_text())
@@ -507,7 +567,8 @@ class FormBrowserTests(FormBrowserFixture):
         self.wait_published()
         self.assertNotIn("A second-meeting talk", (self.directory / "prototype/meetings/meeting-4/index.html").read_text())
         self.assertIn("A second-meeting talk", (self.directory / "prototype/meetings/meeting-10/index.html").read_text())
-        self.page.get_by_role("button", name="Clear token").click()
+        self.assertEqual(self.page.get_by_role("button", name="Clear token").count(), 0)
+        self.page.locator("#github-token").fill("")
         self.assertEqual(self.page.locator("#github-token").input_value(), "")
         self.assertTrue(self.page.locator("#submit-talk").is_disabled())
 

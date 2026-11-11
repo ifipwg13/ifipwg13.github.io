@@ -1,38 +1,43 @@
-/* Only the PAT owner's +1 on the canonical registration opening post is changed. */
+/* Attendance comments are private; assigned usernames are trusted labels. */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
   const ident = new URLSearchParams(location.search).get('meeting');
   const tokenField = $('github-token');
+  const usernameField = $('github-username');
   let meeting = null;
   let accepting = false;
   let token = '';
   let owner = null;
+  let participant = null;
   let busy = false;
   let pending = null;
 
   function problem(message) { const error = new Error(message); error.safe = true; return error; }
   function showError(message = '') { $('form-error').textContent = message; $('form-error').hidden = !message; }
-  function message(error) { return error.httpStatus || error.safe ? error.message : 'GitHub could not be reached. Check status before trying again.'; }
+  function message(error) { return error.httpStatus || error.safe ? error.message : 'The service could not be reached. Check status before trying again.'; }
   function action() { return document.querySelector('input[name="participation"]:checked')?.value; }
   function controls() {
     $('submit-participation').disabled = busy || !!pending || !owner || !accepting || !action();
     $('check-token').disabled = busy;
-    $('clear-token').disabled = busy;
     $('check-status').disabled = busy || !owner;
     tokenField.disabled = busy;
+    usernameField.disabled = busy;
     for (const radio of document.querySelectorAll('input[name="participation"]')) radio.disabled = busy;
   }
   function resetIdentity() {
     token = '';
     owner = null;
+    participant = null;
     $('identity').textContent = '';
-    $('participation-status').textContent = 'Check your token to see your current participation status.';
+    $('participation-status').textContent = 'Check your credentials to see your current participation status.';
+    $('legacy-attendance').hidden = true;
+    if (!pending) $('submission-status').textContent = '';
     controls();
   }
   function readToken() {
     const value = tokenField.value.trim();
-    if (!value || !/^[\x21-\x7e]+$/.test(value)) throw problem('Enter your personal access token on one line without spaces.');
+    if (!value || !/^[\x21-\x7e]+$/.test(value)) throw problem('Enter the password supplied by the organizer, without spaces.');
     return value;
   }
   function api(path, method = 'GET', body, credential = token) {
@@ -54,55 +59,69 @@
     return issue;
   }
 
-  async function ownReaction(user, credential = token) {
+  async function ownAttendance(user, person, credential = token) {
     let found = null;
     for (let page = 1; page <= 100; page++) {
-      const batch = await api(issuePath() + '/reactions?content=%2B1&per_page=100&page=' + page, 'GET', undefined, credential);
-      if (!Array.isArray(batch)) throw problem('GitHub did not return participation status.');
-      for (const reaction of batch) {
-        if (reaction.content !== '+1' || reaction.user?.id !== user.id) continue;
-        if (found || !Number.isSafeInteger(reaction.id) || reaction.id < 1) throw problem('The participation record needs organizer review.');
-        found = reaction;
+      const batch = await api(issuePath() + '/comments?per_page=100&page=' + page, 'GET', undefined, credential);
+      if (!Array.isArray(batch)) throw problem('Participation status could not be read.');
+      for (const comment of batch) {
+        const record = memberAPI.attendanceRecord(comment, ident, user);
+        if (!record || record.username !== person.username) continue;
+        if (found) throw problem('More than one participation record exists for this username. Contact the organizer.');
+        found = comment;
       }
       if (batch.length < 100) return found;
     }
     throw problem('There are too many participation records to check. Contact the organizer.');
   }
 
-  function displayState(reaction) {
-    $('participation-status').textContent = reaction ? 'You are currently registered.' : 'You are currently not registered.';
+  async function checkEarlierRegistrations(credential) {
+    const reactions = await api(issuePath() + '/reactions?content=%2B1&per_page=1', 'GET', undefined, credential);
+    if (!Array.isArray(reactions)) throw problem('Earlier registrations could not be checked. Contact the organizer.');
+    $('legacy-attendance').hidden = !reactions.length;
+  }
+
+  function displayState(comment) {
+    $('participation-status').textContent = comment ? 'You are currently registered.' :
+      $('legacy-attendance').hidden ? 'You are currently not registered.' :
+      'No registration under this username was found. Earlier registrations need organizer confirmation.';
   }
 
   async function checkToken() {
     if (busy || !meeting) return;
     showError();
     resetIdentity();
-    let candidate;
-    try { candidate = readToken(); }
+    let candidate, username;
+    try { candidate = readToken(); username = memberAPI.assignedUsername(usernameField.value); }
     catch (error) { showError(message(error)); return; }
     busy = true;
     controls();
     try {
-      const user = await memberAPI.authenticate(candidate);
-      if (!Number.isSafeInteger(user.id) || user.id < 1) throw problem('GitHub did not identify the token owner.');
-      if (pending && pending.owner !== user.id) throw problem('Use the original account to confirm the pending participation change.');
+      const identity = await memberAPI.identify(username, candidate);
+      const user = identity.account;
+      const person = identity.participant;
+      if (pending && (pending.owner !== user.id || pending.username !== person.username || pending.fingerprint !== person.credential_fingerprint)) throw problem('Use the original username and password to confirm the pending participation change.');
       await currentIssue(!pending, candidate);
-      const reaction = await ownReaction(user, candidate);
-      if (tokenField.value.trim() !== candidate) throw problem('The token changed. Check it again.');
+      const comment = await ownAttendance(user, person, candidate);
+      await checkEarlierRegistrations(candidate);
+      if (tokenField.value.trim() !== candidate || memberAPI.assignedUsername(usernameField.value) !== username) throw problem('The credentials changed. Check them again.');
       token = candidate;
       owner = user;
-      $('identity').textContent = 'Submitting as ' + user.login + '. Check that this is your account.';
-      displayState(reaction);
+      participant = person;
+      $('identity').textContent = 'Credentials accepted.';
+      displayState(comment);
     } catch (error) { showError(message(error)); }
     finally { busy = false; controls(); }
   }
 
   async function verifyPending() {
-    if (!owner || readToken() !== token || owner.id !== pending.owner) throw problem('Check the original account\'s token before checking status.');
+    if (!owner || !participant || readToken() !== token || owner.id !== pending.owner ||
+        participant.username !== pending.username || participant.credential_fingerprint !== pending.fingerprint ||
+        memberAPI.assignedUsername(usernameField.value) !== participant.username) throw problem('Check the original username and password before checking status.');
     await currentIssue(false);
-    const reaction = await ownReaction(owner);
-    displayState(reaction);
-    if (!!reaction === pending.register) {
+    const comment = await ownAttendance(owner, participant);
+    displayState(comment);
+    if (!!comment === pending.register) {
       $('submission-status').textContent = pending.register ? 'Registration confirmed.' : 'Unregistration confirmed.';
       pending = null;
       $('check-status').hidden = true;
@@ -125,9 +144,10 @@
     event.preventDefault();
     if (busy || pending || !owner || !meeting || !accepting || !action()) return;
     showError();
-    try { if (readToken() !== token) throw problem('Check your token before submitting.'); }
+    try { if (readToken() !== token || !participant || memberAPI.assignedUsername(usernameField.value) !== participant.username) throw problem('Check your credentials before submitting.'); }
     catch (error) { showError(message(error)); return; }
     const desired = action() === 'register';
+    $('submission-status').textContent = 'Updating participation…';
     busy = true;
     controls();
     let writing = false;
@@ -135,14 +155,14 @@
     try {
       // Recheck current private state immediately before a mutation.
       await currentIssue();
-      const reaction = await ownReaction(owner);
-      pending = {owner: owner.id, register: desired};
-      if (desired && !reaction) {
+      const comment = await ownAttendance(owner, participant);
+      pending = {owner: owner.id, username: participant.username, fingerprint: participant.credential_fingerprint, register: desired};
+      if (desired && !comment) {
         writing = true;
-        await api(issuePath() + '/reactions', 'POST', {content: '+1'});
-      } else if (!desired && reaction) {
+        await api(issuePath() + '/comments', 'POST', {body: memberAPI.attendanceBody(ident, participant)});
+      } else if (!desired && comment) {
         writing = true;
-        await api(issuePath() + '/reactions/' + reaction.id, 'DELETE');
+        await api(memberAPI.repo + '/issues/comments/' + comment.id, 'DELETE');
       }
       written = writing;
       await verifyPending();
@@ -200,11 +220,7 @@
   $('retry-meetings').addEventListener('click', () => { showError(); loadMeeting(); });
   for (const radio of document.querySelectorAll('input[name="participation"]')) radio.addEventListener('change', controls);
   tokenField.addEventListener('input', resetIdentity);
-  $('clear-token').addEventListener('click', () => {
-    tokenField.value = '';
-    resetIdentity();
-    $('identity').textContent = 'Token cleared from this page. Saved password-manager entries are managed by your browser.';
-  });
-  window.addEventListener('pagehide', () => { tokenField.value = ''; resetIdentity(); });
+  usernameField.addEventListener('input', resetIdentity);
+  window.addEventListener('pagehide', () => { tokenField.value = ''; usernameField.value = ''; resetIdentity(); });
   loadMeeting();
 })();

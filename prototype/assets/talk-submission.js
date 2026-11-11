@@ -8,9 +8,11 @@
   const $ = id => document.getElementById(id);
   const form = $('talk-form');
   const tokenField = $('github-token');
+  const usernameField = $('github-username');
   let token = '';
   let login = '';
   let checkedToken = '';
+  let participant = null;
   let busy = false;
   let pending = null;
   let pollTimer = null;
@@ -32,6 +34,7 @@
     token = '';
     checkedToken = '';
     login = '';
+    participant = null;
     $('identity').textContent = '';
     buttons();
   }
@@ -39,13 +42,20 @@
   function readToken() {
     const value = tokenField.value.trim();
     if (!value || !/^[\x21-\x7e]+$/.test(value)) {
-      throw new Error('Enter a personal access token on one line, without spaces.');
+      throw new Error('Enter the password supplied by the organizer, without spaces.');
     }
     return value;
   }
 
   async function api(path, method = 'GET', body, credential = token) {
     return memberAPI.request(path, method, body, credential);
+  }
+
+  function requireCheckedCredentials() {
+    if (!checkedToken || readToken() !== checkedToken || !participant || memberAPI.assignedUsername(usernameField.value) !== participant.username) {
+      resetIdentity();
+      throw new Error('Use Check credentials before submitting.');
+    }
   }
 
   function ascii(value, label, limit, multiline = false) {
@@ -129,15 +139,20 @@
     error();
     resetIdentity();
     const candidate = readToken();
+    const username = memberAPI.assignedUsername(usernameField.value);
     busy = true;
     buttons();
     try {
-      const user = await memberAPI.authenticate(candidate);
-      if (tokenField.value.trim() !== candidate) throw new Error('The token changed. Check it again.');
+      const identity = await memberAPI.identify(username, candidate);
+      if (tokenField.value.trim() !== candidate || memberAPI.assignedUsername(usernameField.value) !== username) throw new Error('The credentials changed. Check them again.');
+      if (pending && (pending.username !== username || pending.fingerprint !== identity.participant.credential_fingerprint || pending.login !== identity.account.login)) {
+        throw Object.assign(new Error('Use the original username and password to check this submission.'), {safe: true});
+      }
       token = candidate;
       checkedToken = candidate;
-      login = user.login;
-      $('identity').textContent = 'Submitting as ' + login + '. Check that this is your account.';
+      login = identity.account.login;
+      participant = identity.participant;
+      $('identity').textContent = 'Credentials accepted.';
     } finally {
       busy = false;
       buttons();
@@ -150,7 +165,8 @@
       const body = issue.body || '';
       if (!body.startsWith(MARKER + '\n```json\n')) return false;
       const data = JSON.parse(body.slice((MARKER + '\n```json\n').length).replace(/\n```\s*$/, ''));
-      return data.submission_id === pending.id;
+      return data.submission_id === pending.id && data.participant?.username === pending.username &&
+        data.participant?.credential_fingerprint === pending.fingerprint;
     } catch {
       return false;
     }
@@ -161,7 +177,7 @@
     for (let page = 1; page <= 5; page++) {
       const issues = await api(REPO + '/issues?state=all&creator=' + encodeURIComponent(login) +
         '&sort=created&direction=desc&per_page=100&page=' + page);
-      if (!Array.isArray(issues)) throw new Error('GitHub did not return a submission list.');
+      if (!Array.isArray(issues)) throw new Error('The submission list could not be read.');
       const matches = issues.filter(matchedSubmission);
       if (matches.length > 1) throw new Error('More than one matching private record exists. Ask the organizer to inspect it.');
       if (matches.length === 1) {
@@ -175,15 +191,15 @@
 
   async function status() {
     if (!pending) return;
-    if (!checkedToken || checkedToken !== readToken()) throw new Error('Check the original account\'s token to read this submission status.');
-    if (pending.login.toLowerCase() !== login.toLowerCase()) throw new Error('Use the same account that submitted this talk.');
+    if (!checkedToken || checkedToken !== readToken() || !participant || pending.username !== participant.username ||
+        pending.fingerprint !== participant.credential_fingerprint || pending.login !== login) throw new Error('Check the original username and password to read this submission status.');
     if (!pending.number) await recover();
-    if (!Number.isSafeInteger(pending.number) || pending.number < 1) throw new Error('GitHub did not return a valid submission number.');
+    if (!Number.isSafeInteger(pending.number) || pending.number < 1) throw new Error('A valid submission reference was not returned.');
     const comments = [];
     // Only private bot comments with our identifier count as publication status.
     for (let page = 1; page <= 10; page++) {
       const batch = await api(REPO + '/issues/' + pending.number + '/comments?per_page=100&page=' + page);
-      if (!Array.isArray(batch)) throw new Error('GitHub did not return submission status.');
+      if (!Array.isArray(batch)) throw new Error('Submission status could not be read.');
       comments.push(...batch);
       if (batch.length < 100) break;
       if (page === 10) throw new Error('The private record has too many comments. Ask the organizer to check its status.');
@@ -201,7 +217,7 @@
     }
     const latest = states.at(-1);
     if (latest?.state === 'published' && /^[a-f0-9]{40}$/.test(latest.revision) && meetings.has(latest.meeting_id)) {
-      $('submission-status').textContent = 'Your talk is published in the synchronized website preview. Refresh the meeting page to see it.';
+      $('submission-status').textContent = 'Your talk is published. Refresh the meeting page to see it.';
       $('meeting-link').href = 'meetings/' + latest.meeting_id + '/';
       $('meeting-link').hidden = false;
       return;
@@ -211,14 +227,14 @@
       return;
     }
     if (latest?.state === 'needs-correction') {
-      $('submission-status').textContent = 'Your talk needs correction. Open your private Issue in GitHub for the validation message, or ask the organizer for help.';
+      $('submission-status').textContent = 'Your talk needs correction. Contact the organizer for help.';
       return;
     }
     if (latest?.state === 'needs-attention') {
-      $('submission-status').textContent = 'Your talk is recorded, but processing needs attention. Ask the organizer to check GitHub Actions; do not submit another copy.';
+      $('submission-status').textContent = 'Your talk is recorded, but processing needs attention. Contact the organizer; do not submit another copy.';
       return;
     }
-    $('submission-status').textContent = 'Submitted. GitHub Actions is checking your talk; it is not yet confirmed as published. You can keep this page open or check again later.';
+    $('submission-status').textContent = 'Submitted. Submission is not yet confirmed. You can keep this page open or check again later.';
     if (++pollCount < 12) pollTimer = setTimeout(checkStatus, 5000);
   }
 
@@ -229,7 +245,7 @@
     buttons();
     error();
     try { await status(); }
-    catch { error('Submission status could not be confirmed. Check your token and use Check submission status again. No second submission was sent.'); }
+    catch { error('Submission status could not be confirmed. Check your credentials and use Check submission status again. No second submission was sent.'); }
     finally { busy = false; buttons(); }
   }
 
@@ -242,24 +258,25 @@
     let data;
     try {
       data = details();
-      if (!checkedToken || readToken() !== checkedToken) throw new Error('Use Check token before submitting.');
+      requireCheckedCredentials();
       // Re-read public eligibility immediately before submission; Actions checks
       // authoritative private state independently (including race conditions).
       await loadMeetings();
+      requireCheckedCredentials();
       $('meeting').value = data.meeting;
       if (!meetings.has(data.meeting)) throw new Error('This meeting is no longer open for talk submissions.');
       const context = meetings.get(data.meeting);
       if (data.date < context.date || data.date > context.endDate) throw new Error('The meeting dates changed. Review your talk date before submitting.');
       if (!crypto.randomUUID) throw new Error('Use a browser with secure HTTPS access to submit a talk.');
     } catch (failure) { error(failure.message); busy = false; buttons(); return; }
-    pending = {id: crypto.randomUUID(), login, number: null};
+    pending = {id: crypto.randomUUID(), login, username: participant.username, fingerprint: participant.credential_fingerprint, number: null};
     buttons();
     $('talk-fields').disabled = true;
     const prefix = data.meeting === 'demo-001' ? '[meeting 1]' : '[meeting ' + data.meeting.slice(8) + ']';
     const payload = {schema_version: 1, meeting_id: data.meeting, authors: data.authors,
-      abstract: data.abstract, date: data.date, time: data.time, submission_id: pending.id};
+      abstract: data.abstract, date: data.date, time: data.time, submission_id: pending.id, participant: {...participant}};
     const issue = {title: prefix + ' ' + data.title, body: MARKER + '\n```json\n' + JSON.stringify(payload, null, 2) + '\n```'};
-    $('submission-status').textContent = 'Sending your talk to GitHub…';
+    $('submission-status').textContent = 'Submitting your talk…';
     try {
       const created = await api(REPO + '/issues', 'POST', issue);
       if (!Number.isSafeInteger(created.number) || created.number < 1) throw new Error('Unconfirmed submission');
@@ -270,7 +287,7 @@
       if ([401, 403, 404, 410, 422, 429].includes(failure.httpStatus)) {
         pending = null;
         $('talk-fields').disabled = false;
-        $('submission-status').textContent = 'GitHub did not accept this submission.';
+        $('submission-status').textContent = 'The service did not accept this submission.';
         error(failure.message);
       } else {
         $('submission-status').textContent = 'The connection ended before submission was confirmed. Checking for your private record without sending another copy…';
@@ -283,19 +300,15 @@
     if (pending) await checkStatus();
   });
 
-  $('check-token').addEventListener('click', () => checkToken().catch(failure => error(failure.httpStatus ? failure.message : 'The token could not be checked. Verify it and try again.')));
+  $('check-token').addEventListener('click', () => checkToken().catch(failure => error(failure.httpStatus || failure.safe ? failure.message : 'The credentials could not be checked. Verify them and try again.')));
   $('check-status').addEventListener('click', checkStatus);
   tokenField.addEventListener('input', resetIdentity);
-  $('clear-token').addEventListener('click', () => {
-    clearTimeout(pollTimer);
-    tokenField.value = '';
-    resetIdentity();
-    $('identity').textContent = 'Token cleared from this page. Saved password-manager entries are managed by your browser.';
-  });
+  usernameField.addEventListener('input', resetIdentity);
   // No token, credentials, or private responses are persisted by this app.
   window.addEventListener('pagehide', () => {
     clearTimeout(pollTimer);
     tokenField.value = '';
+    usernameField.value = '';
     resetIdentity();
   });
   // A meeting-specific Add talk link fixes the event; the generic form still

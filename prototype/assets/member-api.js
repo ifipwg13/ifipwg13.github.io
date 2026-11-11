@@ -2,7 +2,7 @@
 const memberAPI = (() => {
   const repo = '/repos/ifipwg13/meetings';
   async function request(path, method = 'GET', body, credential) {
-    if (path !== '/user' && path !== repo && !path.startsWith(repo + '/')) throw new Error('Unsupported GitHub request.');
+    if (path !== '/user' && path !== repo && !path.startsWith(repo + '/')) throw new Error('Unsupported request.');
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 20000);
     try {
@@ -15,14 +15,14 @@ const memberAPI = (() => {
       });
       if (!response.ok) {
         const messages = {
-          401: 'GitHub rejected the token. Check whether it has expired or been revoked.',
-          403: 'GitHub denied access. Check token permissions, organization approval or SSO, and repository access.',
-          404: 'The private record is unavailable to this token. Check repository access and meeting availability.',
+          401: 'The credentials were rejected. Ask the organizer whether they have expired or been replaced.',
+          403: 'The credentials do not permit this action. Contact the organizer.',
+          404: 'The record is unavailable. Check your credentials or contact the organizer.',
           410: 'This private record is no longer available.',
-          422: 'GitHub could not accept the request. Check its fields, permissions, and meeting availability.',
-          429: 'GitHub is limiting requests. Wait before checking again.',
+          422: 'The request could not be accepted. Check the fields or contact the organizer.',
+          429: 'Too many requests. Wait before checking again.',
         };
-        const error = new Error(messages[response.status] || 'GitHub is temporarily unavailable. Check status before trying again.');
+        const error = new Error(messages[response.status] || 'The service is temporarily unavailable. Check status before trying again.');
         error.httpStatus = response.status;
         throw error;
       }
@@ -33,12 +33,53 @@ const memberAPI = (() => {
 
   async function authenticate(credential) {
     const user = await request('/user', 'GET', undefined, credential);
-    if (!user || typeof user.login !== 'string' || !/^[A-Za-z0-9-]+$/.test(user.login)) throw new Error('GitHub did not identify the token owner.');
+    if (!user || typeof user.login !== 'string' || !/^[A-Za-z0-9-]+$/.test(user.login) || !Number.isSafeInteger(user.id) || user.id < 1) throw new Error('The credentials could not be verified.');
     const repository = await request(repo, 'GET', undefined, credential);
     if (repository.full_name !== 'ifipwg13/meetings' || repository.permissions?.pull === false) {
-      throw new Error('The token owner needs at least Read access to the private meeting repository.');
+      throw new Error('The credentials do not allow access to meeting records.');
     }
     return user;
+  }
+
+  function assignedUsername(value) {
+    const username = value.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(username)) {
+      const error = new Error('Enter the username assigned by the organizer, using letters, digits, dots, underscores or hyphens (at most 64 characters).');
+      error.safe = true;
+      throw error;
+    }
+    return username;
+  }
+
+  async function identify(username, credential) {
+    username = assignedUsername(username);
+    const account = await authenticate(credential);
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(credential));
+    const credential_fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    // A browser-supplied label/hash is bookkeeping, not authenticated identity.
+    return {account, participant: {username, credential_fingerprint}};
+  }
+
+  const attendanceMarker = '<!-- wg13-participation ';
+  function attendanceBody(ident, participant) {
+    return 'Yes\n\nParticipant: ' + participant.username + '\n\n' + attendanceMarker +
+      JSON.stringify({schema_version: 1, meeting_id: ident, ...participant}) + ' -->';
+  }
+
+  function attendanceRecord(comment, ident, owner) {
+    if (comment.user?.id !== owner.id || !Number.isSafeInteger(comment.id) || comment.id < 1) return null;
+    const body = comment.body || '';
+    const start = body.indexOf(attendanceMarker);
+    if (start < 0 || !body.endsWith(' -->')) return null;
+    try {
+      const data = JSON.parse(body.slice(start + attendanceMarker.length, -4));
+      if (Object.keys(data).sort().join(',') !== 'credential_fingerprint,meeting_id,schema_version,username' ||
+          data.schema_version !== 1 || data.meeting_id !== ident || typeof data.username !== 'string' ||
+          assignedUsername(data.username) !== data.username || typeof data.credential_fingerprint !== 'string' ||
+          !/^[a-f0-9]{64}$/.test(data.credential_fingerprint) ||
+          body !== attendanceBody(ident, {username: data.username, credential_fingerprint: data.credential_fingerprint})) return null;
+      return data;
+    } catch { return null; }
   }
 
   function calendar(value) {
@@ -89,6 +130,6 @@ const memberAPI = (() => {
     } finally { clearTimeout(timer); }
   }
 
-  return {repo, request, authenticate, calendar, clock, meetings,
+  return {repo, request, authenticate, identify, assignedUsername, attendanceBody, attendanceRecord, calendar, clock, meetings,
     displayDate: value => value.split('-').reverse().join('-')};
 })();
