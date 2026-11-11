@@ -1,7 +1,6 @@
 /* Static talk form. Tokens go only to the fixed GitHub API origin, never storage. */
 (() => {
   'use strict';
-  const API = 'https://api.github.com';
   const REPO = '/repos/ifipwg13/meetings';
   const MARKER = '<!-- wg13-web-talk -->';
   const STATUS_MARKER = '<!-- wg13-web-talk-status ';
@@ -45,35 +44,8 @@
     return value;
   }
 
-  async function api(path, method = 'GET', body = undefined, credential = token) {
-    // Do not follow API redirects: Authorization must never reach another host.
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
-    try {
-      const response = await fetch(API + path, {
-        method, credentials: 'omit', cache: 'no-store', redirect: 'error',
-        referrerPolicy: 'no-referrer', signal: controller.signal,
-        headers: {Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + credential,
-          'X-GitHub-Api-Version': '2022-11-28', ...(body ? {'Content-Type': 'application/json'} : {})},
-        ...(body ? {body: JSON.stringify(body)} : {}),
-      });
-      if (!response.ok) {
-        const messages = {
-          401: 'GitHub rejected the token. Check whether it has expired or been revoked.',
-          403: 'GitHub denied access. Check token permissions, organization approval or SSO, and repository access.',
-          404: 'The token cannot access the private meeting repository. Check the account, repository selection, and organization policy.',
-          410: 'This private record is no longer available.',
-          422: 'GitHub could not accept the submission. Check the fields and token permissions before starting a new submission.',
-          429: 'GitHub is limiting requests. Wait before checking again.',
-        };
-        const failure = new Error(messages[response.status] || 'GitHub is temporarily unavailable. Check submission status before trying again.');
-        failure.httpStatus = response.status;
-        throw failure;
-      }
-      return await response.json();
-    } finally {
-      clearTimeout(timer);
-    }
+  async function api(path, method = 'GET', body, credential = token) {
+    return memberAPI.request(path, method, body, credential);
   }
 
   function ascii(value, label, limit, multiline = false) {
@@ -90,14 +62,30 @@
     if (!meetings.has(meeting)) throw new Error('Select a meeting that is open for talk submissions.');
     const title = ascii($('talk-title').value, 'Title', 200);
     if (/^\[meeting(?:[ -])\d+\]/i.test(title)) throw new Error('Enter the talk title without a meeting prefix.');
-    return {meeting, title, authors: ascii($('authors').value, 'Authors', 500),
+    const context = meetings.get(meeting);
+    const date = context.date === context.endDate ? context.date : memberAPI.calendar($('talk-date').value);
+    if (date < context.date || date > context.endDate) throw new Error('Choose a talk date within the meeting dates.');
+    return {meeting, title, date, time: memberAPI.clock($('talk-time').value),
+      authors: ascii($('authors').value, 'Authors', 500),
       abstract: ascii($('abstract').value.replace(/\r\n?/g, '\n'), 'Abstract', 20000, true)};
+  }
+
+  let dateMeeting = null;
+  function scheduleFields() {
+    const id = $('meeting').value;
+    const context = meetings.get(id);
+    const multiple = context && context.date !== context.endDate;
+    $('talk-date-field').hidden = !multiple;
+    $('talk-date').required = !!multiple;
+    $('talk-date').disabled = !multiple;
+    if (multiple && (dateMeeting !== id || !$('talk-date').value)) {
+      $('talk-date').value = memberAPI.displayDate(context.date);
+    }
+    dateMeeting = id;
   }
 
   async function loadMeetings() {
     const selected = requestedMeeting || $('meeting').value;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
     meetings = new Map();
     $('talk-fields').disabled = true;
     $('credential-fields').disabled = true;
@@ -105,16 +93,10 @@
     $('form-status').textContent = 'Loading meeting information…';
     buttons();
     try {
-      const response = await fetch('index.html', {credentials: 'same-origin', cache: 'no-store', signal: controller.signal});
-      if (!response.ok) throw new Error('Meeting information unavailable');
-      const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
-      for (const card of doc.querySelectorAll('article.meeting-card[data-meeting-status="active"]')) {
-        const id = card.dataset.meetingId;
-        const title = card.querySelector('h3')?.textContent.trim();
-        if (/^(?:demo-001|meeting-[1-9][0-9]*)$/.test(id) && title) meetings.set(id, title);
-      }
+      const available = await memberAPI.meetings();
+      meetings = new Map([...available].filter(([, context]) => context.status === 'active'));
       $('meeting').replaceChildren(new Option('Choose a meeting', ''));
-      for (const [id, title] of meetings) $('meeting').add(new Option(title, id));
+      for (const [id, context] of meetings) $('meeting').add(new Option(context.name, id));
       if (meetings.has(selected)) $('meeting').value = selected;
       const unavailable = requestedMeeting && !meetings.has(requestedMeeting);
       const ready = meetings.size > 0 && !unavailable;
@@ -128,8 +110,9 @@
         meetings.clear();
         $('meeting-name').textContent = 'Unavailable';
       } else if (requestedMeeting) {
-        $('meeting-name').textContent = meetings.get(requestedMeeting);
+        $('meeting-name').textContent = meetings.get(requestedMeeting).name;
       }
+      scheduleFields();
       $('retry-meetings').hidden = ready;
     } catch {
       meetings.clear();
@@ -138,7 +121,6 @@
       $('retry-meetings').hidden = false;
       throw new Error('Meeting information could not be loaded. Use Retry loading before submitting.');
     } finally {
-      clearTimeout(timer);
       buttons();
     }
   }
@@ -150,17 +132,7 @@
     busy = true;
     buttons();
     try {
-      const user = await api('/user', 'GET', undefined, candidate);
-      if (!user || typeof user.login !== 'string' || !/^[A-Za-z0-9-]+$/.test(user.login)) {
-        throw new Error('GitHub did not identify the token owner.');
-      }
-      const repo = await api(REPO, 'GET', undefined, candidate);
-      // Some API credentials omit the optional permissions object. A matching
-      // private-repository read is the preliminary check; Actions independently
-      // verifies the real author's membership before admission.
-      if (repo.full_name !== 'ifipwg13/meetings' || repo.permissions?.pull === false) {
-        throw new Error('The token owner needs at least Read access to the private meeting repository.');
-      }
+      const user = await memberAPI.authenticate(candidate);
       if (tokenField.value.trim() !== candidate) throw new Error('The token changed. Check it again.');
       token = candidate;
       checkedToken = candidate;
@@ -276,6 +248,8 @@
       await loadMeetings();
       $('meeting').value = data.meeting;
       if (!meetings.has(data.meeting)) throw new Error('This meeting is no longer open for talk submissions.');
+      const context = meetings.get(data.meeting);
+      if (data.date < context.date || data.date > context.endDate) throw new Error('The meeting dates changed. Review your talk date before submitting.');
       if (!crypto.randomUUID) throw new Error('Use a browser with secure HTTPS access to submit a talk.');
     } catch (failure) { error(failure.message); busy = false; buttons(); return; }
     pending = {id: crypto.randomUUID(), login, number: null};
@@ -283,7 +257,7 @@
     $('talk-fields').disabled = true;
     const prefix = data.meeting === 'demo-001' ? '[meeting 1]' : '[meeting ' + data.meeting.slice(8) + ']';
     const payload = {schema_version: 1, meeting_id: data.meeting, authors: data.authors,
-      abstract: data.abstract, submission_id: pending.id};
+      abstract: data.abstract, date: data.date, time: data.time, submission_id: pending.id};
     const issue = {title: prefix + ' ' + data.title, body: MARKER + '\n```json\n' + JSON.stringify(payload, null, 2) + '\n```'};
     $('submission-status').textContent = 'Sending your talk to GitHub…';
     try {
@@ -326,6 +300,7 @@
   });
   // A meeting-specific Add talk link fixes the event; the generic form still
   // offers selection when opened without a meeting query parameter.
+  $('meeting').addEventListener('change', scheduleFields);
   $('meeting-choice').hidden = !!requestedMeeting;
   $('meeting-context').hidden = !requestedMeeting;
   $('meeting').required = !requestedMeeting;

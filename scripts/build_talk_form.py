@@ -1,7 +1,7 @@
-"""Include the talk form's script and its CSP hash in the static HTML.
+"""Include both member forms' shared helpers, entry scripts, and CSP hashes.
 
-This keeps one editable JS source while letting older preview servers deliver
-a complete working form without a second script request. Standard library only.
+Each source is edited once. Older preview servers deliver complete working forms
+without a second script request. Standard library only.
 """
 import argparse
 import base64
@@ -14,7 +14,10 @@ START = '<!-- talk-form-script:start -->'
 END = '<!-- talk-form-script:end -->'
 
 
-def render(page, javascript):
+def render(page, javascript, shared=None):
+    if shared is None:
+        shared = (ROOT / 'prototype/assets/member-api.js').read_text()
+    javascript = "(() => {\n'use strict';\n" + shared + "\n" + javascript + "\n})();\n"
     if page.count(START) != 1 or page.count(END) != 1 or page.index(END) <= page.index(START):
         raise ValueError('The talk form needs its script generation markers.')
     if re.search(r'</script', javascript, re.IGNORECASE):
@@ -33,14 +36,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    path = ROOT / 'prototype/submit-talk.html'
-    page = path.read_text()
-    expected = render(page, (ROOT / 'prototype/assets/talk-submission.js').read_text())
-    if args.check:
-        if page != expected:
-            parser.exit(1, 'Talk form is stale. Run python3 scripts/build_talk_form.py\n')
-    else:
-        path.write_text(expected)
+    for filename, source in (('submit-talk.html', 'talk-submission.js'), ('participation.html', 'participation.js')):
+        path = ROOT / 'prototype' / filename
+        page = path.read_text()
+        expected = render(page, (ROOT / 'prototype/assets' / source).read_text())
+        if args.check:
+            if page != expected:
+                parser.exit(1, 'Member form is stale. Run python3 scripts/build_talk_form.py\n')
+        else:
+            path.write_text(expected)
 
 
 if __name__ == '__main__':
