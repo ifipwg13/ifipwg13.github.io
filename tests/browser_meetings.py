@@ -126,6 +126,10 @@ class BrowserTests(unittest.TestCase):
                     self.no_overflow()
                     self.page.get_by_role('navigation').get_by_role('link', name='Meetings', exact=True).click()
                     self.assertEqual(self.page.url, base + '/prototype/')
+                    creation = self.page.get_by_role('link', name='Create meeting', exact=True)
+                    self.assertEqual(creation.count(), 1)
+                    self.assertEqual(creation.get_attribute('href'), 'https://github.com/ifipwg13/meetings/issues/new?template=create-meeting.yml')
+                    self.assertEqual(creation.get_attribute('target'), '_blank')
                     self.ordered_dates()
                     self.page.locator('.meeting-card').first.locator(':scope > h3 > a').click()
                     self.assertEqual(self.page.locator('h1').evaluate('node => [getComputedStyle(node).color, getComputedStyle(document.body).color]'), colors)
@@ -218,7 +222,7 @@ class BrowserTests(unittest.TestCase):
         for selector in ('.brand-logo', '.site-brand a'):
             self.assertEqual(self.page.locator(selector).evaluate('node => node.pathname'), '/')
 
-    def test_compact_current_talks_keep_links_and_expand_full_width_without_hide_shortcuts(self):
+    def test_compact_current_talks_use_plain_titles_and_expand_full_width_without_hide_shortcuts(self):
         for server in (self.static, self.preview):
             for width in (1100, 375, 320):
                 self.page.set_viewport_size({'width': width, 'height': 950})
@@ -245,9 +249,9 @@ class BrowserTests(unittest.TestCase):
                     for row in rows:
                         self.assertEqual(row.locator('span.help').count(), 0)
                         title = row.locator('.talk-title')
-                        self.assertEqual(row.locator('a').count(), 1)
-                        self.assertTrue(title.get_attribute('href').startswith('https://github.com/ifipwg13/meetings/issues/'))
-                        self.assertEqual(title.get_attribute('target'), '_blank')
+                        self.assertEqual(row.locator('a').count(), 0)
+                        self.assertIsNone(title.get_attribute('href'))
+                        self.assertIsNone(title.get_attribute('target'))
                         self.assertIn('underline', row.locator('.talk-authors').evaluate('node => getComputedStyle(node).textDecorationLine'))
                     disclosures = [row for row in rows if row.locator('.talk-abstract').count()]
                     if disclosures:

@@ -6,7 +6,7 @@ the roster, and historical meetings use public-only content stored here.
 
 The prototype uses plain HTML/CSS and self-hosted scripts for list ordering and
 the own-site talk and participation forms, with no runtime dependencies or
-additional backend. The forms call GitHub directly using the member's personal token.
+additional backend. The forms call GitHub directly using organizer-issued credentials.
 Participation and discussion belong in the private `ifipwg13/meetings` repository.
 The website displays each talk's date/time, title, entered authors, and expandable abstract.
 
@@ -151,8 +151,8 @@ restored, with individual talk visibility preserved.
 
 Meeting cards have no archive status paragraph. Archived detail pages say
 **This meeting is archived, registration and talk submission are closed.**
-Their Participation and Add talk controls remain disabled. Talk visibility and the private record
-links retain their existing behavior.
+Their Participation and Add talk controls remain disabled. Talk visibility
+retains its existing behavior; public talk titles are non-clickable.
 
 Synchronization runs on Issue events, with no periodic publication timer.
 Wait for **Prepare meeting** to succeed, then refresh: every HTML request fetches
@@ -173,13 +173,12 @@ Cards are ordered by start date, latest first. **When:** shows DD-MM-YYYY dates
 or date ranges, **Where:** shows the location, and descriptions remain unlabeled
 paragraphs. Meeting hours and timezones are not displayed. Talk slots are local
 24-hour clock values. Matching talk Issues appear on cards and meeting pages as
-**09:00 — title by authors**, with the title linking to
-its private Issue. Automatic meeting prefixes and Issue-number labels are omitted.
+**09:00 — title by authors**, with an underlined, non-clickable title. Automatic meeting prefixes and Issue-number labels are omitted.
 Each Issue-backed meeting page shows an initially collapsed **Abstract** disclosure
 beside each talk that has supplied abstract text. Its collapsed row reads
 **09:00 — Title by Presenter ▸ Abstract** when space permits. Long titles and small
 screens wrap naturally. Opening Abstract places the full text below that row.
-Titles and presenter names are underlined; only Issue-backed titles are links.
+Titles and presenter names are underlined and are not private-repository links.
 Abstracts are escaped text with paragraph breaks; Issue-backed
 index cards omit them.
 Comments, registration accounts, and unrelated private content remain private.
@@ -249,7 +248,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/participation-talk-schedule --port 8003
+python3 scripts/preview_server.py --branch feature/shared-member-credentials --port 8003
 ```
 
 Open port **8003** using **Ports → Open in Browser**. Firefox displays the review
@@ -263,7 +262,7 @@ changes. This feature adds the Participation form and talk date/time scheduling,
 including first-day/09:00 defaults for existing Issue-backed proposals. The paired
 private parser must be integrated before real submissions from this form.
 Read-account testing and private editing instructions are in
-[the feature guide](https://github.com/ifipwg13/meetings/blob/feature/participation-talk-schedule/PARTICIPATION_AND_SCHEDULING.md).
+[the feature guide](https://github.com/ifipwg13/meetings/blob/feature/shared-member-credentials/SHARED_CREDENTIALS.md).
 No PR is merged or Pages website published by starting a preview.
 
 In an existing Codespace with older local scripts, press **Ctrl+C** to stop its
@@ -272,10 +271,10 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/participation-talk-schedule:refs/remotes/origin/feature/participation-talk-schedule &&
+git fetch origin refs/heads/feature/shared-member-credentials:refs/remotes/origin/feature/shared-member-credentials &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/participation-talk-schedule:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/participation-talk-schedule --port 8003
+git show origin/feature/shared-member-credentials:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/shared-member-credentials --port 8003
 ```
 
 Open port **8003** from **Ports**, keeping it **Private**. The first page must be
@@ -325,7 +324,8 @@ group-page/abstract use with JavaScript disabled. They add no site dependencies.
 ## Own-site talk form
 
 `prototype/submit-talk.html` and `prototype/assets/talk-submission.js` provide
-required ASCII title/authors/abstract and a masked personal GitHub token field.
+required ASCII title/authors/abstract and organizer-issued Username/Password fields.
+The visible wording is neutral; the Password is an issued PAT, not a GitHub login password.
 An active meeting's **Add talk** link fixes the meeting and displays its name;
 there is no second selection step. The generic form without a `meeting` query
 parameter retains a selector. Public `data-meeting-id`/`data-meeting-status` card
@@ -353,23 +353,33 @@ is bounded at 15 seconds, including the response body, and failures show
 **Retry loading** while fields remain disabled. Typed values are retained after
 a failed pre-submission availability check; no Issue is posted in that case.
 
-The token owner needs Read access to `ifipwg13/meetings`; repository Write is
-unnecessary. A fine-grained PAT needs only that repository and **Issues: Read
-and write** (Metadata Read is automatic). GitHub currently requires a classic
-`repo` PAT for an outside collaborator on an organization repository, if its
-policy allows that token type. Classic `repo` scope reaches other private repos
-the account can access; do not assume it is repository-scoped. The private guide
-above gives precise setup and testing steps for both account types.
+The issuing account is an ordinary organization member with effective **Read**
+access to `ifipwg13/meetings`. A fine-grained PAT is restricted to that repository
+with **Issues: Read and write** plus automatic Metadata Read. Contents, Actions,
+Workflows, Pull requests, and administration permissions are unnecessary.
+Outside collaborators cannot use this fine-grained organization-token route.
+The approved Read account's membership/role were verified before implementation.
 
-The browser verifies the token owner, then posts an unlabeled structured Issue
+Each recipient gets an organizer-assigned username and issued PAT (the website's
+Password). **Check credentials** verifies access, not the human identity or the
+username/password binding. The browser adds the normalized label and a SHA-256
+credential fingerprint to private records. All such tokens act as the same
+GitHub account; their holders can edit shared-account records and can claim
+another assigned username. These are documented trust limitations. There is no
+per-person backend authentication. See the private feature guide for token
+issuance, reconciliation, and the real Read-account Firefox checklist.
+
+The browser verifies access, then posts an unlabeled structured Issue
 directly to the fixed GitHub API origin. Trusted private Actions validates it,
 adds computed labels with its built-in token, and invokes publication in the
 same run. Private bot status distinguishes submission from verified publication.
 A lost POST response triggers GET-only recovery by a per-submission UUID.
 The app uses no local/session storage or token URLs; password-manager
-saving/autofill is best effort via username/current-password hints. Tokens never
-enter the repo or an Issue. Only designated talk title, authors, and abstract
-and scheduling fields are rendered publicly as escaped text. The token is not the administrator's
+saving/autofill is best effort via username/current-password hints. Token values never
+enter a repository or an Issue; only their fingerprints enter private metadata. Only designated talk title, authors, and abstract
+and scheduling fields are rendered publicly as escaped text. Assigned usernames
+and fingerprints never enter public output. **Create meeting** remains at the top
+of the list and opens the private administrator form; GitHub enforces its access. The token is not the administrator's
 `MEETING_AUTOMATION_TOKEN` publishing secret. Native form submission is blocked
 by CSP, and fields remain disabled if JavaScript cannot load.
 
@@ -397,12 +407,21 @@ selection, inactive/invalid context, and the compiled script's CSP hash.
 
 ## Participation and talk scheduling
 
-The new Participation form fixes the meeting, checks the PAT owner and current
-private registration record, and adds/removes only that user's opening-post 👍.
-Repeated Register/Unregister choices preserve the desired state. A successful
-DELETE returns HTTP 204 without JSON; lost responses use read-only status checks
-instead of blindly repeating a mutation. Other reactions and users are untouched.
-Attendance and identity responses are neither published nor persisted.
+Participation fixes the meeting, checks the credentials and current canonical
+registration Issue, and adds/removes a structured **Yes** comment for the assigned
+username. Repeated choices preserve the desired state. Unregister deletes only
+that username's recognized comment during normal form use. Existing reactions,
+unrelated comments, other authors and labels remain unchanged. Duplicates require
+organizer review. Earlier reaction registrations are flagged for reconciliation;
+no automatic mapping or deletion is performed. Username-based state can be
+recovered with a replacement issued password after rechecking credentials.
+
+A successful DELETE returns HTTP 204 without JSON. Lost responses require
+read-only status checks using the original username/password pair instead of
+repeating writes. Changing either field invalidates checked credentials and
+clears stale confirmation text. The Clear token button is removed; page exit
+clears entered credentials. Browser password-manager saving remains best effort.
+Attendance and account responses never enter public output or persistent storage.
 
 Public cards provide `data-registration-issue` from the canonical manifest; never
 construct the registration Issue number from the meeting counter. The form also
@@ -424,3 +443,13 @@ With both checkouts and Playwright/Chromium installed, run
 browser tests. They use fictitious credentials and the actual preview handler.
 The private guide above supplies the real two-account Firefox checklist; local
 API models do not establish GitHub's actual authorization or browser vault behavior.
+
+
+The shared-credential feature adds strict private participant metadata, comment
+attendance, neutral form/error/status text, and non-clickable talk titles. Its
+paired PRs remain unmerged until approved for integration. Before enabling the
+new format, reconcile existing registrations using the private guide. Local
+browser tests exercise the accepted lack of per-person identity enforcement as
+well as ordinary form isolation; they do not claim to prevent impersonation.
+The publication success message confirms synchronized content, not completion
+of a GitHub Pages deployment.
