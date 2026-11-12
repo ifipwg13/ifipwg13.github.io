@@ -121,7 +121,7 @@ an error rather than silently displaying an old meeting list.
 - `prototype/data/legacy-meetings.json`: historical meeting/talk content; edit
   this dataset and rerun the renderer described below.
 
-The homepage, members page, and meeting list share Home / Members / Meetings / Manage Participants
+The homepage, members page, and meeting list share Home / Members / Meetings
 navigation. Meeting detail pages link back to the list. Relative paths are the
 same in the preview and static site. Neither the homepage nor the roster depends
 on JavaScript, a login, or another website at page-load time.
@@ -248,7 +248,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/website-meeting-creation --port 8003
+python3 scripts/preview_server.py --branch feature/shared-password-names --port 8003
 ```
 
 Open port **8003** using **Ports → Open in Browser**. Firefox displays the review
@@ -258,11 +258,12 @@ This optional branch selection leaves the existing prototype preview default
 unchanged. Issue-backed pages in this feature draft are a review snapshot.
 The bar must say **Review snapshot**, name this feature branch, and offer
 **Switch to synchronized preview**. Use the review view for unmerged presentation
-changes. This feature adds Manage Participants to the navigation and a website-native
-Create meeting form at `prototype/create-meeting.html`. The paired private
-status support must be integrated before real creation tests from this form.
+changes. This feature restores Name and shared Password in Participation and Add talk,
+retires directory enrollment, and preserves the administrator Create meeting form.
+The private compatibility change must be integrated before real submissions from
+these member forms.
 Read-account testing and private editing instructions are in
-[the feature guide](https://github.com/ifipwg13/meetings/blob/feature/website-meeting-creation/README.md).
+[the feature guide](https://github.com/ifipwg13/meetings/blob/feature/shared-password-names/README.md).
 No PR is merged or Pages website published by starting a preview.
 
 In an existing Codespace with older local scripts, press **Ctrl+C** to stop its
@@ -271,22 +272,22 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/website-meeting-creation:refs/remotes/origin/feature/website-meeting-creation &&
+git fetch origin refs/heads/feature/shared-password-names:refs/remotes/origin/feature/shared-password-names &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/website-meeting-creation:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/website-meeting-creation --port 8003
+git show origin/feature/shared-password-names:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/shared-password-names --port 8003
 ```
 
 Open port **8003** from **Ports**, keeping it **Private**. The first page must be
-the group homepage with Home / Members / Meetings / Manage Participants navigation and a **Review
+the group homepage with Home / Members / Meetings navigation and a **Review
 snapshot** status bar. This block does not change local HTML, the checked-out
 branch, or the published site. For current Issue states, click **Switch to
 synchronized preview**; the status must then say **Synchronized preview** and
 name `prototype/meeting-management`.
 
 After the paired implementation is approved, integrate the private parser first,
-then this public feature into `prototype/meeting-management`. Enroll issued
-passwords through **Manage participants** before member testing.
+then this public feature into `prototype/meeting-management`. Distribute a shared
+Read-account password and test two entered names without enrollment.
 Keep website-publication PR #1 unmerged.
 Refresh the existing **Synchronized preview** tab; no Codespace restart or new
 port is needed. Do not test new live submissions before both integrations.
@@ -325,8 +326,9 @@ group-page/abstract use with JavaScript disabled. They add no site dependencies.
 ## Own-site talk form
 
 `prototype/submit-talk.html` and `prototype/assets/talk-submission.js` provide
-required ASCII title/authors/abstract and an organizer-issued Password field.
-The assigned real name is resolved automatically; there is no editable username.
+required ASCII title/authors/abstract and Name/shared Password fields.
+Participants enter Name explicitly; no lookup, enrollment or per-person token is
+required. The same password can be used with several names.
 The visible wording is neutral; the Password is an issued PAT, not a GitHub login password.
 An active meeting's **Add talk** link fixes the meeting and displays its name;
 there is no second selection step. The generic form without a `meeting` query
@@ -343,8 +345,8 @@ Editable entries are `prototype/assets/talk-submission.js` and
 `prototype/assets/participation.js`; `prototype/assets/member-api.js` holds shared
 API, identity, calendar, and meeting-loading helpers. These are bundled into
 closure-scoped scripts in each HTML page, without external script requests.
-The administrator source is `prototype/assets/manage-participants.js`.
-After editing any source, regenerate and check **all four** served forms:
+The administrator source is `prototype/assets/create-meeting.js`.
+After editing any source, regenerate and check **all three** served forms:
 
 ```sh
 python3 scripts/build_talk_form.py
@@ -363,21 +365,20 @@ Workflows, Pull requests, and administration permissions are unnecessary.
 Outside collaborators cannot use this fine-grained organization-token route.
 The approved Read account's membership/role were verified before implementation.
 
-Each recipient gets an issued PAT (the website's Password). **Check credentials**
-verifies access and resolves its full SHA-256 fingerprint against a protected
-private directory. Names appear automatically. The Manage Participants page
-associates issued passwords with names, supports renaming/replacement/disable,
-and retains stable participant IDs. Enrollment hashes the issued password locally
-and clears it before any request. Its separate Admin-account PAT authenticates
-management requests with only Issues read/write plus automatic Metadata read.
-Trusted private Actions checks Admin roles again and maintains a bot-owned Issue;
-no member Contents permission, new backend, database, or secret is needed.
+Participants share a Read-account PAT (the website's Password) and enter their
+own Name. The browser checks access, computes the full SHA-256 fingerprint and
+records name/fingerprint metadata privately. No name directory is read or required.
+Names are self-declared labels, not human authentication; a password holder can
+enter another name and act on that shared account's records. Names accept plain
+text and accents; the public talk title/authors/abstract retain strict ASCII.
+The private submitter Name is separate from the intentionally public Authors.
 
-All issued tokens still act as the same Read account. Direct API callers can edit
-that account's other records or forge metadata. Automatic name lookup improves
-normal form use without enforcing per-person repository identity. See the private
-[participant guide](https://github.com/ifipwg13/meetings/blob/feature/website-meeting-creation/PARTICIPANT_NAMES.md)
-for setup, storage boundaries, migration and the real Read-account Firefox tests.
+The Manage Participants form, navigation and reconciliation workflow are retired.
+Existing directory Issues and records remain private and unchanged. Former
+active/disabled directory flags no longer control form access: revoke unwanted
+PATs in GitHub. Existing attendance/talk formats stay readable without lookup.
+See the private [shared-password guide](https://github.com/ifipwg13/meetings/blob/feature/shared-password-names/SHARED_CREDENTIALS.md)
+for issuance, compatibility, replacement and the Firefox acceptance procedure.
 
 The browser verifies access, then posts an unlabeled structured Issue
 directly to the fixed GitHub API origin. Trusted private Actions validates it,
@@ -385,7 +386,7 @@ adds computed labels with its built-in token, and invokes publication in the
 same run. Private bot status distinguishes submission from verified publication.
 A lost POST response triggers GET-only recovery by a per-submission UUID.
 The app uses no local/session storage or token URLs; password-manager
-saving/autofill is best effort via the current-password hint. Token values never
+saving/autofill is best effort via username/current-password hints. Token values never
 enter a repository or an Issue; only their fingerprints enter private metadata. Only designated talk title, authors, and abstract
 and scheduling fields are rendered publicly as escaped text. Directory names/IDs
 and fingerprints never enter public output. **Create meeting** remains at the top
@@ -418,19 +419,19 @@ selection, inactive/invalid context, and the compiled script's CSP hash.
 ## Participation and talk scheduling
 
 Participation fixes the meeting, checks the credentials and current canonical
-registration Issue, and adds/removes a **Yes — Real Name** comment for the resolved
+registration Issue, and adds/removes a **Yes — Real Name** comment for the entered
 participant. Repeated choices preserve the desired state. Unregister deletes only
 that participant's recognized comment during normal form use. Existing reactions,
 unrelated comments, other authors and labels remain unchanged. Duplicates require
 organizer review. Earlier reaction registrations are flagged for reconciliation;
-no automatic mapping or deletion is performed. Stable participant IDs allow a
-replacement password to manage an existing
-registration after rechecking credentials. Known older username comments migrate
-when their fingerprints are enrolled; unknown records remain unchanged.
+no automatic mapping or deletion is performed. A replacement password on the
+same issuing account can manage existing attendance by name, independent of the
+historical fingerprint. Existing version-2 name/member-ID comments remain readable;
+version-1 comments match their original usernames. Unknown records are preserved.
 
 A successful DELETE returns HTTP 204 without JSON. Lost responses require
-read-only status checks using the original password instead of
-repeating writes. Changing the password invalidates checked credentials and
+read-only status checks using the original name/password instead of
+repeating writes. Changing either field invalidates checked credentials and
 clears stale confirmation text. The Clear token button is removed; page exit
 clears entered credentials. Browser password-manager saving remains best effort.
 Attendance and account responses never enter public output or persistent storage.
@@ -457,43 +458,43 @@ The private guide above supplies the real two-account Firefox checklist; local
 API models do not establish GitHub's actual authorization or browser vault behavior.
 
 
-## Website administrator forms
+## Administrator meeting creation
 
-The top navigation adds **Manage Participants** after Meetings on Home, Members,
-and Meetings, with the same navigation in both administrator forms. This manages
-private name/password associations; it does not edit the public member roster.
-Links are visible to all visitors; trusted Actions enforces actual Admin access.
+**Create meeting** stays at the top of the list and opens
+`prototype/create-meeting.html`. It asks for the existing meeting details and a
+separate masked Admin-account password. The entry script is
+`prototype/assets/create-meeting.js`, compiled with the shared helper and exact
+CSP hash. There is no member Name field on this administrator form.
 
-**Create meeting** opens `prototype/create-meeting.html`. Its entry script is
-`prototype/assets/create-meeting.js`, compiled by `build_talk_form.py` with the
-shared helper and exact CSP hash. It asks for name, start/optional end date,
-location, optional description and a masked administrator password. Unicode
-meeting text, existing lengths and day-first date formats are retained. No hours
-or timezone fields are added. The browser posts one Issue with the existing
-field headings and a private submission UUID. The same Issue becomes the
-registration Issue, with its assigned prefix; a second meeting record is not
-created. Check credentials uses the account's actual Admin role and does not
-require a participant-directory association or Contents token permission.
+Check credentials verifies the actual repository Admin role. Submission rechecks
+that role immediately before any Issue POST and rejects silently changed
+credentials. A non-admin password creates no Issue through this form, even if a
+previously checked administrator has been downgraded. Missing/denied permission
+checks fail closed. Trusted private Actions independently checks the trigger and
+original request author before preparing meeting resources. A name, token
+fingerprint or browser visibility flag never grants administration.
 
-Processing is asynchronous. The form shows Submitted until a trusted bot status
-confirms independently verified synchronized content. It offers Open meeting
-when ready. After a lost response, bounded GET-only recovery by UUID prevents
-an automatic duplicate POST. Check creation status remains available after
-polling stops. Old/fake comments cannot announce readiness. Corrections to saved
-Issues retain existing synchronization; preserve the submission marker.
+GitHub's Issues write permission still allows raw API callers to create ordinary
+Issues, including malformed meeting requests. They must never become prepared
+meetings through the private workflow. Preventing all such direct Issue creation
+would also prevent talk submission under this static/direct-API design.
 
-The private [README](https://github.com/ifipwg13/meetings/blob/feature/website-meeting-creation/README.md#create-limited-member-and-administrator-tokens)
-gives step-by-step creation of both token kinds: Read-account member passwords
-and separate Admin-account passwords, each limited to meetings with Issues
-read/write and automatic Metadata read. The existing publishing secret is
-separate and still needs file-write permissions. Website forms introduce no new
-secret, backend, database or dependency. Passwords are temporary in memory and
-Authorization headers; optional password-manager storage belongs to the browser.
+The form creates one registration Issue with its submission UUID, assigned prefix
+and existing synchronization. It shows Submitted until trusted bot status confirms
+verified public revision content; only then does it offer Open meeting. Lost
+responses use bounded GET-only UUID recovery, without duplicate POSTs. Preserve
+the marker when editing saved Issues. Hidden/archived meeting behavior is retained.
 
-Run `python3 tests/browser_create_meeting.py` with the sibling private checkout
-for the full form/controller/synchronization integration. Also run the existing
-participant, talk, attendance, navigation and meeting suites. Tests use fictitious
-credentials and a modeled API; actual minimal-scope PAT acceptance and Firefox
-password-manager behavior remain manual after integration approval. Paired PRs
-stay draft/unmerged until approved; publication PR #1 remains separate.
-Backup/export/restore work remains deferred.
+The private [README](https://github.com/ifipwg13/meetings/blob/feature/shared-password-names/README.md#create-limited-member-and-administrator-tokens)
+gives exact issuance steps: one shared Read-account password for member forms,
+and a separate Admin-account password for Create meeting. Both select only
+meetings with Issues read/write plus automatic Metadata read. The publishing
+secret remains separate because it writes repository files. No new secret,
+backend, database or dependency is needed.
+
+Run `python3 tests/browser_create_meeting.py` with the sibling private checkout,
+alongside talk, participation and meeting/browser tests. These use fictitious
+credentials and the real preview/controller with a modeled API. Actual minimal-
+scope PAT acceptance, live Actions timing and Firefox vault behavior remain manual
+after integration approval. Both implementation PRs stay draft/unmerged until
+approved. Publication PR #1 and backup/export/restore remain separate and deferred.

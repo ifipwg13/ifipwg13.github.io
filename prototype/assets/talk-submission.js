@@ -8,6 +8,7 @@
   const $ = id => document.getElementById(id);
   const form = $('talk-form');
   const tokenField = $('github-token');
+  const nameField = $('participant-name');
   let token = '';
   let login = '';
   let checkedToken = '';
@@ -51,7 +52,7 @@
   }
 
   function requireCheckedCredentials() {
-    if (!checkedToken || readToken() !== checkedToken || !participant) {
+    if (!checkedToken || readToken() !== checkedToken || !participant || memberAPI.participantName(nameField.value) !== participant.name) {
       resetIdentity();
       throw new Error('Use Check credentials before submitting.');
     }
@@ -141,16 +142,17 @@
     busy = true;
     buttons();
     try {
-      const identity = await memberAPI.identify(candidate, !pending);
-      if (tokenField.value.trim() !== candidate) throw new Error('The credentials changed. Check them again.');
-      if (pending && (pending.member_id !== identity.participant.member_id || pending.fingerprint !== identity.participant.credential_fingerprint || pending.login !== identity.account.login)) {
-        throw Object.assign(new Error('Use the original password to check this submission.'), {safe: true});
+      const name = memberAPI.participantName(nameField.value);
+      const identity = await memberAPI.identify(name, candidate);
+      if (tokenField.value.trim() !== candidate || memberAPI.participantName(nameField.value) !== name) throw new Error('The credentials changed. Check them again.');
+      if (pending && (pending.name_key !== memberAPI.nameKey(identity.name) || pending.fingerprint !== identity.participant.credential_fingerprint || pending.login !== identity.account.login)) {
+        throw Object.assign(new Error('Use the original name and password to check this submission.'), {safe: true});
       }
       token = candidate;
       checkedToken = candidate;
       login = identity.account.login;
       participant = identity.participant;
-      $('identity').textContent = 'Credentials accepted for ' + identity.name + '.';
+      $('identity').textContent = 'Credentials accepted.';
     } finally {
       busy = false;
       buttons();
@@ -163,7 +165,7 @@
       const body = issue.body || '';
       if (!body.startsWith(MARKER + '\n```json\n')) return false;
       const data = JSON.parse(body.slice((MARKER + '\n```json\n').length).replace(/\n```\s*$/, ''));
-      return data.submission_id === pending.id && data.participant?.member_id === pending.member_id &&
+      return data.submission_id === pending.id && memberAPI.nameKey(data.participant?.name) === pending.name_key &&
         data.participant?.credential_fingerprint === pending.fingerprint;
     } catch {
       return false;
@@ -189,8 +191,8 @@
 
   async function status() {
     if (!pending) return;
-    if (!checkedToken || checkedToken !== readToken() || !participant || pending.member_id !== participant.member_id ||
-        pending.fingerprint !== participant.credential_fingerprint || pending.login !== login) throw new Error('Check the original password to read this submission status.');
+    if (!checkedToken || checkedToken !== readToken() || !participant || pending.name_key !== memberAPI.nameKey(participant.name) ||
+        pending.fingerprint !== participant.credential_fingerprint || pending.login !== login || memberAPI.participantName(nameField.value) !== participant.name) throw new Error('Check the original name and password to read this submission status.');
     if (!pending.number) await recover();
     if (!Number.isSafeInteger(pending.number) || pending.number < 1) throw new Error('A valid submission reference was not returned.');
     const comments = [];
@@ -261,16 +263,13 @@
       // authoritative private state independently (including race conditions).
       await loadMeetings();
       requireCheckedCredentials();
-      const names = await memberAPI.directory(token);
-      requireCheckedCredentials();
-      if (memberAPI.resolve(names, participant.credential_fingerprint).member_id !== participant.member_id) throw new Error('The participant association changed. Check your credentials again.');
       $('meeting').value = data.meeting;
       if (!meetings.has(data.meeting)) throw new Error('This meeting is no longer open for talk submissions.');
       const context = meetings.get(data.meeting);
       if (data.date < context.date || data.date > context.endDate) throw new Error('The meeting dates changed. Review your talk date before submitting.');
       if (!crypto.randomUUID) throw new Error('Use a browser with secure HTTPS access to submit a talk.');
     } catch (failure) { error(failure.message); busy = false; buttons(); return; }
-    pending = {id: crypto.randomUUID(), login, member_id: participant.member_id, fingerprint: participant.credential_fingerprint, number: null};
+    pending = {id: crypto.randomUUID(), login, name_key: memberAPI.nameKey(participant.name), fingerprint: participant.credential_fingerprint, number: null};
     buttons();
     $('talk-fields').disabled = true;
     const prefix = data.meeting === 'demo-001' ? '[meeting 1]' : '[meeting ' + data.meeting.slice(8) + ']';
@@ -304,10 +303,12 @@
   $('check-token').addEventListener('click', () => checkToken().catch(failure => error(failure.httpStatus || failure.safe ? failure.message : 'The credentials could not be checked. Verify them and try again.')));
   $('check-status').addEventListener('click', checkStatus);
   tokenField.addEventListener('input', resetIdentity);
+  nameField.addEventListener('input', resetIdentity);
   // No token, credentials, or private responses are persisted by this app.
   window.addEventListener('pagehide', () => {
     clearTimeout(pollTimer);
     tokenField.value = '';
+    nameField.value = '';
     resetIdentity();
   });
   // A meeting-specific Add talk link fixes the event; the generic form still

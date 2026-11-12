@@ -42,8 +42,6 @@ const memberAPI = (() => {
   }
 
   function inputError(message) { const error = new Error(message); error.safe = true; return error; }
-  const directoryLabel = 'participant-directory';
-  const directoryMarker = '<!-- wg13-participant-directory ';
   async function fingerprint(credential) {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(credential));
     return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -51,64 +49,18 @@ const memberAPI = (() => {
   function uuid(value) { return typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value); }
   function realName(value) { return typeof value === 'string' && !!value.trim() && value === value.trim() && Array.from(value).length <= 200 && !/[\x00-\x1f\x7f-\x9f\u2028\u2029]/.test(value) && !/(?:github_pat_|gh[pousr]_)[A-Za-z0-9_]+/.test(value); }
   function bot(record) { return record.user?.login === 'github-actions[bot]' && record.user?.type === 'Bot'; }
-  function validateDirectory(data) {
-    if (!data || Object.keys(data).sort().join(',') !== 'members,revision,schema_version' || data.schema_version !== 1 ||
-        !Number.isSafeInteger(data.revision) || data.revision < 0 || !Array.isArray(data.members)) throw inputError('The participant directory needs organizer attention.');
-    const ids = new Set(), prints = new Set();
-    for (const member of data.members) {
-      if (!member || Object.keys(member).sort().join(',') !== 'credentials,id,name' || !uuid(member.id) || ids.has(member.id) ||
-          !realName(member.name) || !Array.isArray(member.credentials) || !member.credentials.length) throw inputError('The participant directory needs organizer attention.');
-      ids.add(member.id);
-      for (const key of member.credentials) {
-        if (!key || Object.keys(key).sort().join(',') !== 'active,fingerprint' || typeof key.active !== 'boolean' ||
-            typeof key.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(key.fingerprint) || prints.has(key.fingerprint)) throw inputError('The participant directory needs organizer attention.');
-        prints.add(key.fingerprint);
-      }
-    }
-    return data;
+  function participantName(value) {
+    if (typeof value !== 'string') throw inputError('Enter your name.');
+    const name = value.normalize('NFC').trim().replace(/ +/g, ' ');
+    if (!realName(name)) throw inputError('Enter your name on one line, at most 200 characters; never enter a password here.');
+    return name;
   }
-  async function directory(credential, required = true) {
-    let reference;
-    try { reference = await request(repo + '/labels/' + directoryLabel, 'GET', undefined, credential); }
-    catch (error) {
-      if (error.httpStatus === 404) {
-        if (!required) return null;
-        throw inputError('Participant names are not configured. Contact the organizer.');
-      }
-      throw error;
-    }
-    const match = /^wg13-directory:v1:([1-9][0-9]*)$/.exec(reference?.description || '');
-    if (!match) throw inputError('The participant directory needs organizer attention.');
-    const issue = await request(repo + '/issues/' + match[1], 'GET', undefined, credential);
-    const labels = (issue.labels || []).map(label => typeof label === 'string' ? label : label.name);
-    if (issue.number !== Number(match[1]) || !bot(issue) || issue.pull_request || issue.state !== 'closed' || !issue.locked || !labels.includes(directoryLabel)) throw inputError('The protected participant directory could not be verified.');
-    const text = issue.body || '';
-    if (text.length > 60000 || text.split(directoryMarker).length !== 2 || !text.endsWith(' -->')) throw inputError('The participant directory could not be read.');
-    let data;
-    try { data = JSON.parse(text.slice(text.indexOf(directoryMarker) + directoryMarker.length, -4)); }
-    catch { throw inputError('The participant directory could not be read.'); }
-    validateDirectory(data);
-    const names = data.members.map(member => '- ' + markdownName(member.name) + (member.credentials.some(key => key.active) ? '' : ' (inactive)'));
-    const expected = '# Participant directory\n\nManaged through Manage participants.\n\n' + names.join('\n') + '\n\n' + directoryMarker + metadata(data) + ' -->';
-    if (text !== expected) throw inputError('The participant directory has independent edits. Contact the organizer.');
-    return data;
-  }
-  function resolve(data, print, active = true) {
-    for (const member of data.members) {
-      const key = member.credentials.find(credential => credential.fingerprint === print);
-      if (key) {
-        if (active && !key.active) throw inputError('These credentials are disabled. Contact the organizer.');
-        return {member_id: member.id, name: member.name, credential_fingerprint: print, active: key.active};
-      }
-    }
-    throw inputError('These credentials have not been assigned a name. Contact the organizer.');
-  }
-  async function identify(credential, active = true) {
+  function nameKey(value) { return participantName(value).toLowerCase().normalize('NFC'); }
+  async function identify(name, credential) {
+    name = participantName(name);
     const account = await authenticate(credential);
     const print = await fingerprint(credential);
-    const names = await directory(credential);
-    const person = resolve(names, print, active);
-    return {account, name: person.name, participant: {member_id: person.member_id, credential_fingerprint: print}, active: person.active, names};
+    return {account, name, participant: {name, credential_fingerprint: print}};
   }
   async function administrator(credential) {
     const account = await authenticate(credential);
@@ -126,29 +78,32 @@ const memberAPI = (() => {
   }
   const attendanceMarker = '<!-- wg13-participation ';
   function attendanceBody(ident, person) {
-    const data = {schema_version: 2, meeting_id: ident, member_id: person.member_id, name: person.name,
+    const data = {schema_version: 3, meeting_id: ident, name: person.name,
       credential_fingerprint: person.credential_fingerprint};
     return 'Yes — ' + markdownName(person.name) + '\n\n' + attendanceMarker + metadata(data) + ' -->';
   }
-  function attendanceRecord(comment, ident, owner, names) {
+  function attendanceRecord(comment, ident, owner) {
     if (comment.user?.id !== owner.id || !Number.isSafeInteger(comment.id) || comment.id < 1) return null;
     const text = comment.body || '';
     const start = text.indexOf(attendanceMarker);
-    if (start < 0 || !text.endsWith(' -->')) return null;
+    if (start < 0 || !text.endsWith(' -->') || text.split(attendanceMarker).length !== 2) return null;
     try {
       const data = JSON.parse(text.slice(start + attendanceMarker.length, -4));
       if (data.meeting_id !== ident || typeof data.credential_fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(data.credential_fingerprint)) return null;
-      const person = resolve(names, data.credential_fingerprint, false);
+      let name, expected;
       if (data.schema_version === 1) {
         if (Object.keys(data).sort().join(',') !== 'credential_fingerprint,meeting_id,schema_version,username' ||
-            typeof data.username !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(data.username) ||
-            text !== 'Yes\n\nParticipant: ' + data.username + '\n\n' + attendanceMarker + JSON.stringify(data) + ' -->') return null;
-      } else if (data.schema_version === 2) {
-        if (Object.keys(data).sort().join(',') !== 'credential_fingerprint,meeting_id,member_id,name,schema_version' ||
-            data.member_id !== person.member_id || !realName(data.name) ||
-            text !== attendanceBody(ident, {...person, name: data.name})) return null;
+            typeof data.username !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(data.username)) return null;
+        name = data.username;
+        expected = 'Yes\n\nParticipant: ' + name + '\n\n' + attendanceMarker + JSON.stringify(data) + ' -->';
+      } else if (data.schema_version === 2 || data.schema_version === 3) {
+        const fields = data.schema_version === 2 ? 'credential_fingerprint,meeting_id,member_id,name,schema_version' : 'credential_fingerprint,meeting_id,name,schema_version';
+        if (Object.keys(data).sort().join(',') !== fields || !realName(data.name) || (data.schema_version === 2 && !uuid(data.member_id))) return null;
+        name = data.name;
+        expected = 'Yes — ' + markdownName(name) + '\n\n' + attendanceMarker + metadata(data) + ' -->';
       } else return null;
-      return person;
+      if (text !== expected) return null;
+      return {name, key:nameKey(name), credential_fingerprint:data.credential_fingerprint};
     } catch { return null; }
   }
 
@@ -200,6 +155,6 @@ const memberAPI = (() => {
     } finally { clearTimeout(timer); }
   }
 
-  return {repo, request, authenticate, identify, administrator, fingerprint, directory, resolve, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
+  return {repo, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
     displayDate: value => value.split('-').reverse().join('-')};
 })();
