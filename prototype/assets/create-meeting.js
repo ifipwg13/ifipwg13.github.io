@@ -134,17 +134,23 @@
       id = crypto.randomUUID();
     } catch (failure) { error(safe(failure)); return; }
     const body = MARKER + id + ' -->\n\n### Start date\n\n' + memberAPI.displayDate(data.start) + '\n\n### End date\n\n' + memberAPI.displayDate(data.end) + '\n\n### Location\n\n' + data.location + '\n\n### Description\n\n' + (data.description || '_No response_') + '\n';
-    pending = {id, login:account.login, number:null};
-    busy = true; controls(); $('check-status').hidden = false;
+    busy = true; controls();
     $('submission-status').textContent = 'Submitting meeting…';
     try {
+      // Recheck the current role at submission, before any Issue POST.
+      const verified = await memberAPI.administrator(credential);
+      checked();
+      if (verified.login !== account.login) throw problem('Check administrator credentials again.');
+      pending = {id, login:account.login, number:null};
+      $('check-status').hidden = false;
       const created = await api(memberAPI.repo + '/issues', 'POST', {title:data.name, body});
       if (!Number.isSafeInteger(created.number) || created.number < 1) throw new Error('Unconfirmed submission');
       pending.number = created.number;
     } catch (failure) {
-      if ([400,401,403,404,410,422,429].includes(failure.httpStatus)) {
+      if (!pending || [400,401,403,404,410,422,429].includes(failure.httpStatus)) {
         pending = null; $('check-status').hidden = true;
         $('submission-status').textContent = 'The meeting was not accepted.';
+        resetAccess();
       } else $('submission-status').textContent = 'The response was interrupted. Check creation status; do not create another copy.';
       error(safe(failure));
     } finally { busy = false; controls(); }

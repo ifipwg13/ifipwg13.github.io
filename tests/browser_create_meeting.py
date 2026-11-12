@@ -6,13 +6,13 @@ import unittest
 from unittest.mock import patch
 
 from browser_talk_submission import FormBrowserFixture, TOKEN, API, m, ROOT
-from browser_manage_participants import ADMIN_TOKEN
+ADMIN_TOKEN = 'github_pat_ADMIN_FICTITIOUS_TEST_ONLY'
 
 
 class MeetingCreationBrowserTests(FormBrowserFixture):
     def setUp(self):
         super().setUp()
-        for name in ('prototype/create-meeting.html','prototype/manage-participants.html','index.html','members/index.html'):
+        for name in ('prototype/create-meeting.html','index.html','members/index.html'):
             target = self.directory / name
             target.parent.mkdir(parents=True,exist_ok=True)
             target.write_bytes((ROOT / name).read_bytes())
@@ -118,8 +118,7 @@ class MeetingCreationBrowserTests(FormBrowserFixture):
 
     def test_navigation_creation_and_correct_public_meeting_after_sync(self):
         self.page.goto(self.base + '/')
-        self.page.get_by_role('navigation').get_by_role('link',name='Manage Participants',exact=True).click()
-        self.assertEqual(self.page.locator('h1').inner_text(),'Manage participants')
+        self.assertEqual(self.page.get_by_role('link',name='Manage Participants',exact=True).count(),0)
         self.page.get_by_role('navigation').get_by_role('link',name='Meetings',exact=True).click()
         self.page.get_by_role('link',name='Create meeting',exact=True).click()
         self.assertTrue(self.page.url.endswith('/prototype/create-meeting.html'))
@@ -142,7 +141,7 @@ class MeetingCreationBrowserTests(FormBrowserFixture):
         self.assertFalse(self.errors); self.assertFalse(self.external)
 
     def test_administrator_needs_no_directory_association_or_contents_api(self):
-        self.api.issues.pop(900); self.api.labels.pop('participant-directory')
+        self.api.issues.pop(900, None); self.api.labels.pop('participant-directory', None)
         self.open_creation(); self.checked(); self.fill_meeting(end='',description=''); self.create(); self.ready()
         details = m.load_manifest(self.api,'meeting-' + str(self.last_number),'main')['meeting']
         self.assertNotIn('end_date',details); self.assertEqual(details['description'],'')
@@ -154,13 +153,33 @@ class MeetingCreationBrowserTests(FormBrowserFixture):
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
         self.assertTrue(self.page.locator('#create-meeting').is_disabled()); self.assertEqual(self.posts,0)
 
-    def test_revoked_admin_role_is_rejected_by_trusted_workflow(self):
+    def test_non_admin_roles_and_forced_submit_never_send_an_issue_post(self):
+        before = set(self.api.issues)
+        for role in ('read','triage','write','maintain'):
+            self.api.permissions['member'] = role
+            self.open_creation(TOKEN)
+            self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
+            self.fill_meeting()
+            self.page.locator('#talk-form').evaluate("form => form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
+            self.assertEqual(self.posts,0)
+        self.assertEqual(set(self.api.issues),before)
+
+    def test_silent_admin_password_replacement_with_member_password_is_rejected_before_post(self):
         self.open_creation(); self.checked(); self.fill_meeting()
+        self.page.locator('#admin-token').evaluate('(node, value) => {node.value=value}',TOKEN)
+        self.create()
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('Check the administrator credentials')")
+        self.assertEqual(self.posts,0)
+
+    def test_role_is_rechecked_before_post_so_revoked_admin_cannot_create_even_an_issue(self):
+        self.open_creation(); self.checked(); self.fill_meeting()
+        before = set(self.api.issues)
         self.api.permissions['manager'] = 'read'
         self.create()
-        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.includes('needs attention')")
-        self.assertNotIn('registration',self.api.issues[self.last_number]['labels'])
-        self.assertIsNone(m.load_manifest(self.api,'meeting-' + str(self.last_number),'main'))
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'The meeting was not accepted.'")
+        self.assertEqual(self.posts,0)
+        self.assertEqual(set(self.api.issues),before)
+        self.assertTrue(self.page.locator('#create-meeting').is_disabled())
 
     def test_expired_and_write_denied_tokens_show_safe_errors(self):
         self.auth_status = 401; self.open_creation()
@@ -169,7 +188,7 @@ class MeetingCreationBrowserTests(FormBrowserFixture):
         self.auth_status = None; self.open_creation(); self.checked(); self.fill_meeting(); self.deny_post = True; self.create()
         self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'The meeting was not accepted.'")
         self.assertNotIn('PRIVATE DENIAL CANARY',self.page.locator('body').inner_text())
-        self.assertFalse(self.page.locator('#create-meeting').is_disabled())
+        self.assertTrue(self.page.locator('#create-meeting').is_disabled())
 
     def test_invalid_dates_required_fields_and_password_paste_are_not_posted(self):
         self.open_creation(); self.checked()

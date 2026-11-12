@@ -1,17 +1,15 @@
-/* Attendance comments resolve names through the protected private directory. */
+/* Shared-account attendance is selected by the entered name, not the token hash. */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
   const ident = new URLSearchParams(location.search).get('meeting');
   const tokenField = $('github-token');
+  const nameField = $('participant-name');
   let meeting = null;
   let accepting = false;
   let token = '';
   let owner = null;
   let participant = null;
-  let directoryData = null;
-  let credentialActive = false;
-  let personName = "";
   let busy = false;
   let pending = null;
 
@@ -20,19 +18,17 @@
   function message(error) { return error.httpStatus || error.safe ? error.message : 'The service could not be reached. Check status before trying again.'; }
   function action() { return document.querySelector('input[name="participation"]:checked')?.value; }
   function controls() {
-    $('submit-participation').disabled = busy || !!pending || !owner || !credentialActive || !accepting || !action();
+    $('submit-participation').disabled = busy || !!pending || !owner || !accepting || !action();
     $('check-token').disabled = busy;
     $('check-status').disabled = busy || !owner;
     tokenField.disabled = busy;
+    nameField.disabled = busy;
     for (const radio of document.querySelectorAll('input[name="participation"]')) radio.disabled = busy;
   }
   function resetIdentity() {
     token = '';
     owner = null;
     participant = null;
-    directoryData = null;
-    credentialActive = false;
-    personName = "";
     $('identity').textContent = '';
     $('participation-status').textContent = 'Check your credentials to see your current participation status.';
     $('legacy-attendance').hidden = true;
@@ -69,8 +65,8 @@
       const batch = await api(issuePath() + '/comments?per_page=100&page=' + page, 'GET', undefined, credential);
       if (!Array.isArray(batch)) throw problem('Participation status could not be read.');
       for (const comment of batch) {
-        const record = memberAPI.attendanceRecord(comment, ident, user, directoryData);
-        if (!record || record.member_id !== person.member_id) continue;
+        const record = memberAPI.attendanceRecord(comment, ident, user);
+        if (!record || record.key !== memberAPI.nameKey(person.name)) continue;
         if (found) throw problem('More than one participation record exists for this participant. Contact the organizer.');
         found = comment;
       }
@@ -101,21 +97,19 @@
     busy = true;
     controls();
     try {
-      const identity = await memberAPI.identify(candidate, !pending);
+      const name = memberAPI.participantName(nameField.value);
+      const identity = await memberAPI.identify(name, candidate);
       const user = identity.account;
       const person = identity.participant;
-      if (pending && (pending.owner !== user.id || pending.member_id !== person.member_id || pending.fingerprint !== person.credential_fingerprint)) throw problem('Use the original password to confirm the pending participation change.');
+      if (pending && (pending.owner !== user.id || pending.name_key !== memberAPI.nameKey(person.name) || pending.fingerprint !== person.credential_fingerprint)) throw problem('Use the original name and password to confirm the pending participation change.');
       await currentIssue(!pending, candidate);
-      directoryData = identity.names;
       const comment = await ownAttendance(user, person, candidate);
       await checkEarlierRegistrations(candidate);
-      if (tokenField.value.trim() !== candidate) throw problem('The credentials changed. Check them again.');
+      if (tokenField.value.trim() !== candidate || memberAPI.participantName(nameField.value) !== name) throw problem('The credentials changed. Check them again.');
       token = candidate;
       owner = user;
       participant = person;
-      credentialActive = identity.active;
-      personName = identity.name;
-      $('identity').textContent = 'Credentials accepted for ' + personName + '.';
+      $('identity').textContent = 'Credentials accepted.';
       displayState(comment);
     } catch (error) { showError(message(error)); }
     finally { busy = false; controls(); }
@@ -123,7 +117,7 @@
 
   async function verifyPending() {
     if (!owner || !participant || readToken() !== token || owner.id !== pending.owner ||
-        participant.member_id !== pending.member_id || participant.credential_fingerprint !== pending.fingerprint) throw problem('Check the original password before checking status.');
+        memberAPI.nameKey(participant.name) !== pending.name_key || participant.credential_fingerprint !== pending.fingerprint || memberAPI.participantName(nameField.value) !== participant.name) throw problem('Check the original name and password before checking status.');
     await currentIssue(false);
     const comment = await ownAttendance(owner, participant);
     displayState(comment);
@@ -150,7 +144,7 @@
     event.preventDefault();
     if (busy || pending || !owner || !meeting || !accepting || !action()) return;
     showError();
-    try { if (readToken() !== token || !participant) throw problem('Check your credentials before submitting.'); }
+    try { if (readToken() !== token || !participant || memberAPI.participantName(nameField.value) !== participant.name) throw problem('Check your credentials before submitting.'); }
     catch (error) { showError(message(error)); return; }
     const desired = action() === 'register';
     $('submission-status').textContent = 'Updating participation…';
@@ -161,15 +155,12 @@
     try {
       // Recheck current private state immediately before a mutation.
       await currentIssue();
-      directoryData = await memberAPI.directory(token);
-      const currentPerson = memberAPI.resolve(directoryData, participant.credential_fingerprint);
-      if (currentPerson.member_id !== participant.member_id) throw problem('The participant association changed. Check credentials again.');
-      personName = currentPerson.name;
       const comment = await ownAttendance(owner, participant);
-      pending = {owner: owner.id, member_id: participant.member_id, fingerprint: participant.credential_fingerprint, register: desired};
+      if (!owner || !participant || readToken() !== token || memberAPI.participantName(nameField.value) !== participant.name) throw problem('Check your credentials before submitting.');
+      pending = {owner: owner.id, name_key: memberAPI.nameKey(participant.name), fingerprint: participant.credential_fingerprint, register: desired};
       if (desired && !comment) {
         writing = true;
-        await api(issuePath() + '/comments', 'POST', {body: memberAPI.attendanceBody(ident, {...participant, name: personName})});
+        await api(issuePath() + '/comments', 'POST', {body: memberAPI.attendanceBody(ident, participant)});
       } else if (!desired && comment) {
         writing = true;
         await api(memberAPI.repo + '/issues/comments/' + comment.id, 'DELETE');
@@ -230,6 +221,7 @@
   $('retry-meetings').addEventListener('click', () => { showError(); loadMeeting(); });
   for (const radio of document.querySelectorAll('input[name="participation"]')) radio.addEventListener('change', controls);
   tokenField.addEventListener('input', resetIdentity);
-  window.addEventListener('pagehide', () => { tokenField.value = ''; resetIdentity(); });
+  nameField.addEventListener('input', resetIdentity);
+  window.addEventListener('pagehide', () => { tokenField.value = ''; nameField.value = ''; resetIdentity(); });
   loadMeeting();
 })();
