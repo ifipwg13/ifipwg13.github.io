@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-1BLZY59hlzzwzHibodiKDhMzx4/0d9aQUYTo9oPTjW4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-6CLxSTTU7iXOAS8ODcpwI3J0vb8pUXmgRgxtnNUp5jQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Add talk · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -48,8 +48,6 @@
       </fieldset>
       <fieldset id="credential-fields" disabled>
         <legend>Credentials</legend>
-        <label for="github-username">Username</label>
-        <input id="github-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}">
         <label for="github-token">Password</label>
         <input id="github-token" name="password" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required>
         <div class="actions">
@@ -114,44 +112,114 @@ const memberAPI = (() => {
     return user;
   }
 
-  function assignedUsername(value) {
-    const username = value.trim().toLowerCase();
-    if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(username)) {
-      const error = new Error('Enter the username assigned by the organizer, using letters, digits, dots, underscores or hyphens (at most 64 characters).');
-      error.safe = true;
+  function inputError(message) { const error = new Error(message); error.safe = true; return error; }
+  const directoryLabel = 'participant-directory';
+  const directoryMarker = '<!-- wg13-participant-directory ';
+  async function fingerprint(credential) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(credential));
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+  function uuid(value) { return typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value); }
+  function realName(value) { return typeof value === 'string' && !!value.trim() && value === value.trim() && Array.from(value).length <= 200 && !/[\x00-\x1f\x7f-\x9f\u2028\u2029]/.test(value) && !/(?:github_pat_|gh[pousr]_)[A-Za-z0-9_]+/.test(value); }
+  function bot(record) { return record.user?.login === 'github-actions[bot]' && record.user?.type === 'Bot'; }
+  function validateDirectory(data) {
+    if (!data || Object.keys(data).sort().join(',') !== 'members,revision,schema_version' || data.schema_version !== 1 ||
+        !Number.isSafeInteger(data.revision) || data.revision < 0 || !Array.isArray(data.members)) throw inputError('The participant directory needs organizer attention.');
+    const ids = new Set(), prints = new Set();
+    for (const member of data.members) {
+      if (!member || Object.keys(member).sort().join(',') !== 'credentials,id,name' || !uuid(member.id) || ids.has(member.id) ||
+          !realName(member.name) || !Array.isArray(member.credentials) || !member.credentials.length) throw inputError('The participant directory needs organizer attention.');
+      ids.add(member.id);
+      for (const key of member.credentials) {
+        if (!key || Object.keys(key).sort().join(',') !== 'active,fingerprint' || typeof key.active !== 'boolean' ||
+            typeof key.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(key.fingerprint) || prints.has(key.fingerprint)) throw inputError('The participant directory needs organizer attention.');
+        prints.add(key.fingerprint);
+      }
+    }
+    return data;
+  }
+  async function directory(credential, required = true) {
+    let reference;
+    try { reference = await request(repo + '/labels/' + directoryLabel, 'GET', undefined, credential); }
+    catch (error) {
+      if (error.httpStatus === 404) {
+        if (!required) return null;
+        throw inputError('Participant names are not configured. Contact the organizer.');
+      }
       throw error;
     }
-    return username;
+    const match = /^wg13-directory:v1:([1-9][0-9]*)$/.exec(reference?.description || '');
+    if (!match) throw inputError('The participant directory needs organizer attention.');
+    const issue = await request(repo + '/issues/' + match[1], 'GET', undefined, credential);
+    const labels = (issue.labels || []).map(label => typeof label === 'string' ? label : label.name);
+    if (issue.number !== Number(match[1]) || !bot(issue) || issue.pull_request || issue.state !== 'closed' || !issue.locked || !labels.includes(directoryLabel)) throw inputError('The protected participant directory could not be verified.');
+    const text = issue.body || '';
+    if (text.length > 60000 || text.split(directoryMarker).length !== 2 || !text.endsWith(' -->')) throw inputError('The participant directory could not be read.');
+    let data;
+    try { data = JSON.parse(text.slice(text.indexOf(directoryMarker) + directoryMarker.length, -4)); }
+    catch { throw inputError('The participant directory could not be read.'); }
+    validateDirectory(data);
+    const names = data.members.map(member => '- ' + markdownName(member.name) + (member.credentials.some(key => key.active) ? '' : ' (inactive)'));
+    const expected = '# Participant directory\n\nManaged through Manage participants.\n\n' + names.join('\n') + '\n\n' + directoryMarker + metadata(data) + ' -->';
+    if (text !== expected) throw inputError('The participant directory has independent edits. Contact the organizer.');
+    return data;
   }
-
-  async function identify(username, credential) {
-    username = assignedUsername(username);
+  function resolve(data, print, active = true) {
+    for (const member of data.members) {
+      const key = member.credentials.find(credential => credential.fingerprint === print);
+      if (key) {
+        if (active && !key.active) throw inputError('These credentials are disabled. Contact the organizer.');
+        return {member_id: member.id, name: member.name, credential_fingerprint: print, active: key.active};
+      }
+    }
+    throw inputError('These credentials have not been assigned a name. Contact the organizer.');
+  }
+  async function identify(credential, active = true) {
     const account = await authenticate(credential);
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(credential));
-    const credential_fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-    // A browser-supplied label/hash is bookkeeping, not authenticated identity.
-    return {account, participant: {username, credential_fingerprint}};
+    const print = await fingerprint(credential);
+    const names = await directory(credential);
+    const person = resolve(names, print, active);
+    return {account, name: person.name, participant: {member_id: person.member_id, credential_fingerprint: print}, active: person.active, names};
   }
-
+  async function administrator(credential) {
+    const account = await authenticate(credential);
+    const role = await request(repo + '/collaborators/' + encodeURIComponent(account.login) + '/permission', 'GET', undefined, credential);
+    if (role.permission !== 'admin') throw inputError('Participant management requires administrator access.');
+    return account;
+  }
+  function metadata(data) {
+    return JSON.stringify(data).replace(/[\u007f-\uffff]/g, character => '\\u' + character.charCodeAt(0).toString(16).padStart(4, '0'))
+      .replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+  }
+  function markdownName(value) {
+    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/[\\`*_{}\[\]()#+.!|>\-]/g, character => '\\' + character);
+  }
   const attendanceMarker = '<!-- wg13-participation ';
-  function attendanceBody(ident, participant) {
-    return 'Yes\n\nParticipant: ' + participant.username + '\n\n' + attendanceMarker +
-      JSON.stringify({schema_version: 1, meeting_id: ident, ...participant}) + ' -->';
+  function attendanceBody(ident, person) {
+    const data = {schema_version: 2, meeting_id: ident, member_id: person.member_id, name: person.name,
+      credential_fingerprint: person.credential_fingerprint};
+    return 'Yes — ' + markdownName(person.name) + '\n\n' + attendanceMarker + metadata(data) + ' -->';
   }
-
-  function attendanceRecord(comment, ident, owner) {
+  function attendanceRecord(comment, ident, owner, names) {
     if (comment.user?.id !== owner.id || !Number.isSafeInteger(comment.id) || comment.id < 1) return null;
-    const body = comment.body || '';
-    const start = body.indexOf(attendanceMarker);
-    if (start < 0 || !body.endsWith(' -->')) return null;
+    const text = comment.body || '';
+    const start = text.indexOf(attendanceMarker);
+    if (start < 0 || !text.endsWith(' -->')) return null;
     try {
-      const data = JSON.parse(body.slice(start + attendanceMarker.length, -4));
-      if (Object.keys(data).sort().join(',') !== 'credential_fingerprint,meeting_id,schema_version,username' ||
-          data.schema_version !== 1 || data.meeting_id !== ident || typeof data.username !== 'string' ||
-          assignedUsername(data.username) !== data.username || typeof data.credential_fingerprint !== 'string' ||
-          !/^[a-f0-9]{64}$/.test(data.credential_fingerprint) ||
-          body !== attendanceBody(ident, {username: data.username, credential_fingerprint: data.credential_fingerprint})) return null;
-      return data;
+      const data = JSON.parse(text.slice(start + attendanceMarker.length, -4));
+      if (data.meeting_id !== ident || typeof data.credential_fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(data.credential_fingerprint)) return null;
+      const person = resolve(names, data.credential_fingerprint, false);
+      if (data.schema_version === 1) {
+        if (Object.keys(data).sort().join(',') !== 'credential_fingerprint,meeting_id,schema_version,username' ||
+            typeof data.username !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(data.username) ||
+            text !== 'Yes\n\nParticipant: ' + data.username + '\n\n' + attendanceMarker + JSON.stringify(data) + ' -->') return null;
+      } else if (data.schema_version === 2) {
+        if (Object.keys(data).sort().join(',') !== 'credential_fingerprint,meeting_id,member_id,name,schema_version' ||
+            data.member_id !== person.member_id || !realName(data.name) ||
+            text !== attendanceBody(ident, {...person, name: data.name})) return null;
+      } else return null;
+      return person;
     } catch { return null; }
   }
 
@@ -203,7 +271,7 @@ const memberAPI = (() => {
     } finally { clearTimeout(timer); }
   }
 
-  return {repo, request, authenticate, identify, assignedUsername, attendanceBody, attendanceRecord, calendar, clock, meetings,
+  return {repo, request, authenticate, identify, administrator, fingerprint, directory, resolve, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
     displayDate: value => value.split('-').reverse().join('-')};
 })();
 
@@ -217,7 +285,6 @@ const memberAPI = (() => {
   const $ = id => document.getElementById(id);
   const form = $('talk-form');
   const tokenField = $('github-token');
-  const usernameField = $('github-username');
   let token = '';
   let login = '';
   let checkedToken = '';
@@ -261,7 +328,7 @@ const memberAPI = (() => {
   }
 
   function requireCheckedCredentials() {
-    if (!checkedToken || readToken() !== checkedToken || !participant || memberAPI.assignedUsername(usernameField.value) !== participant.username) {
+    if (!checkedToken || readToken() !== checkedToken || !participant) {
       resetIdentity();
       throw new Error('Use Check credentials before submitting.');
     }
@@ -348,20 +415,19 @@ const memberAPI = (() => {
     error();
     resetIdentity();
     const candidate = readToken();
-    const username = memberAPI.assignedUsername(usernameField.value);
     busy = true;
     buttons();
     try {
-      const identity = await memberAPI.identify(username, candidate);
-      if (tokenField.value.trim() !== candidate || memberAPI.assignedUsername(usernameField.value) !== username) throw new Error('The credentials changed. Check them again.');
-      if (pending && (pending.username !== username || pending.fingerprint !== identity.participant.credential_fingerprint || pending.login !== identity.account.login)) {
-        throw Object.assign(new Error('Use the original username and password to check this submission.'), {safe: true});
+      const identity = await memberAPI.identify(candidate, !pending);
+      if (tokenField.value.trim() !== candidate) throw new Error('The credentials changed. Check them again.');
+      if (pending && (pending.member_id !== identity.participant.member_id || pending.fingerprint !== identity.participant.credential_fingerprint || pending.login !== identity.account.login)) {
+        throw Object.assign(new Error('Use the original password to check this submission.'), {safe: true});
       }
       token = candidate;
       checkedToken = candidate;
       login = identity.account.login;
       participant = identity.participant;
-      $('identity').textContent = 'Credentials accepted.';
+      $('identity').textContent = 'Credentials accepted for ' + identity.name + '.';
     } finally {
       busy = false;
       buttons();
@@ -374,7 +440,7 @@ const memberAPI = (() => {
       const body = issue.body || '';
       if (!body.startsWith(MARKER + '\n```json\n')) return false;
       const data = JSON.parse(body.slice((MARKER + '\n```json\n').length).replace(/\n```\s*$/, ''));
-      return data.submission_id === pending.id && data.participant?.username === pending.username &&
+      return data.submission_id === pending.id && data.participant?.member_id === pending.member_id &&
         data.participant?.credential_fingerprint === pending.fingerprint;
     } catch {
       return false;
@@ -400,8 +466,8 @@ const memberAPI = (() => {
 
   async function status() {
     if (!pending) return;
-    if (!checkedToken || checkedToken !== readToken() || !participant || pending.username !== participant.username ||
-        pending.fingerprint !== participant.credential_fingerprint || pending.login !== login) throw new Error('Check the original username and password to read this submission status.');
+    if (!checkedToken || checkedToken !== readToken() || !participant || pending.member_id !== participant.member_id ||
+        pending.fingerprint !== participant.credential_fingerprint || pending.login !== login) throw new Error('Check the original password to read this submission status.');
     if (!pending.number) await recover();
     if (!Number.isSafeInteger(pending.number) || pending.number < 1) throw new Error('A valid submission reference was not returned.');
     const comments = [];
@@ -472,13 +538,16 @@ const memberAPI = (() => {
       // authoritative private state independently (including race conditions).
       await loadMeetings();
       requireCheckedCredentials();
+      const names = await memberAPI.directory(token);
+      requireCheckedCredentials();
+      if (memberAPI.resolve(names, participant.credential_fingerprint).member_id !== participant.member_id) throw new Error('The participant association changed. Check your credentials again.');
       $('meeting').value = data.meeting;
       if (!meetings.has(data.meeting)) throw new Error('This meeting is no longer open for talk submissions.');
       const context = meetings.get(data.meeting);
       if (data.date < context.date || data.date > context.endDate) throw new Error('The meeting dates changed. Review your talk date before submitting.');
       if (!crypto.randomUUID) throw new Error('Use a browser with secure HTTPS access to submit a talk.');
     } catch (failure) { error(failure.message); busy = false; buttons(); return; }
-    pending = {id: crypto.randomUUID(), login, username: participant.username, fingerprint: participant.credential_fingerprint, number: null};
+    pending = {id: crypto.randomUUID(), login, member_id: participant.member_id, fingerprint: participant.credential_fingerprint, number: null};
     buttons();
     $('talk-fields').disabled = true;
     const prefix = data.meeting === 'demo-001' ? '[meeting 1]' : '[meeting ' + data.meeting.slice(8) + ']';
@@ -512,12 +581,10 @@ const memberAPI = (() => {
   $('check-token').addEventListener('click', () => checkToken().catch(failure => error(failure.httpStatus || failure.safe ? failure.message : 'The credentials could not be checked. Verify them and try again.')));
   $('check-status').addEventListener('click', checkStatus);
   tokenField.addEventListener('input', resetIdentity);
-  usernameField.addEventListener('input', resetIdentity);
   // No token, credentials, or private responses are persisted by this app.
   window.addEventListener('pagehide', () => {
     clearTimeout(pollTimer);
     tokenField.value = '';
-    usernameField.value = '';
     resetIdentity();
   });
   // A meeting-specific Add talk link fixes the event; the generic form still

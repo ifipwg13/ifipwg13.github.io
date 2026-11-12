@@ -1,7 +1,7 @@
 """Read-role attendance comments through the real preview; fictitious keys only.
 
 The modeled API deliberately treats both issued passwords as the same account.
-It cannot enforce separation between assigned usernames; tests document that.
+Direct API use cannot enforce separation between people; tests document that.
 """
 import copy
 import hashlib
@@ -11,17 +11,19 @@ from urllib.parse import parse_qs, urlsplit
 from unittest.mock import patch
 import unittest
 
-from browser_talk_submission import FormBrowserFixture, TOKEN, API, m, preview
+from browser_talk_submission import FormBrowserFixture, TOKEN, SECOND_TOKEN, API, m, preview
+from test_participant_directory import ALICE, BOB, install_directory
 
-OTHER_TOKEN = 'github_pat_OTHER_FICTITIOUS_TEST_ONLY'
+OTHER_TOKEN = SECOND_TOKEN
 MARKER = '<!-- wg13-participation '
 
 
 def record(number, username='alice', credential=TOKEN, owner=11, ident='meeting-4'):
-    data = {'schema_version': 1, 'meeting_id': ident, 'username': username,
-            'credential_fingerprint': hashlib.sha256(credential.encode()).hexdigest()}
-    return {'id': number, 'user': {'id': owner, 'login': 'member' if owner == 11 else 'other-private-user'},
-            'body': 'Yes\n\nParticipant: ' + username + '\n\n' + MARKER + json.dumps(data, separators=(',', ':')) + ' -->'}
+    person = {'member_id': BOB if username in ('bob','other-person') else ALICE,
+              'name': 'Bob Example' if username in ('bob','other-person') else 'Alice Example',
+              'credential_fingerprint': hashlib.sha256(credential.encode()).hexdigest()}
+    return {'id':number, 'user':{'id':owner, 'login':'member' if owner==11 else 'other-private-user'},
+            'body':m.directory.attendance_body(ident, person)}
 
 
 class ParticipationBrowserTests(FormBrowserFixture):
@@ -65,6 +67,8 @@ class ParticipationBrowserTests(FormBrowserFixture):
             self.json_response(route, owner)
         elif path == root:
             self.json_response(route, {'full_name': m.PRIVATE, 'permissions': {'pull': True, 'push': False, 'admin': False}})
+        elif path == root + '/labels/participant-directory':
+            self.json_response(route, self.api.labels[m.directory.LABEL])
         elif path.startswith(root + '/issues/comments/'):
             self.assertEqual(request.method, 'DELETE')
             number = int(path.rsplit('/', 1)[1])
@@ -75,7 +79,7 @@ class ParticipationBrowserTests(FormBrowserFixture):
                 return
             issue_number, comment = found
             # Read members can delete comments authored by their own account.
-            # There is deliberately no server-side assigned-username isolation.
+            # There is deliberately no server-side per-person ownership.
             if self.deny_mutations or comment['user']['id'] != owner['id'] or self.api.issues[issue_number].get('locked'):
                 self.json_response(route, {}, 403)
                 return
@@ -122,11 +126,10 @@ class ParticipationBrowserTests(FormBrowserFixture):
         if ready:
             self.page.wait_for_function("() => !document.getElementById('participation-fields').disabled")
 
-    def check(self, credential=TOKEN, username='alice'):
-        self.page.locator('#github-username').fill(username)
+    def check(self, credential=TOKEN):
         self.page.locator('#github-token').fill(credential)
         self.page.get_by_role('button', name='Check credentials', exact=True).click()
-        self.page.wait_for_function("() => document.getElementById('identity').textContent === 'Credentials accepted.'")
+        self.page.wait_for_function("() => document.getElementById('identity').textContent.startsWith('Credentials accepted for ')")
 
     def choose(self, action):
         self.page.get_by_role('radio', name=action, exact=True).check()
@@ -146,7 +149,8 @@ class ParticipationBrowserTests(FormBrowserFixture):
         self.choose('Register'); self.confirmed(True)
         self.assertEqual(len(self.mutations), 1)
         data = json.loads(self.api.comments[4][-1]['body'].split(MARKER)[1][:-4])
-        self.assertEqual(data['username'], 'alice')
+        self.assertEqual(data['member_id'], ALICE)
+        self.assertEqual(data['name'], 'Alice Example')
         self.assertEqual(data['credential_fingerprint'], hashlib.sha256(TOKEN.encode()).hexdigest())
         self.choose('Register'); self.confirmed(True)
         self.assertEqual(len(self.mutations), 1)
@@ -161,19 +165,24 @@ class ParticipationBrowserTests(FormBrowserFixture):
         self.assertEqual(self.page.evaluate('[localStorage.length, sessionStorage.length]'), [0, 0])
         self.assertFalse(self.errors)
 
-    def test_two_usernames_and_passwords_on_one_account_remain_distinct_in_normal_form_use(self):
+    def test_two_names_and_passwords_on_one_account_remain_distinct_in_normal_form_use(self):
         self.open_participation(); self.check(); self.choose('Register'); self.confirmed(True)
         alice = copy.deepcopy(self.api.comments[4][-1])
-        self.check(OTHER_TOKEN, 'bob'); self.choose('Register'); self.confirmed(True)
+        self.check(OTHER_TOKEN); self.choose('Register'); self.confirmed(True)
         bob = copy.deepcopy(self.api.comments[4][-1])
         self.assertEqual(alice['user'], bob['user'])
         self.assertNotEqual(alice['body'], bob['body'])
-        self.check(TOKEN, 'alice'); self.choose('Unregister'); self.confirmed(False)
+        self.check(TOKEN); self.choose('Unregister'); self.confirmed(False)
         self.assertIn(bob, self.api.comments[4])
         self.assertNotIn(alice, self.api.comments[4])
 
-    def test_a_replacement_password_for_same_username_can_remove_existing_registration(self):
+    def test_a_replacement_password_for_same_person_can_remove_existing_registration(self):
         self.api.comments[4].append(record(999))
+        data = install_directory(self.api)
+        data['members'] = [data['members'][0]]
+        data['members'][0]['credentials'].append({'fingerprint':hashlib.sha256(OTHER_TOKEN.encode()).hexdigest(),'active':True})
+        data['members'][0]['credentials'][0]['active'] = False
+        self.api.issues[900]['body'] = m.directory.body(data)
         self.open_participation(); self.check(OTHER_TOKEN)
         self.assertIn('currently registered', self.page.locator('#participation-status').inner_text())
         self.choose('Unregister'); self.confirmed(False)
@@ -213,7 +222,7 @@ class ParticipationBrowserTests(FormBrowserFixture):
         self.page.wait_for_function("() => !document.getElementById('check-status').hidden")
         self.page.locator('#github-token').fill(OTHER_TOKEN)
         self.page.get_by_role('button', name='Check credentials', exact=True).click()
-        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('original username and password')")
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('original password')")
         self.assertTrue(self.page.locator('#submit-participation').is_disabled())
         self.assertEqual(len(self.mutations), 1)
         self.check(); self.page.get_by_role('button', name='Check participation status').click(); self.confirmed(True)
@@ -227,7 +236,7 @@ class ParticipationBrowserTests(FormBrowserFixture):
         self.assertTrue(any('page=2' in r['url'] for r in self.requests))
 
     def test_malformed_or_wrong_meeting_records_are_not_deleted(self):
-        bad = record(990); bad['body'] = bad['body'].replace('"schema_version":1', '"schema_version":2')
+        bad = record(990); bad['body'] = bad['body'].replace('"schema_version":2', '"schema_version":9')
         wrong = record(991, ident='meeting-10')
         invalid_hash = record(992); invalid_hash['body'] = invalid_hash['body'].replace(hashlib.sha256(TOKEN.encode()).hexdigest(), 'not-a-fingerprint')
         self.api.comments[4] += [bad, wrong, invalid_hash]
@@ -239,30 +248,29 @@ class ParticipationBrowserTests(FormBrowserFixture):
     def test_duplicate_participant_comments_require_organizer_review(self):
         self.api.comments[4] += [record(998), record(999)]
         self.open_participation()
-        self.page.locator('#github-username').fill('alice'); self.page.locator('#github-token').fill(TOKEN)
+        self.page.locator('#github-token').fill(TOKEN)
         self.page.get_by_role('button', name='Check credentials', exact=True).click()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('More than one')")
         self.assertFalse(self.mutations)
         self.assertTrue(self.page.locator('#submit-participation').is_disabled())
 
-    def test_usernames_are_required_normalized_and_invalidate_credentials_when_changed(self):
-        self.open_participation()
-        self.page.locator('#github-token').fill(TOKEN)
-        self.page.get_by_role('button', name='Check credentials', exact=True).click()
-        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('assigned by the organizer')")
-        self.assertFalse(self.requests)
-        self.check(username='ALICE'); self.choose('Register'); self.confirmed(True)
-        self.assertIn('Participant: alice', self.api.comments[4][-1]['body'])
-        self.page.locator('#github-username').fill('bob')
-        self.assertTrue(self.page.locator('#submit-participation').is_disabled())
+    def test_names_are_resolved_from_directory_and_cannot_be_selected_or_typed(self):
+        self.open_participation(); self.check()
+        self.assertEqual(self.page.locator('#github-username').count(), 0)
+        self.assertEqual(self.page.locator('#identity').inner_text(), 'Credentials accepted for Alice Example.')
+        self.choose('Register'); self.confirmed(True)
+        self.assertTrue(self.api.comments[4][-1]['body'].startswith('Yes — Alice Example'))
+        self.check(OTHER_TOKEN)
+        self.assertEqual(self.page.locator('#identity').inner_text(), 'Credentials accepted for Bob Example.')
 
-    def test_shared_account_does_not_enforce_per_person_identity(self):
+    def test_shared_account_direct_api_access_is_not_per_person_authorization(self):
         self.api.comments[4].append(record(999, 'bob', OTHER_TOKEN))
-        self.open_participation()
-        # Someone knowing another assigned label can claim it. This is a
-        # documented trust boundary, not a security guarantee of the form.
-        self.check(TOKEN, 'bob'); self.choose('Unregister'); self.confirmed(False)
-        self.assertTrue(self.mutations[0][1].endswith('/999'))
+        self.open_participation(); self.check()
+        self.choose('Unregister'); self.confirmed(False)
+        self.assertFalse(self.mutations)  # Normal form targets Alice, not Bob.
+        status = self.page.evaluate("async ({url,key}) => (await fetch(url, {method:'DELETE',headers:{Authorization:'Bearer '+key,'X-GitHub-Api-Version':'2022-11-28'}})).status", {'url':API+'/repos/'+m.PRIVATE+'/issues/comments/999','key':TOKEN})
+        self.assertEqual(status,204)  # Direct API still sees the shared author.
+        self.assertTrue(self.mutations[-1][1].endswith('/999'))
 
     def test_registration_number_comes_from_metadata_not_meeting_counter(self):
         self.api.issues[20] = copy.deepcopy(self.api.issues[4]) | {'number': 20}
@@ -277,7 +285,7 @@ class ParticipationBrowserTests(FormBrowserFixture):
     def test_wrong_registration_labels_prevent_changes(self):
         self.api.issues[4]['labels'] = ['talk', 'meeting:meeting-10']
         self.open_participation()
-        self.page.locator('#github-username').fill('alice'); self.page.locator('#github-token').fill(TOKEN)
+        self.page.locator('#github-token').fill(TOKEN)
         self.page.get_by_role('button', name='Check credentials', exact=True).click()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('could not be verified')")
         self.assertFalse(self.mutations)
@@ -300,7 +308,7 @@ class ParticipationBrowserTests(FormBrowserFixture):
         self.open_participation()
         for status in (401, 403, 404):
             self.auth_error = status
-            self.page.locator('#github-username').fill('alice'); self.page.locator('#github-token').fill(TOKEN)
+            self.page.locator('#github-token').fill(TOKEN)
             self.page.get_by_role('button', name='Check credentials', exact=True).click()
             self.page.wait_for_function("() => !document.getElementById('check-token').disabled && !document.getElementById('form-error').hidden")
             self.assertTrue(self.page.locator('#submit-participation').is_disabled())
@@ -359,7 +367,7 @@ class ParticipationBrowserTests(FormBrowserFixture):
         self.assertNotIn(TOKEN, self.page.url)
         self.page.evaluate("window.dispatchEvent(new PageTransitionEvent('pagehide'))")
         self.assertEqual(self.page.locator('#github-token').input_value(), '')
-        self.assertEqual(self.page.locator('#github-username').input_value(), '')
+        self.assertEqual(self.page.locator('#github-username').count(), 0)
         self.assertTrue(self.page.locator('#submit-participation').is_disabled())
         self.assertEqual(self.page.locator('#clear-token').count(), 0)
 
