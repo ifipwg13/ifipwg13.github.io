@@ -4,6 +4,7 @@ No live GitHub writes or real tokens. Run with both repositories checked out:
   python3 tests/browser_talk_submission.py
 """
 import copy
+import base64
 import functools
 import hashlib
 import http.server
@@ -27,6 +28,7 @@ sys.path.insert(0, str(PRIVATE_ROOT / "tests"))
 from test_web_talks import WebGitHub, proposal, m  # noqa: E402
 from shared_member_fixtures import SharedGitHub, install_retired_directory
 from test_meeting_setup import DETAILS, form_body  # noqa: E402
+from test_talk_slides import stage, example_pdf  # noqa: E402
 
 TOKEN = "github_pat_FICTITIOUS_TEST_ONLY_123456"
 SECOND_TOKEN = "github_pat_SECOND_FICTITIOUS_TEST_ONLY"
@@ -98,6 +100,9 @@ class FormBrowserFixture(unittest.TestCase):
         self.external = []
         self.errors = []
         self.posts = 0
+        self.upload_posts = 0
+        self.upload_mode = 'success'
+        self.upload_commit = None
         self.response_mode = "success"
         self.status_mode = "automatic"
         self.context.route("**/*", self.route)
@@ -106,10 +111,14 @@ class FormBrowserFixture(unittest.TestCase):
         self.base = f"http://127.0.0.1:{self.server.server_port}"
 
     def flush_pages(self):
-        for name, value in self.api.branch_files(m.PUBLIC, m.PREVIEW_BRANCH).items():
+        files = self.api.branch_files(m.PUBLIC, m.PREVIEW_BRANCH)
+        for old in self.directory.glob('prototype/slides/*/*.pdf'):
+            if str(old.relative_to(self.directory)) not in files:
+                old.unlink()
+        for name, value in files.items():
             path = self.directory / name
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(value)
+            path.write_bytes(value) if isinstance(value, bytes) else path.write_text(value)
 
     def json_response(self, route, body, status=200):
         route.fulfill(status=status, content_type="application/json", body=json.dumps(body),
@@ -130,7 +139,7 @@ class FormBrowserFixture(unittest.TestCase):
         self.requests.append({"method": request.method, "url": request.url, "headers": request.headers,
                               "body": request.post_data})
         if request.method == "OPTIONS":
-            route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST",
+            route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, PUT",
                           "Access-Control-Allow-Headers": "authorization,content-type,x-github-api-version"})
             return
         self.assertIn(request.headers.get("authorization"), {"Bearer " + TOKEN, "Bearer " + SECOND_TOKEN})
@@ -138,6 +147,33 @@ class FormBrowserFixture(unittest.TestCase):
             self.assertNotIn(credential, request.url)
             self.assertNotIn(credential, request.post_data or "")
         path = url.path
+        upload_root = '/repos/' + m.web.UPLOADS
+        if path.startswith(upload_root + '/'):
+            if request.method == 'PUT':
+                self.upload_posts += 1
+                self.assertTrue(path.startswith(upload_root + '/contents/submissions/'))
+                if self.upload_mode == '403':
+                    self.json_response(route, {'message':'PRIVATE DENIAL'}, 403); return
+                if self.upload_mode == 'lost-before-upload':
+                    route.abort('failed'); return
+                data = request.post_data_json
+                self.assertEqual(set(data), {'message','branch','content'})
+                self.assertEqual(data['branch'], 'main')
+                submission = path.rsplit('/',1)[1].removesuffix('.pdf')
+                content = base64.b64decode(data['content'])
+                reference = stage(self.api, content, submission)
+                self.upload_commit = reference['commit']
+                metadata = self.api.api('GET', f"repos/{m.web.UPLOADS}/contents/{reference['path']}?ref={self.upload_commit}")
+                if self.upload_mode == 'lost-response': route.abort('failed')
+                else: self.json_response(route, {'content':metadata,'commit':{'sha':self.upload_commit}}, 201)
+            elif path == upload_root + '/git/ref/heads/main':
+                if self.upload_commit: self.json_response(route, {'object':{'sha':self.upload_commit}})
+                else: self.json_response(route, {}, 404)
+            elif '/contents/submissions/' in path:
+                metadata = self.api.api('GET', path.lstrip('/') + '?' + url.query, missing_ok=True)
+                self.json_response(route, metadata or {}, 200 if metadata else 404)
+            else: raise AssertionError('Unsupported upload operation: ' + path)
+            return
         if path == "/user":
             if self.response_mode in {"401", "403", "404"}:
                 self.json_response(route, {}, int(self.response_mode))
@@ -191,12 +227,10 @@ class FormBrowserFixture(unittest.TestCase):
         self.page.goto(self.base + "/prototype/submit-talk.html" + ("?meeting=" + ident if ident is not None else ""))
         if ready:
             self.page.wait_for_function("() => !document.getElementById('talk-fields').disabled")
-            self.page.locator('#participant-name').fill('Alice Example')
         self.assertFalse(self.page.locator("#check-status").is_visible())
         self.assertFalse(self.page.locator("#meeting-link").is_visible())
 
-    def credentials(self, credential=TOKEN, name='Alice Example'):
-        self.page.locator('#participant-name').fill(name)
+    def credentials(self, credential=TOKEN):
         self.page.locator("#github-token").fill(credential)
         self.page.get_by_role("button", name="Check credentials", exact=True).click()
         self.page.wait_for_function("() => !document.getElementById('submit-talk').disabled")
@@ -221,14 +255,15 @@ class FormBrowserTests(FormBrowserFixture):
         self.assertNotIn('PRIVATE DIRECTORY CANARY', self.page.content())
         self.assertFalse(any('participant-directory' in r['url'] or '/issues/900' in r['url'] for r in self.requests))
 
-    def test_two_names_using_one_password_keep_private_metadata_and_shared_author(self):
+    def test_two_submissions_need_no_name_and_do_not_publish_account_information(self):
         numbers = []
-        for name in ['PRIVATE Alice Example','PRIVATE Bob Example']:
-            self.open_form(); self.credentials(TOKEN, name); self.fill_talk('A fictitious contribution')
+        for title in ['First fictitious contribution','Second fictitious contribution']:
+            self.open_form(); self.credentials(); self.fill_talk(title)
             self.page.get_by_role('button', name='Submit talk', exact=True).click(); self.wait_published()
             numbers.append(self.last_number)
             data = m.web.parse(self.api.issues[self.last_number])
-            self.assertEqual(data['participant'], {'name':name, 'credential_fingerprint':hashlib.sha256(TOKEN.encode()).hexdigest()})
+            self.assertNotIn('participant', data)
+            self.assertEqual(self.page.locator('#participant-name').count(), 0)
         self.assertNotEqual(*numbers)
         self.assertEqual(self.api.issues[numbers[0]]['user'], self.api.issues[numbers[1]]['user'])
         public = '\n'.join(self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH).values())
@@ -236,13 +271,10 @@ class FormBrowserTests(FormBrowserFixture):
             self.assertNotIn(value, public)
         self.assertNotIn('GitHub', self.page.locator('body').inner_text())
 
-    def test_name_is_required_and_autofill_cannot_reuse_checked_credentials(self):
-        self.open_form(); self.page.locator('#participant-name').fill(''); self.page.locator('#github-token').fill(TOKEN)
-        self.page.get_by_role('button', name='Check credentials', exact=True).click()
-        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('Enter your name')")
-        self.assertTrue(self.page.locator('#submit-talk').is_disabled()); self.assertEqual(self.posts, 0)
+    def test_silent_password_autofill_cannot_reuse_checked_credentials(self):
+        self.open_form()
         self.credentials(); self.fill_talk()
-        self.page.locator('#participant-name').evaluate("node => {node.value='Bob Example';}")
+        self.page.locator('#github-token').evaluate("node => {node.value='changed-password';}")
         self.page.get_by_role('button', name='Submit talk', exact=True).click()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('Check credentials')")
         self.assertEqual(self.posts, 0)
@@ -254,18 +286,20 @@ class FormBrowserTests(FormBrowserFixture):
         self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Submitted.')")
         self.page.locator('#github-token').fill(SECOND_TOKEN)
         self.page.get_by_role('button', name='Check credentials', exact=True).click()
-        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('original name and password')")
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('original password')")
         self.assertEqual(self.posts, 1)
         self.assertTrue(self.page.locator('#submit-talk').is_disabled())
 
-    def test_pending_talk_cannot_be_checked_with_another_name_using_the_shared_password(self):
+    def test_pending_talk_can_be_checked_again_using_original_password(self):
         self.status_mode = 'pending'
         self.open_form(); self.credentials(); self.fill_talk()
         self.page.get_by_role('button',name='Submit talk',exact=True).click()
         self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Submitted.')")
-        self.page.locator('#participant-name').fill('Bob Example')
+        self.page.locator('#github-token').fill('')
+        self.page.locator('#github-token').fill(TOKEN)
         self.page.get_by_role('button',name='Check credentials',exact=True).click()
-        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('original name and password')")
+        self.page.wait_for_function("() => document.getElementById('identity').textContent === 'Credentials accepted.'")
+        self.page.get_by_role('button',name='Check submission status',exact=True).click()
         self.assertEqual(self.posts,1)
 
     def test_credentials_changed_during_availability_refresh_abort_before_post(self):
@@ -442,7 +476,6 @@ class FormBrowserTests(FormBrowserFixture):
             self.page.goto(self.base + '/prototype/meetings/meeting-4/')
             self.page.get_by_role('link', name='Add talk', exact=True).click()
             self.page.wait_for_function("() => !document.getElementById('talk-fields').disabled")
-            self.page.locator('#participant-name').fill('Alice Example')
             self.assertIn('?meeting=meeting-4', self.page.url)
             self.assertEqual(self.page.locator('#meeting-name').inner_text(), DETAILS['name'])
             self.assertFalse(self.page.locator('#meeting-choice').is_visible())
@@ -599,6 +632,112 @@ class FormBrowserTests(FormBrowserFixture):
         self.page.locator("#talk-form").evaluate("form => form.submit()")
         self.assertEqual(self.posts, 0)
         self.assertNotIn(TOKEN, self.page.url)
+
+
+class SlideBrowserTests(FormBrowserFixture):
+    def select_pdf(self, content=None, name='slides.pdf'):
+        self.page.locator('#slides').set_input_files({'name':name,'mimeType':'application/pdf',
+                                                     'buffer':example_pdf() if content is None else content})
+
+    def submit(self):
+        self.page.get_by_role('button', name='Submit talk', exact=True).click()
+
+    def test_member_upload_publishes_pdf_title_link_in_actual_preview(self):
+        self.base = f'http://127.0.0.1:{self.preview.server_port}/__preview/synchronized'
+        self.open_form(); self.credentials(); self.fill_talk(); self.select_pdf()
+        for width in (1100,375,320):
+            self.page.set_viewport_size({'width':width,'height':950})
+            self.assertTrue(self.page.evaluate('document.documentElement.scrollWidth <= innerWidth'))
+        self.submit(); self.wait_published()
+        self.assertEqual((self.posts,self.upload_posts),(1,1))
+        self.assertTrue(self.page.locator('#talk-title').is_disabled())
+        data = m.web.parse(self.api.issues[self.last_number])
+        self.assertNotIn('participant',data)
+        self.assertEqual(data['slides']['size'],len(example_pdf()))
+        self.page.get_by_role('link', name='Return to meeting').click()
+        title = self.page.locator('.public-talks a.talk-title')
+        self.assertEqual(title.inner_text(),'Fictitious trees')
+        address = title.evaluate('node => node.href')
+        self.assertTrue(address.startswith(self.base + '/prototype/slides/meeting-4/'))
+        result = self.page.request.get(address)
+        self.assertEqual(result.status,200)
+        self.assertEqual(result.headers['content-type'],'application/pdf')
+        self.assertEqual(result.headers['x-content-type-options'],'nosniff')
+        self.assertEqual(result.body(),example_pdf())
+        self.assertEqual(self.api.permissions['member'],'read')
+        writes = [request for request in self.requests if request['method'] in {'POST','PUT','PATCH','DELETE'}]
+        self.assertEqual([request['method'] for request in writes],['PUT','POST'])
+        self.assertTrue(writes[0]['url'].startswith(API + '/repos/' + m.web.UPLOADS + '/contents/submissions/'))
+        self.assertEqual(writes[1]['url'],API + '/repos/' + m.PRIVATE + '/issues')
+        self.assertFalse(self.errors); self.assertFalse(self.external)
+
+    def test_exact_ten_mb_pdf_is_accepted_end_to_end(self):
+        content = example_pdf(10_000_000)
+        self.open_form(); self.credentials(); self.fill_talk(); self.select_pdf(content); self.submit(); self.wait_published()
+        self.assertEqual(self.upload_posts,1)
+        attachment = m.public_talks(self.api,'meeting-4')[-1]['slides']
+        self.assertEqual(self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)[attachment['path']],content)
+
+    def test_oversized_empty_and_wrong_file_are_rejected_before_any_write(self):
+        self.open_form(); self.credentials(); self.fill_talk()
+        for content,name in [(b'','empty.pdf'),(example_pdf(),'slides.txt'),(b'not a pdf','slides.pdf'),
+                             (b'x' * 10_000_001,'oversized.pdf')]:
+            self.select_pdf(content,name); self.submit()
+            self.page.wait_for_function("() => !document.getElementById('form-error').hidden")
+            self.assertEqual((self.posts,self.upload_posts),(0,0))
+        self.assertFalse(self.errors)
+
+    def test_trusted_validation_rejects_spoofed_pdf_despite_browser_header_check(self):
+        self.open_form(); self.credentials(); self.fill_talk()
+        self.select_pdf(b'%PDF-1.7\nThis is not a PDF structure.\n%%EOF'); self.submit()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.includes('needs correction')")
+        self.assertFalse(any(path.endswith('.pdf') for path in self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)))
+        self.assertNotIn('Fictitious trees',(self.directory / 'prototype/meetings/meeting-4/index.html').read_text())
+
+    def test_lost_upload_response_recovers_pinned_file_without_duplicate_upload_or_issue(self):
+        self.upload_mode = 'lost-response'
+        self.open_form(); self.credentials(); self.fill_talk(); self.select_pdf(); self.submit(); self.wait_published()
+        self.page.get_by_role('button',name='Check submission status',exact=True).click()
+        self.assertEqual((self.posts,self.upload_posts),(1,1))
+        self.assertTrue(any('/git/ref/heads/main' in request['url'] for request in self.requests))
+        self.assertTrue(any('?ref=' + self.upload_commit in request['url'] for request in self.requests))
+
+    def test_unconfirmed_upload_does_not_create_issue_or_retry_put(self):
+        self.upload_mode = 'lost-before-upload'
+        self.open_form(); self.credentials(); self.fill_talk(); self.select_pdf(); self.submit()
+        self.page.wait_for_function("() => !document.getElementById('check-status').hidden && !document.getElementById('check-status').disabled")
+        self.page.get_by_role('button',name='Check submission status',exact=True).click()
+        self.page.wait_for_function("() => !document.getElementById('form-error').hidden")
+        self.assertEqual((self.posts,self.upload_posts),(0,1))
+        self.assertTrue(self.page.locator('#submit-talk').is_disabled())
+
+    def test_missing_file_write_permission_does_not_create_issue_and_can_be_corrected(self):
+        self.upload_mode = '403'
+        self.open_form(); self.credentials(); self.fill_talk(); self.select_pdf(); self.submit()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.includes('No talk was sent')")
+        self.assertEqual((self.posts,self.upload_posts),(0,1))
+        self.assertIn('file-write permission',self.page.locator('#form-error').inner_text())
+        self.assertNotIn('PRIVATE DENIAL',self.page.locator('body').inner_text())
+        self.upload_mode = 'success'; self.submit(); self.wait_published()
+        self.assertEqual((self.posts,self.upload_posts),(1,2))
+
+    def test_lost_issue_response_after_upload_recovers_without_second_post(self):
+        self.response_mode = 'lost-response'
+        self.open_form(); self.credentials(); self.fill_talk(); self.select_pdf(); self.submit(); self.wait_published()
+        self.assertEqual((self.posts,self.upload_posts),(1,1))
+        self.assertTrue(any('creator=member' in request['url'] for request in self.requests))
+
+    def test_meeting_closing_during_upload_prevents_issue_post(self):
+        self.open_form(); self.credentials(); self.fill_talk(); self.select_pdf()
+        def close_meeting(route):
+            m.manage_meeting(self.api,{'number':4,'id':'meeting-4','action':'archive'})
+            self.flush_pages()
+            self.route(route)
+        self.context.route('**/repos/' + m.web.UPLOADS + '/contents/submissions/*',close_meeting)
+        self.submit()
+        self.page.wait_for_function("() => !document.getElementById('check-status').hidden && !document.getElementById('check-status').disabled")
+        self.assertEqual((self.posts,self.upload_posts),(0,1))
+        self.assertFalse(self.errors)
 
 
 if __name__ == "__main__":

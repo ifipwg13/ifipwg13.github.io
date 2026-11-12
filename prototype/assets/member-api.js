@@ -1,10 +1,14 @@
 /* Shared, closure-scoped helpers. No credentials or private responses persist. */
 const memberAPI = (() => {
   const repo = '/repos/ifipwg13/meetings';
+  const uploads = '/repos/ifipwg13/meeting-slides-uploads';
   async function request(path, method = 'GET', body, credential) {
-    if (path !== '/user' && path !== repo && !path.startsWith(repo + '/')) throw new Error('Unsupported request.');
+    const uploadPath = path.startsWith(uploads + '/') && (
+      (method === 'GET' && path === uploads + '/git/ref/heads/main') ||
+      (['GET', 'PUT'].includes(method) && /^\/contents\/submissions\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\.pdf(?:\?ref=[a-f0-9]{40})?$/.test(path.slice(uploads.length))));
+    if (path !== '/user' && path !== repo && !path.startsWith(repo + '/') && !uploadPath) throw new Error('Unsupported request.');
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
+    const timer = setTimeout(() => controller.abort(), uploadPath && method === 'PUT' ? 60000 : 20000);
     try {
       const response = await fetch('https://api.github.com' + path, {
         method, credentials: 'omit', cache: 'no-store', redirect: 'error',
@@ -155,6 +159,6 @@ const memberAPI = (() => {
     } finally { clearTimeout(timer); }
   }
 
-  return {repo, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
+  return {repo, uploads, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
     displayDate: value => value.split('-').reverse().join('-')};
 })();

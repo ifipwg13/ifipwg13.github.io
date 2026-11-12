@@ -8,7 +8,8 @@ The prototype uses plain HTML/CSS and self-hosted scripts for list ordering and
 the own-site talk and participation forms, with no runtime dependencies or
 additional backend. The forms call GitHub directly using organizer-issued credentials.
 Participation and discussion belong in the private `ifipwg13/meetings` repository.
-The website displays each talk's date/time, title, entered authors, and expandable abstract.
+The website displays each talk's date/time, title, entered authors, and expandable
+abstract. An optional PDF makes the title a link to the public slide file.
 
 ## Preview in Firefox without publishing
 
@@ -35,7 +36,8 @@ The website displays each talk's date/time, title, entered authors, and expandab
 Keep port visibility **Private**. This preview is separate from GitHub Pages:
 opening it does not merge the pull request or publish the website. The Python
 server serves the root homepage, `members/index.html`, and the allowed HTML/CSS,
-meeting-list and talk-form scripts, and exact IFIP logo path under `prototype/` on the selected public branch. Other
+meeting-list and talk-form scripts, exact IFIP logo path, and narrowly allowed
+versioned PDF paths under `prototype/` on the selected public branch. Other
 root files, hidden files, and private records cannot be served. It fetches the
 branch when a page is requested, so refreshing Firefox receives updates without
 another terminal command. Your local files and branches are not changed.
@@ -248,7 +250,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/shared-password-names --port 8003
+python3 scripts/preview_server.py --branch feature/talk-pdf-uploads --port 8003
 ```
 
 Open port **8003** using **Ports → Open in Browser**. Firefox displays the review
@@ -258,12 +260,13 @@ This optional branch selection leaves the existing prototype preview default
 unchanged. Issue-backed pages in this feature draft are a review snapshot.
 The bar must say **Review snapshot**, name this feature branch, and offer
 **Switch to synchronized preview**. Use the review view for unmerged presentation
-changes. This feature restores Name and shared Password in Participation and Add talk,
-retires directory enrollment, and preserves the administrator Create meeting form.
+changes. This feature adds optional PDF uploads and simplifies the forms. Add talk
+asks only for Password alongside its public fields; Participation keeps Name and
+Password. Meeting creation defaults the end date to the start date.
 The private compatibility change must be integrated before real submissions from
 these member forms.
 Read-account testing and private editing instructions are in
-[the feature guide](https://github.com/ifipwg13/meetings/blob/feature/shared-password-names/README.md).
+[the feature guide](https://github.com/ifipwg13/meetings/blob/feature/talk-pdf-uploads/README.md).
 No PR is merged or Pages website published by starting a preview.
 
 In an existing Codespace with older local scripts, press **Ctrl+C** to stop its
@@ -272,10 +275,10 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/shared-password-names:refs/remotes/origin/feature/shared-password-names &&
+git fetch origin refs/heads/feature/talk-pdf-uploads:refs/remotes/origin/feature/talk-pdf-uploads &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/shared-password-names:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/shared-password-names --port 8003
+git show origin/feature/talk-pdf-uploads:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/talk-pdf-uploads --port 8003
 ```
 
 Open port **8003** from **Ports**, keeping it **Private**. The first page must be
@@ -287,7 +290,8 @@ name `prototype/meeting-management`.
 
 After the paired implementation is approved, integrate the private parser first,
 then this public feature into `prototype/meeting-management`. Distribute a shared
-Read-account password and test two entered names without enrollment.
+Read-account password with the upload repository selected and Contents read/write
+for PDF tests. Complete the private PDF setup guide first.
 Keep website-publication PR #1 unmerged.
 Refresh the existing **Synchronized preview** tab; no Codespace restart or new
 port is needed. Do not test new live submissions before both integrations.
@@ -326,9 +330,10 @@ group-page/abstract use with JavaScript disabled. They add no site dependencies.
 ## Own-site talk form
 
 `prototype/submit-talk.html` and `prototype/assets/talk-submission.js` provide
-required ASCII title/authors/abstract and Name/shared Password fields.
-Participants enter Name explicitly; no lookup, enrollment or per-person token is
-required. The same password can be used with several names.
+required ASCII title/authors/abstract, schedule, a shared Password, and an optional
+PDF upload. No separate submitter Name is needed. The Issue author records the
+issuing account privately. Participation still asks for Name. No directory or
+per-person token is required.
 The visible wording is neutral; the Password is an issued PAT, not a GitHub login password.
 An active meeting's **Add talk** link fixes the meeting and displays its name;
 there is no second selection step. The generic form without a `meeting` query
@@ -359,25 +364,29 @@ is bounded at 15 seconds, including the response body, and failures show
 a failed pre-submission availability check; no Issue is posted in that case.
 
 The issuing account is an ordinary organization member with effective **Read**
-access to `ifipwg13/meetings`. A fine-grained PAT is restricted to that repository
-with **Issues: Read and write** plus automatic Metadata Read. Contents, Actions,
-Workflows, Pull requests, and administration permissions are unnecessary.
+access to `ifipwg13/meetings`. Issues read/write plus Metadata Read supports text
+submissions and participation. PDF uploads additionally require Write on a separate
+private `ifipwg13/meeting-slides-uploads` repository, selected on the token with
+Contents read/write. The account keeps Read on meetings and no write access to the
+website. GitHub permissions apply repository-wide, not just to one's own uploads.
+Actions, Workflows, Pull requests, and administration permissions are unnecessary
+for the browser token.
 Outside collaborators cannot use this fine-grained organization-token route.
 The approved Read account's membership/role were verified before implementation.
 
-Participants share a Read-account PAT (the website's Password) and enter their
-own Name. The browser checks access, computes the full SHA-256 fingerprint and
-records name/fingerprint metadata privately. No name directory is read or required.
+Participants share a Read-account PAT (the website's Password). Participation
+asks for Name and records name/fingerprint metadata privately; Add talk needs no
+name and does not record that participant object. No name directory is consulted.
 Names are self-declared labels, not human authentication; a password holder can
 enter another name and act on that shared account's records. Names accept plain
 text and accents; the public talk title/authors/abstract retain strict ASCII.
-The private submitter Name is separate from the intentionally public Authors.
+The public Authors field remains required and independent of participation names.
 
 The Manage Participants form, navigation and reconciliation workflow are retired.
 Existing directory Issues and records remain private and unchanged. Former
 active/disabled directory flags no longer control form access: revoke unwanted
 PATs in GitHub. Existing attendance/talk formats stay readable without lookup.
-See the private [shared-password guide](https://github.com/ifipwg13/meetings/blob/feature/shared-password-names/SHARED_CREDENTIALS.md)
+See the private [shared-password guide](https://github.com/ifipwg13/meetings/blob/feature/talk-pdf-uploads/SHARED_CREDENTIALS.md)
 for issuance, compatibility, replacement and the Firefox acceptance procedure.
 
 The browser verifies access, then posts an unlabeled structured Issue
@@ -386,9 +395,11 @@ adds computed labels with its built-in token, and invokes publication in the
 same run. Private bot status distinguishes submission from verified publication.
 A lost POST response triggers GET-only recovery by a per-submission UUID.
 The app uses no local/session storage or token URLs; password-manager
-saving/autofill is best effort via username/current-password hints. Token values never
-enter a repository or an Issue; only their fingerprints enter private metadata. Only designated talk title, authors, and abstract
-and scheduling fields are rendered publicly as escaped text. Directory names/IDs
+saving/autofill is best effort via current-password hints (Participation also has
+username). Token values never enter a repository or an Issue. Participation stores
+only their fingerprints in private metadata; Add talk binds recovery in memory.
+Only designated talk title, authors, abstract and scheduling fields are rendered
+publicly as escaped text, with a PDF link when applicable. Directory names/IDs
 and fingerprints never enter public output. **Create meeting** remains at the top
 of the list and opens our website administrator form; trusted Actions enforces its access. The token is not the administrator's
 `MEETING_AUTOMATION_TOKEN` publishing secret. Native form submission is blocked
@@ -485,7 +496,7 @@ verified public revision content; only then does it offer Open meeting. Lost
 responses use bounded GET-only UUID recovery, without duplicate POSTs. Preserve
 the marker when editing saved Issues. Hidden/archived meeting behavior is retained.
 
-The private [README](https://github.com/ifipwg13/meetings/blob/feature/shared-password-names/README.md#create-limited-member-and-administrator-tokens)
+The private [README](https://github.com/ifipwg13/meetings/blob/feature/talk-pdf-uploads/README.md#create-limited-member-and-administrator-tokens)
 gives exact issuance steps: one shared Read-account password for member forms,
 and a separate Admin-account password for Create meeting. Both select only
 meetings with Issues read/write plus automatic Metadata read. The publishing
@@ -498,3 +509,33 @@ credentials and the real preview/controller with a modeled API. Actual minimal-
 scope PAT acceptance, live Actions timing and Firefox vault behavior remain manual
 after integration approval. Both implementation PRs stay draft/unmerged until
 approved. Publication PR #1 and backup/export/restore remain separate and deferred.
+
+
+## PDF uploads
+
+One optional PDF of at most **10,000,000 bytes** can accompany a talk. The browser
+uses the shared member password to stage it in a separate private GitHub repository,
+then creates the talk Issue with a commit-pinned file reference. The trusted private
+publisher verifies the size, checksums and PDF structure before copying it into
+`prototype/slides/<meeting ID>/` and linking the title. Without a PDF the title
+remains non-clickable. Abstract disclosures and schedules are preserved.
+
+HTML and PDFs are committed together. The preview permits only generated PDF
+paths and serves them as `application/pdf` with `nosniff`; use this feature's
+preview-server version when reviewing PDF links. Hide/restore follows existing
+meeting/talk visibility. Public history and caches retain previously published
+material; the complete PDF and its embedded metadata become public.
+
+The private [PDF setup and testing guide](https://github.com/ifipwg13/meetings/blob/feature/talk-pdf-uploads/SLIDES_UPLOADS.md)
+explains repository creation, roles, token scopes, the publisher secret and
+recovery. Provisioning is required before real uploads can work. No credentials
+or PDF bytes are stored in public JavaScript, browser local/session storage,
+URLs or logs; only selected PDFs are intentionally copied to public files.
+
+The paired private publisher adds the pinned `pypdf` dependency for structural
+checks in a credential-free subprocess with memory/time limits. The site itself
+has no new runtime dependencies. For local integration tests, install it using:
+
+```sh
+python3 -m pip install --require-hashes -r ../meetings/.github/scripts/pdf-requirements.txt
+```

@@ -25,6 +25,18 @@ def record(number, username='alice', credential=TOKEN, owner=11, ident='meeting-
 
 
 class ParticipationBrowserTests(FormBrowserFixture):
+    def test_removed_headings_and_prompt_do_not_return_after_credential_changes(self):
+        self.open_participation()
+        text = 'Check your credentials to see your current participation status.'
+        self.assertEqual(self.page.locator('#credential-fields legend').count(),0)
+        self.assertNotIn(text,self.page.locator('body').inner_text())
+        self.check()
+        self.assertIn('not registered',self.page.locator('#participation-status').inner_text().lower())
+        self.page.locator('#github-token').fill('')
+        self.assertEqual(self.page.locator('#participation-status').inner_text(),'')
+        self.assertNotIn(text,self.page.locator('body').inner_text())
+        self.assertTrue(self.page.locator('#participant-name').is_visible())
+
     def setUp(self):
         super().setUp()
         self.api.comments[4] = [

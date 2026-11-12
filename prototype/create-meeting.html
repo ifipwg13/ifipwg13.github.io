@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-g4O6VJeS02MdkNWgakl0HQ3nUq+6v3pvfOQVoesN3mg='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-dJnYRkUfSVJgTHPaGUdMlJUZ88fQ16jTqbuLZOz6xGg='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Create meeting · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -32,9 +32,9 @@
         <p class="help">Enter the name without a meeting number.</p>
         <label for="start-date">Start date</label>
         <input id="start-date" type="text" placeholder="1-3-2027" maxlength="10" required>
-        <label for="end-date">End date (optional)</label>
+        <label for="end-date">End date</label>
         <input id="end-date" type="text" placeholder="4-3-2027" maxlength="10">
-        <p class="help">Use DD-MM-YYYY or DD-MM-YY, leading zeros are optional. Leave the end date blank for a one-day meeting.</p>
+        <p class="help">Use DD-MM-YYYY or DD-MM-YY, leading zeros are optional. A blank end date means the same day as the start date.</p>
         <label for="location">Location</label>
         <input id="location" type="text" maxlength="200" required>
         <label for="description">Description (optional)</label>
@@ -64,10 +64,14 @@
 /* Shared, closure-scoped helpers. No credentials or private responses persist. */
 const memberAPI = (() => {
   const repo = '/repos/ifipwg13/meetings';
+  const uploads = '/repos/ifipwg13/meeting-slides-uploads';
   async function request(path, method = 'GET', body, credential) {
-    if (path !== '/user' && path !== repo && !path.startsWith(repo + '/')) throw new Error('Unsupported request.');
+    const uploadPath = path.startsWith(uploads + '/') && (
+      (method === 'GET' && path === uploads + '/git/ref/heads/main') ||
+      (['GET', 'PUT'].includes(method) && /^\/contents\/submissions\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\.pdf(?:\?ref=[a-f0-9]{40})?$/.test(path.slice(uploads.length))));
+    if (path !== '/user' && path !== repo && !path.startsWith(repo + '/') && !uploadPath) throw new Error('Unsupported request.');
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
+    const timer = setTimeout(() => controller.abort(), uploadPath && method === 'PUT' ? 60000 : 20000);
     try {
       const response = await fetch('https://api.github.com' + path, {
         method, credentials: 'omit', cache: 'no-store', redirect: 'error',
@@ -218,7 +222,7 @@ const memberAPI = (() => {
     } finally { clearTimeout(timer); }
   }
 
-  return {repo, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
+  return {repo, uploads, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
     displayDate: value => value.split('-').reverse().join('-')};
 })();
 
@@ -226,6 +230,13 @@ const memberAPI = (() => {
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
+  let automaticEnd = '';
+  $('start-date').addEventListener('input', () => {
+    if (!$('end-date').value || $('end-date').value === automaticEnd) {
+      $('end-date').value = $('start-date').value;
+      automaticEnd = $('end-date').value;
+    }
+  });
   const MARKER = '<!-- wg13-meeting-submission:';
   const STATUS = '<!-- wg13-meeting-status ';
   let credential = '', account = null, pending = null, busy = false, timer = null, polls = 0;

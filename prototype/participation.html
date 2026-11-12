@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-EI1UuEZNfvv+U+fo2oyJC2JJESGoa0kI5p00v3OGIfo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-hdHecgenvn5XB4W1v6tWdgyY41J+GSrMWmggPAlBeCQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Participation · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -28,11 +28,10 @@
           <label><input type="radio" name="participation" value="register" required> Register</label>
           <label><input type="radio" name="participation" value="unregister" required> Unregister</label>
         </div>
-        <p id="participation-status" role="status" aria-live="polite">Check your credentials to see your current participation status.</p>
+        <p id="participation-status" role="status" aria-live="polite"></p>
         <p id="legacy-attendance" class="help" hidden>Earlier registrations are also on record. Contact the organizer if your registration predates this form.</p>
       </fieldset>
-      <fieldset id="credential-fields" disabled>
-        <legend>Credentials</legend>
+      <fieldset id="credential-fields" aria-label="Name and password" disabled>
         <label for="participant-name">Name</label>
         <input id="participant-name" name="username" type="text" autocomplete="username" maxlength="200" required>
         <p class="help">Use the same name each time. If someone shares your name, add a distinguishing detail.</p>
@@ -60,10 +59,14 @@
 /* Shared, closure-scoped helpers. No credentials or private responses persist. */
 const memberAPI = (() => {
   const repo = '/repos/ifipwg13/meetings';
+  const uploads = '/repos/ifipwg13/meeting-slides-uploads';
   async function request(path, method = 'GET', body, credential) {
-    if (path !== '/user' && path !== repo && !path.startsWith(repo + '/')) throw new Error('Unsupported request.');
+    const uploadPath = path.startsWith(uploads + '/') && (
+      (method === 'GET' && path === uploads + '/git/ref/heads/main') ||
+      (['GET', 'PUT'].includes(method) && /^\/contents\/submissions\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\.pdf(?:\?ref=[a-f0-9]{40})?$/.test(path.slice(uploads.length))));
+    if (path !== '/user' && path !== repo && !path.startsWith(repo + '/') && !uploadPath) throw new Error('Unsupported request.');
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
+    const timer = setTimeout(() => controller.abort(), uploadPath && method === 'PUT' ? 60000 : 20000);
     try {
       const response = await fetch('https://api.github.com' + path, {
         method, credentials: 'omit', cache: 'no-store', redirect: 'error',
@@ -214,7 +217,7 @@ const memberAPI = (() => {
     } finally { clearTimeout(timer); }
   }
 
-  return {repo, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
+  return {repo, uploads, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
     displayDate: value => value.split('-').reverse().join('-')};
 })();
 
@@ -250,7 +253,7 @@ const memberAPI = (() => {
     owner = null;
     participant = null;
     $('identity').textContent = '';
-    $('participation-status').textContent = 'Check your credentials to see your current participation status.';
+    $('participation-status').textContent = '';
     $('legacy-attendance').hidden = true;
     if (!pending) $('submission-status').textContent = '';
     controls();
