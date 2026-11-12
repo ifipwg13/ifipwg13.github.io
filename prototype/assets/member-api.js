@@ -113,7 +113,7 @@ const memberAPI = (() => {
   async function administrator(credential) {
     const account = await authenticate(credential);
     const role = await request(repo + '/collaborators/' + encodeURIComponent(account.login) + '/permission', 'GET', undefined, credential);
-    if (role.permission !== 'admin') throw inputError('Participant management requires administrator access.');
+    if (role.permission !== 'admin') throw inputError('This operation requires administrator access.');
     return account;
   }
   function metadata(data) {

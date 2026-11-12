@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-cApbyudnx7F+vXC2hhZbSKHuuKGnbmDhKGPAt/IIid0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-oJvSVe7oNC5OXIPKzNjU+Jxk7OEmqy1hjzbPdgZY8ts='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Manage participants · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -13,7 +13,12 @@
   <header class="site-header"><div class="container">
     <a class="brand-logo" href="../" aria-label="IFIP WG1.3 home"><img src="assets/ifip-logo.png" alt="IFIP" width="75" height="142"></a>
     <p class="site-brand"><a href="../">IFIP WG1.3</a></p>
-    <nav class="site-nav" aria-label="Main navigation"><a href="./">All meetings</a></nav>
+    <nav class="site-nav" aria-label="Main navigation">
+      <a href="../">Home</a>
+      <a href="../members/">Members</a>
+      <a href="./">Meetings</a>
+      <a href="manage-participants.html" aria-current="page">Manage Participants</a>
+    </nav>
   </div></header>
   <main id="main" class="container">
     <h1>Manage participants</h1>
@@ -188,7 +193,7 @@ const memberAPI = (() => {
   async function administrator(credential) {
     const account = await authenticate(credential);
     const role = await request(repo + '/collaborators/' + encodeURIComponent(account.login) + '/permission', 'GET', undefined, credential);
-    if (role.permission !== 'admin') throw inputError('Participant management requires administrator access.');
+    if (role.permission !== 'admin') throw inputError('This operation requires administrator access.');
     return account;
   }
   function metadata(data) {
