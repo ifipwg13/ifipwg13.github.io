@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-mArN1pIAOnpKo5vF0tI7U9tiX49v8klWHaicUaGIA3Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>Create meeting · IFIP WG1.3</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="container">
+    <a class="brand-logo" href="../" aria-label="IFIP WG1.3 home"><img src="assets/ifip-logo.png" alt="IFIP" width="75" height="142"></a>
+    <p class="site-brand"><a href="../">IFIP WG1.3</a></p>
+    <nav class="site-nav" aria-label="Main navigation">
+      <a href="../">Home</a>
+      <a href="../members/">Members</a>
+      <a href="./">Meetings</a>
+      <a href="manage-participants.html">Manage Participants</a>
+    </nav>
+  </div></header>
+  <main id="main" class="container">
+    <h1>Create meeting</h1>
+    <p>For administrators. Enter the meeting details as they should appear on the website.</p>
+    <noscript><p class="notice">Enable JavaScript to create a meeting. No information has been sent.</p></noscript>
+    <p id="form-status" role="status" aria-live="polite">The form could not start. Please reload this page.</p>
+    <form id="talk-form" autocomplete="off">
+      <fieldset id="meeting-fields" disabled>
+        <legend>Meeting details</legend>
+        <label for="meeting-name">Meeting name</label>
+        <input id="meeting-name" type="text" maxlength="200" required>
+        <p class="help">Enter the name without a meeting number.</p>
+        <label for="start-date">Start date</label>
+        <input id="start-date" type="text" placeholder="1-3-2027" maxlength="10" required>
+        <label for="end-date">End date (optional)</label>
+        <input id="end-date" type="text" placeholder="4-3-2027" maxlength="10">
+        <p class="help">Use DD-MM-YYYY or DD-MM-YY, leading zeros are optional. Leave the end date blank for a one-day meeting.</p>
+        <label for="location">Location</label>
+        <input id="location" type="text" maxlength="200" required>
+        <label for="description">Description (optional)</label>
+        <textarea id="description" rows="5" maxlength="1200"></textarea>
+      </fieldset>
+      <fieldset id="admin-fields" disabled>
+        <legend>Administrator credentials</legend>
+        <label for="admin-token">Administrator password</label>
+        <input id="admin-token" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required>
+        <p><button id="check-admin" type="button" class="button button-secondary">Check credentials</button></p>
+        <p id="admin-identity" role="status" aria-live="polite"></p>
+      </fieldset>
+      <p id="form-error" role="alert" hidden></p>
+      <div class="actions">
+        <button id="create-meeting" type="submit" class="button" disabled>Create meeting</button>
+        <button id="check-status" type="button" class="button button-secondary" hidden>Check creation status</button>
+      </div>
+    </form>
+    <p id="submission-status" role="status" aria-live="polite"></p>
+    <p><a id="meeting-link" href="./" hidden>Open meeting</a></p>
+  </main>
+  <footer class="container site-footer"><p><a href="./">Back to all meetings</a></p></footer>
+  <!-- talk-form-script:start -->
+<script>
+(() => {
+'use strict';
+/* Shared, closure-scoped helpers. No credentials or private responses persist. */
+const memberAPI = (() => {
+  const repo = '/repos/ifipwg13/meetings';
+  async function request(path, method = 'GET', body, credential) {
+    if (path !== '/user' && path !== repo && !path.startsWith(repo + '/')) throw new Error('Unsupported request.');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch('https://api.github.com' + path, {
+        method, credentials: 'omit', cache: 'no-store', redirect: 'error',
+        referrerPolicy: 'no-referrer', signal: controller.signal,
+        headers: {Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + credential,
+          'X-GitHub-Api-Version': '2022-11-28', ...(body ? {'Content-Type': 'application/json'} : {})},
+        ...(body ? {body: JSON.stringify(body)} : {}),
+      });
+      if (!response.ok) {
+        const messages = {
+          401: 'The credentials were rejected. Ask the organizer whether they have expired or been replaced.',
+          403: 'The credentials do not permit this action. Contact the organizer.',
+          404: 'The record is unavailable. Check your credentials or contact the organizer.',
+          410: 'This private record is no longer available.',
+          422: 'The request could not be accepted. Check the fields or contact the organizer.',
+          429: 'Too many requests. Wait before checking again.',
+        };
+        const error = new Error(messages[response.status] || 'The service is temporarily unavailable. Check status before trying again.');
+        error.httpStatus = response.status;
+        throw error;
+      }
+      // Reaction deletion succeeds with no JSON body.
+      return response.status === 204 ? null : await response.json();
+    } finally { clearTimeout(timer); }
+  }
+
+  async function authenticate(credential) {
+    const user = await request('/user', 'GET', undefined, credential);
+    if (!user || typeof user.login !== 'string' || !/^[A-Za-z0-9-]+$/.test(user.login) || !Number.isSafeInteger(user.id) || user.id < 1) throw new Error('The credentials could not be verified.');
+    const repository = await request(repo, 'GET', undefined, credential);
+    if (repository.full_name !== 'ifipwg13/meetings' || repository.permissions?.pull === false) {
+      throw new Error('The credentials do not allow access to meeting records.');
+    }
+    return user;
+  }
+
+  function inputError(message) { const error = new Error(message); error.safe = true; return error; }
+  const directoryLabel = 'participant-directory';
+  const directoryMarker = '<!-- wg13-participant-directory ';
+  async function fingerprint(credential) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(credential));
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+  function uuid(value) { return typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value); }
+  function realName(value) { return typeof value === 'string' && !!value.trim() && value === value.trim() && Array.from(value).length <= 200 && !/[\x00-\x1f\x7f-\x9f\u2028\u2029]/.test(value) && !/(?:github_pat_|gh[pousr]_)[A-Za-z0-9_]+/.test(value); }
+  function bot(record) { return record.user?.login === 'github-actions[bot]' && record.user?.type === 'Bot'; }
+  function validateDirectory(data) {
+    if (!data || Object.keys(data).sort().join(',') !== 'members,revision,schema_version' || data.schema_version !== 1 ||
+        !Number.isSafeInteger(data.revision) || data.revision < 0 || !Array.isArray(data.members)) throw inputError('The participant directory needs organizer attention.');
+    const ids = new Set(), prints = new Set();
+    for (const member of data.members) {
+      if (!member || Object.keys(member).sort().join(',') !== 'credentials,id,name' || !uuid(member.id) || ids.has(member.id) ||
+          !realName(member.name) || !Array.isArray(member.credentials) || !member.credentials.length) throw inputError('The participant directory needs organizer attention.');
+      ids.add(member.id);
+      for (const key of member.credentials) {
+        if (!key || Object.keys(key).sort().join(',') !== 'active,fingerprint' || typeof key.active !== 'boolean' ||
+            typeof key.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(key.fingerprint) || prints.has(key.fingerprint)) throw inputError('The participant directory needs organizer attention.');
+        prints.add(key.fingerprint);
+      }
+    }
+    return data;
+  }
+  async function directory(credential, required = true) {
+    let reference;
+    try { reference = await request(repo + '/labels/' + directoryLabel, 'GET', undefined, credential); }
+    catch (error) {
+      if (error.httpStatus === 404) {
+        if (!required) return null;
+        throw inputError('Participant names are not configured. Contact the organizer.');
+      }
+      throw error;
+    }
+    const match = /^wg13-directory:v1:([1-9][0-9]*)$/.exec(reference?.description || '');
+    if (!match) throw inputError('The participant directory needs organizer attention.');
+    const issue = await request(repo + '/issues/' + match[1], 'GET', undefined, credential);
+    const labels = (issue.labels || []).map(label => typeof label === 'string' ? label : label.name);
+    if (issue.number !== Number(match[1]) || !bot(issue) || issue.pull_request || issue.state !== 'closed' || !issue.locked || !labels.includes(directoryLabel)) throw inputError('The protected participant directory could not be verified.');
+    const text = issue.body || '';
+    if (text.length > 60000 || text.split(directoryMarker).length !== 2 || !text.endsWith(' -->')) throw inputError('The participant directory could not be read.');
+    let data;
+    try { data = JSON.parse(text.slice(text.indexOf(directoryMarker) + directoryMarker.length, -4)); }
+    catch { throw inputError('The participant directory could not be read.'); }
+    validateDirectory(data);
+    const names = data.members.map(member => '- ' + markdownName(member.name) + (member.credentials.some(key => key.active) ? '' : ' (inactive)'));
+    const expected = '# Participant directory\n\nManaged through Manage participants.\n\n' + names.join('\n') + '\n\n' + directoryMarker + metadata(data) + ' -->';
+    if (text !== expected) throw inputError('The participant directory has independent edits. Contact the organizer.');
+    return data;
+  }
+  function resolve(data, print, active = true) {
+    for (const member of data.members) {
+      const key = member.credentials.find(credential => credential.fingerprint === print);
+      if (key) {
+        if (active && !key.active) throw inputError('These credentials are disabled. Contact the organizer.');
+        return {member_id: member.id, name: member.name, credential_fingerprint: print, active: key.active};
+      }
+    }
+    throw inputError('These credentials have not been assigned a name. Contact the organizer.');
+  }
+  async function identify(credential, active = true) {
+    const account = await authenticate(credential);
+    const print = await fingerprint(credential);
+    const names = await directory(credential);
+    const person = resolve(names, print, active);
+    return {account, name: person.name, participant: {member_id: person.member_id, credential_fingerprint: print}, active: person.active, names};
+  }
+  async function administrator(credential) {
+    const account = await authenticate(credential);
+    const role = await request(repo + '/collaborators/' + encodeURIComponent(account.login) + '/permission', 'GET', undefined, credential);
+    if (role.permission !== 'admin') throw inputError('This operation requires administrator access.');
+    return account;
+  }
+  function metadata(data) {
+    return JSON.stringify(data).replace(/[\u007f-\uffff]/g, character => '\\u' + character.charCodeAt(0).toString(16).padStart(4, '0'))
+      .replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+  }
+  function markdownName(value) {
+    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/[\\`*_{}\[\]()#+.!|>\-]/g, character => '\\' + character);
+  }
+  const attendanceMarker = '<!-- wg13-participation ';
+  function attendanceBody(ident, person) {
+    const data = {schema_version: 2, meeting_id: ident, member_id: person.member_id, name: person.name,
+      credential_fingerprint: person.credential_fingerprint};
+    return 'Yes — ' + markdownName(person.name) + '\n\n' + attendanceMarker + metadata(data) + ' -->';
+  }
+  function attendanceRecord(comment, ident, owner, names) {
+    if (comment.user?.id !== owner.id || !Number.isSafeInteger(comment.id) || comment.id < 1) return null;
+    const text = comment.body || '';
+    const start = text.indexOf(attendanceMarker);
+    if (start < 0 || !text.endsWith(' -->')) return null;
+    try {
+      const data = JSON.parse(text.slice(start + attendanceMarker.length, -4));
+      if (data.meeting_id !== ident || typeof data.credential_fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(data.credential_fingerprint)) return null;
+      const person = resolve(names, data.credential_fingerprint, false);
+      if (data.schema_version === 1) {
+        if (Object.keys(data).sort().join(',') !== 'credential_fingerprint,meeting_id,schema_version,username' ||
+            typeof data.username !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(data.username) ||
+            text !== 'Yes\n\nParticipant: ' + data.username + '\n\n' + attendanceMarker + JSON.stringify(data) + ' -->') return null;
+      } else if (data.schema_version === 2) {
+        if (Object.keys(data).sort().join(',') !== 'credential_fingerprint,meeting_id,member_id,name,schema_version' ||
+            data.member_id !== person.member_id || !realName(data.name) ||
+            text !== attendanceBody(ident, {...person, name: data.name})) return null;
+      } else return null;
+      return person;
+    } catch { return null; }
+  }
+
+  function calendar(value) {
+    let year, month, day;
+    let match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
+    if (match) [, year, month, day] = match;
+    else {
+      match = /^([0-9]{1,2})-([0-9]{1,2})-([0-9]{2}|[0-9]{4})$/.exec(value);
+      if (!match) throw new Error('Enter a valid date as DD-MM-YYYY or DD-MM-YY.');
+      [, day, month, year] = match;
+      if (year.length === 2) year = '20' + year;
+    }
+    [year, month, day] = [year, month, day].map(Number);
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (year < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1]) throw new Error('Enter a valid calendar date.');
+    return String(year).padStart(4, '0') + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  }
+
+  function clock(value) {
+    const match = /^([0-9]{1,2}):([0-9]{2})$/.exec(value);
+    if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) throw new Error('Enter a time between 00:00 and 23:59, for example 09:00.');
+    return match[1].padStart(2, '0') + ':' + match[2];
+  }
+
+  async function meetings() {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch('index.html', {credentials: 'same-origin', cache: 'no-store', signal: controller.signal});
+      if (!response.ok) throw new Error('Meeting information unavailable.');
+      const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const found = new Map();
+      for (const card of doc.querySelectorAll('article.meeting-card[data-meeting-id]')) {
+        const id = card.dataset.meetingId;
+        if (!/^(?:demo-001|meeting-[1-9][0-9]*)$/.test(id) || !['active', 'archived'].includes(card.dataset.meetingStatus)) continue;
+        const name = card.querySelector('h3')?.textContent.trim();
+        const dates = card.querySelectorAll('.meeting-summary time[datetime]');
+        if (!name || !dates.length || found.has(id)) throw new Error('Meeting information is incomplete.');
+        const date = calendar(dates[0].getAttribute('datetime').slice(0, 10));
+        const endDate = calendar(dates[dates.length - 1].getAttribute('datetime').slice(0, 10));
+        if (date > endDate) throw new Error('Meeting dates are invalid.');
+        const registration = Number(card.dataset.registrationIssue);
+        found.set(id, {name, date, endDate, status: card.dataset.meetingStatus,
+          registration: Number.isSafeInteger(registration) && registration > 0 ? registration : null});
+      }
+      return found;
+    } finally { clearTimeout(timer); }
+  }
+
+  return {repo, request, authenticate, identify, administrator, fingerprint, directory, resolve, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
+    displayDate: value => value.split('-').reverse().join('-')};
+})();
+
+/* Administrator-only Issue creation. Credentials stay in memory/Authorization. */
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const MARKER = '<!-- wg13-meeting-submission:';
+  const STATUS = '<!-- wg13-meeting-status ';
+  let credential = '', account = null, pending = null, busy = false, timer = null, polls = 0;
+  const problem = text => Object.assign(new Error(text), {safe:true});
+  function error(text = '') { $('form-error').textContent = text; $('form-error').hidden = !text; }
+  function safe(failure) { return failure.httpStatus || failure.safe ? failure.message : 'The request could not be confirmed. Check creation status before trying again.'; }
+  function controls() {
+    $('create-meeting').disabled = busy || !!pending || !account;
+    $('check-admin').disabled = busy;
+    $('admin-token').disabled = busy;
+    $('meeting-fields').disabled = busy || !!pending;
+    $('check-status').disabled = busy || !account;
+  }
+  function resetAccess() {
+    credential = ''; account = null;
+    $('admin-identity').textContent = '';
+    controls();
+  }
+  function password() {
+    const value = $('admin-token').value.trim();
+    if (!value || !/^[\x21-\x7e]+$/.test(value)) throw problem('Enter the administrator password without spaces.');
+    return value;
+  }
+  function checked() {
+    if (!account || password() !== credential || (pending && account.login !== pending.login)) throw problem('Check the administrator credentials before continuing.');
+  }
+  function api(path, method = 'GET', body) { checked(); return memberAPI.request(path, method, body, credential); }
+  async function checkAccess() {
+    if (busy) return;
+    error(); resetAccess();
+    let candidate;
+    try { candidate = password(); } catch (failure) { error(safe(failure)); return; }
+    busy = true; controls();
+    try {
+      const verified = await memberAPI.administrator(candidate);
+      if (password() !== candidate) throw problem('The password changed. Check credentials again.');
+      if (pending && verified.login !== pending.login) throw problem('Use the original administrator account to check this meeting.');
+      credential = candidate; account = verified;
+      $('admin-identity').textContent = 'Administrator access confirmed.';
+    } catch (failure) { resetAccess(); error(safe(failure)); }
+    finally { busy = false; controls(); }
+  }
+  function field(id, title, limit, required = true, multiline = false) {
+    const text = $(id).value.trim();
+    if ((required && !text) || Array.from(text).length > limit || /[\x00-\x09\x0b-\x1f\x7f]/.test(text) || (!multiline && text.includes('\n'))) throw problem('Enter ' + title + ' using at most ' + limit + ' characters.');
+    if (text && (text === credential || /(?:github_pat_|gh[pousr]_)[A-Za-z0-9_]+/.test(text))) throw problem('Enter meeting details only; never enter a password in these fields.');
+    return text;
+  }
+  function details() {
+    const name = field('meeting-name', 'the meeting name', 200);
+    if (/^\[meeting[ -][0-9]+\]/.test(name)) throw problem('Enter the meeting name without a meeting number.');
+    let start, end;
+    try {
+      start = memberAPI.calendar($('start-date').value.trim());
+      end = $('end-date').value.trim() ? memberAPI.calendar($('end-date').value.trim()) : start;
+    } catch { throw problem('Enter valid dates as DD-MM-YYYY or DD-MM-YY, leading zeros are optional.'); }
+    if (end < start) throw problem('The end date must be on or after the start date.');
+    const location = field('location', 'the location', 200);
+    const description = field('description', 'the description', 1200, false, true);
+    if (/^### .+$/m.test(description)) throw problem('Use plain paragraphs in the description, without lines starting with ###.');
+    return {name, start, end, location, description};
+  }
+  function matches(issue) {
+    return !issue.pull_request && issue.user?.login === pending.login &&
+      (issue.body || '').split('\n').includes(MARKER + pending.id + ' -->');
+  }
+  async function recover() {
+    for (let page = 1; page <= 5; page++) {
+      const batch = await api(memberAPI.repo + '/issues?state=all&creator=' + encodeURIComponent(pending.login) + '&sort=created&direction=desc&per_page=100&page=' + page);
+      if (!Array.isArray(batch)) throw new Error('Invalid response');
+      const found = batch.filter(matches);
+      if (found.length > 1) throw problem('More than one matching record exists. Review the saved meeting before continuing.');
+      if (found.length === 1) { pending.number = found[0].number; return; }
+      if (batch.length < 100) break;
+    }
+    throw problem('The submitted meeting has not been located. Check creation status again; do not create another copy.');
+  }
+  async function status() {
+    checked();
+    if (!pending.number) await recover();
+    if (!Number.isSafeInteger(pending.number) || pending.number < 1) throw new Error('Invalid reference');
+    const issue = await api(memberAPI.repo + '/issues/' + pending.number);
+    if (!matches(issue)) throw problem('The saved meeting could not be matched to this submission. Contact the organizer.');
+    const states = [];
+    for (let page = 1; page <= 10; page++) {
+      const batch = await api(memberAPI.repo + '/issues/' + pending.number + '/comments?per_page=100&page=' + page);
+      if (!Array.isArray(batch)) throw new Error('Invalid response');
+      for (const comment of batch) {
+        if (!memberAPI.bot(comment) || !(comment.body || '').startsWith(STATUS)) continue;
+        try {
+          const data = JSON.parse(comment.body.slice(STATUS.length, comment.body.indexOf(' -->')));
+          if (data.schema_version === 1 && data.submission_id === pending.id && data.meeting_id === 'meeting-' + pending.number) states.push(data);
+        } catch { /* Unrelated comments never become confirmation or page content. */ }
+      }
+      if (batch.length < 100) break;
+      if (page === 10) throw new Error('Too many comments');
+    }
+    const latest = states.at(-1);
+    if (latest?.state === 'ready' && /^[a-f0-9]{40}$/.test(latest.revision)) {
+      const labels = (issue.labels || []).map(label => typeof label === 'string' ? label : label.name);
+      if (!labels.includes('registration') || !labels.includes('meeting:' + latest.meeting_id)) throw new Error('Registration verification pending');
+      const hidden = labels.includes('hidden');
+      const archived = labels.includes('archived') || issue.state !== 'open' || issue.locked;
+      $('submission-status').textContent = hidden ? 'Meeting synchronized. It is currently hidden.' : archived ? 'Meeting synchronized. It is currently archived.' : 'Meeting ready. Open the meeting or refresh the meetings page.';
+      $('meeting-link').href = 'meetings/' + latest.meeting_id + '/';
+      $('meeting-link').hidden = hidden;
+      pending.complete = true; clearTimeout(timer);
+    } else if (latest?.state === 'needs-attention') {
+      $('submission-status').textContent = 'Meeting preparation needs attention. An administrator can correct the saved meeting issue by editing it. Then check creation status again.';
+      $('meeting-link').hidden = true;
+    } else {
+      $('submission-status').textContent = 'Submitted. Waiting for the meeting to be synchronized.';
+      if (++polls < 12) timer = setTimeout(checkStatus, 5000);
+    }
+  }
+  async function checkStatus() {
+    if (busy || !pending) return;
+    clearTimeout(timer); busy = true; controls(); error();
+    try { await status(); } catch (failure) { error(safe(failure)); }
+    finally { busy = false; controls(); }
+  }
+  $('talk-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (busy || pending || !account) return;
+    error();
+    let data, id;
+    try {
+      checked(); data = details();
+      if (!crypto.randomUUID) throw problem('Open this page over HTTPS to create a meeting.');
+      id = crypto.randomUUID();
+    } catch (failure) { error(safe(failure)); return; }
+    const body = MARKER + id + ' -->\n\n### Start date\n\n' + memberAPI.displayDate(data.start) + '\n\n### End date\n\n' + memberAPI.displayDate(data.end) + '\n\n### Location\n\n' + data.location + '\n\n### Description\n\n' + (data.description || '_No response_') + '\n';
+    pending = {id, login:account.login, number:null};
+    busy = true; controls(); $('check-status').hidden = false;
+    $('submission-status').textContent = 'Submitting meeting…';
+    try {
+      const created = await api(memberAPI.repo + '/issues', 'POST', {title:data.name, body});
+      if (!Number.isSafeInteger(created.number) || created.number < 1) throw new Error('Unconfirmed submission');
+      pending.number = created.number;
+    } catch (failure) {
+      if ([400,401,403,404,410,422,429].includes(failure.httpStatus)) {
+        pending = null; $('check-status').hidden = true;
+        $('submission-status').textContent = 'The meeting was not accepted.';
+      } else $('submission-status').textContent = 'The response was interrupted. Check creation status; do not create another copy.';
+      error(safe(failure));
+    } finally { busy = false; controls(); }
+    if (pending) await checkStatus();
+  });
+  $('check-admin').addEventListener('click', checkAccess);
+  $('check-status').addEventListener('click', checkStatus);
+  $('admin-token').addEventListener('input', resetAccess);
+  window.addEventListener('pagehide', () => { clearTimeout(timer); $('admin-token').value = ''; resetAccess(); });
+  $('form-status').textContent = '';
+  $('admin-fields').disabled = false;
+  controls();
+})();
+
+})();
+</script>
+  <!-- talk-form-script:end -->
+</body>
+</html>

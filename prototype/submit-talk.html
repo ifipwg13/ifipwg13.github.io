@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-6CLxSTTU7iXOAS8ODcpwI3J0vb8pUXmgRgxtnNUp5jQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-93cFIt4UdSNoS03Ljh8XVdLEMi43eBvCGRdihSA4bWg='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Add talk · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -184,7 +184,7 @@ const memberAPI = (() => {
   async function administrator(credential) {
     const account = await authenticate(credential);
     const role = await request(repo + '/collaborators/' + encodeURIComponent(account.login) + '/permission', 'GET', undefined, credential);
-    if (role.permission !== 'admin') throw inputError('Participant management requires administrator access.');
+    if (role.permission !== 'admin') throw inputError('This operation requires administrator access.');
     return account;
   }
   function metadata(data) {
