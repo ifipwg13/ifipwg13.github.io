@@ -1,4 +1,4 @@
-"""Include both member forms' shared helpers, entry scripts, and CSP hashes.
+"""Include member/admin forms' shared helpers, entry scripts, and CSP hashes.
 
 Each source is edited once. Older preview servers deliver complete working forms
 without a second script request. Standard library only.
@@ -36,7 +36,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    for filename, source in (('submit-talk.html', 'talk-submission.js'), ('participation.html', 'participation.js')):
+    for filename, source in (('submit-talk.html', 'talk-submission.js'), ('participation.html', 'participation.js'),
+                             ('manage-participants.html', 'manage-participants.js')):
         path = ROOT / 'prototype' / filename
         page = path.read_text()
         expected = render(page, (ROOT / 'prototype/assets' / source).read_text())
