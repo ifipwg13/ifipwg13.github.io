@@ -277,7 +277,8 @@ class BrowserTests(unittest.TestCase):
                     self.open(server, '/prototype/' + link)
                     self.check_logo(server)
                     self.assertEqual(self.page.locator('.talk-hide').count(), 0)
-                    self.assertEqual(self.page.locator('.meeting-actions .button').count(), 2)
+                    self.assertEqual(self.page.locator('.meeting-actions .button').count(), 3)
+                    self.assertEqual(self.page.locator('.meeting-actions').inner_text().splitlines(), ['Participation', 'Add talk', 'Schedule'])
                     archived = self.page.get_by_label('Registration status', exact=True).count() > 0
                     if archived:
                         self.assertEqual(self.page.get_by_label('Registration status', exact=True).inner_text(),
