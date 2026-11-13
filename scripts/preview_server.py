@@ -50,7 +50,8 @@ def resource_path(url):
         return path.lstrip("/")
     if not path.startswith("/prototype/"):
         raise FileNotFoundError
-    if not path.endswith((".html", ".css")) and path not in {"/prototype/assets/meetings-list.js", "/prototype/assets/talk-submission.js", '/' + LOGO_PATH}:
+    pdf = re.fullmatch(r"/prototype/slides/(?:demo-001|meeting-[1-9][0-9]*)/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}-[a-f0-9]{64}\.pdf", path)
+    if not pdf and not path.endswith((".html", ".css")) and path not in {"/prototype/assets/meetings-list.js", "/prototype/assets/talk-submission.js", '/' + LOGO_PATH}:
         raise FileNotFoundError
     return path.lstrip("/")
 
@@ -236,9 +237,10 @@ def make_server(source, host="0.0.0.0", port=8001):
                 self.send_error(503, "Preview could not update from GitHub. Check the Codespaces terminal and refresh again.")
                 return
             self.send_response(200)
-            mime = ('image/png' if path.endswith('.png') else 'text/javascript' if path.endswith('.js')
+            mime = ('application/pdf' if path.endswith('.pdf') else 'image/png' if path.endswith('.png') else 'text/javascript' if path.endswith('.js')
                     else 'text/css' if path.endswith('.css') else 'text/html')
-            self.send_header("Content-Type", mime + ('' if mime == 'image/png' else "; charset=utf-8"))
+            self.send_header("Content-Type", mime + ('' if mime in {'image/png', 'application/pdf'} else "; charset=utf-8"))
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Length", str(len(content)))
             self.send_header("X-Preview-Revision", revision)
             self.end_headers()

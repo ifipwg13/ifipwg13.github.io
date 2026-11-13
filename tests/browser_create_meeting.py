@@ -153,6 +153,26 @@ class MeetingCreationBrowserTests(FormBrowserFixture):
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
         self.assertTrue(self.page.locator('#create-meeting').is_disabled()); self.assertEqual(self.posts,0)
 
+    def test_end_date_defaults_to_start_preserves_explicit_range_and_blank_means_same_day(self):
+        self.open_creation(); self.checked()
+        self.assertEqual(self.page.locator('label[for="end-date"]').inner_text(),'End date')
+        self.page.locator('#start-date').fill('1-3-28')
+        self.assertEqual(self.page.locator('#end-date').input_value(),'1-3-28')
+        self.page.locator('#start-date').fill('2-3-28')
+        self.assertEqual(self.page.locator('#end-date').input_value(),'2-3-28')
+        self.page.locator('#end-date').fill('5-3-28')
+        self.page.locator('#start-date').fill('3-3-28')
+        self.assertEqual(self.page.locator('#end-date').input_value(),'5-3-28')
+        self.page.locator('#end-date').fill('')
+        self.page.locator('#meeting-name').fill('Same day default')
+        self.page.locator('#location').fill('Fictitious room')
+        self.create(); self.ready()
+        issue = self.api.issues[self.last_number]
+        self.assertIn('### End date\n\n03-03-2028',issue['body'])
+        details = m.load_manifest(self.api,'meeting-' + str(self.last_number),'main')['meeting']
+        self.assertEqual(details['date'],'2028-03-03')
+        self.assertNotIn('end_date',details)
+
     def test_non_admin_roles_and_forced_submit_never_send_an_issue_post(self):
         before = set(self.api.issues)
         for role in ('read','triage','write','maintain'):

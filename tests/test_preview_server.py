@@ -29,6 +29,26 @@ def meeting_page(title, stylesheet="assets/style.css"):
 
 
 class PreviewTests(unittest.TestCase):
+    def test_versioned_pdf_is_binary_with_correct_mime_and_other_pdf_paths_rejected(self):
+        name = '12345678-1234-4567-8123-123456789abc-' + 'a'*64 + '.pdf'
+        relative = 'prototype/slides/meeting-4/' + name
+        path = self.remote / relative
+        path.parent.mkdir(parents=True)
+        content = b'%PDF-1.7\n\xff\x00\x80 binary fixture\n%%EOF'
+        path.write_bytes(content)
+        git(self.remote,'add','prototype'); git(self.remote,'commit','-m','Fictitious binary PDF')
+        server = self.server()
+        for prefix in ('/','/__preview/synchronized/'):
+            status,headers,body = self.request(server,prefix + relative)
+            self.assertEqual(status,200); self.assertEqual(body,content)
+            self.assertEqual(headers['Content-Type'],'application/pdf')
+            self.assertEqual(headers['X-Content-Type-Options'],'nosniff')
+            self.assertEqual(int(headers['Content-Length']),len(content))
+            self.assertEqual(self.request(server,prefix + relative,method='HEAD')[2],b'')
+        for target in ('/prototype/slides/meeting-4/other.pdf','/prototype/other.pdf',
+                       '/prototype/slides/../../README.md','/private.pdf'):
+            self.assertEqual(self.request(server,target)[0],404)
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)

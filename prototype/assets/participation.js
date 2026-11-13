@@ -30,7 +30,7 @@
     owner = null;
     participant = null;
     $('identity').textContent = '';
-    $('participation-status').textContent = 'Check your credentials to see your current participation status.';
+    $('participation-status').textContent = '';
     $('legacy-attendance').hidden = true;
     if (!pending) $('submission-status').textContent = '';
     controls();

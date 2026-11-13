@@ -2,6 +2,13 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
+  let automaticEnd = '';
+  $('start-date').addEventListener('input', () => {
+    if (!$('end-date').value || $('end-date').value === automaticEnd) {
+      $('end-date').value = $('start-date').value;
+      automaticEnd = $('end-date').value;
+    }
+  });
   const MARKER = '<!-- wg13-meeting-submission:';
   const STATUS = '<!-- wg13-meeting-status ';
   let credential = '', account = null, pending = null, busy = false, timer = null, polls = 0;
