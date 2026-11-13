@@ -615,7 +615,7 @@ python3 tests/browser_meetings.py
 
 Each Issue-backed meeting page has **Participation | Add talk | Schedule**.
 **Schedule** opens a form fixed to that meeting, without a meeting selector.
-An administrator checks one password, edits dates/times for several talks, and
+An administrator checks one password, edits dates/times or **Hidden** checkboxes for several talks, and
 clicks **Save changes**. The password is a fine-grained PAT belonging to an Admin
 of `ifipwg13/meetings`, restricted to that repository with **Issues: Read and
 write** and automatic Metadata read access. No Contents scope is needed.
@@ -626,8 +626,14 @@ hash; no extra script route, dependency, backend, or database is required.
 Edit `prototype/assets/schedule.js`, then run
 `python3 scripts/build_talk_form.py` to update `prototype/schedule.html`.
 The matching private workflow checks the real administrator role again, updates
-only changed dates/times, and synchronizes the meeting once. Archived meetings
-permit corrections; hidden talk/meeting states are preserved. Legacy meetings
+only changed dates/times and explicit `talk-hidden` label transitions, and
+synchronizes the meeting once. Check **Hidden** to hide a talk; clear it to restore
+it, then **Save changes**. Already-hidden talks remain in the administrator table.
+Unchanged checkboxes send no visibility instruction, so time-only edits preserve
+visibility. Hide/restore-only saves do not rewrite proposal bodies or require
+valid date/time fields. Other labels and private records are preserved.
+Archived meetings permit corrections and visibility changes; meeting-level hiding
+and the archive admission cutoff take precedence. Legacy meetings
 have no editor. Single-day dates are fixed; old proposals default to the first
 meeting day at 09:00 without an automatic rewrite. Equal slots remain permitted.
 An administrator may edit at most 100 changed talks per request.
@@ -640,6 +646,14 @@ without posting a duplicate. The form confirms synchronization, not Pages
 deployment. GitHub does not provide atomic multi-Issue updates; concurrent edits
 should be avoided while a save is in progress. See the private README for the
 workflow, recovery, and credential details.
+
+When combined with scheduling changes, hiding is verified first; restoration
+waits until the scheduling changes succeed. Progress distinguishes saved
+visibility settings from verified public appearance. Invalid or excluded
+proposals may have their hiding label removed without becoming published; the
+result explains this. Hiding removes current public talk/slide copies while
+retaining private originals; Git history and external caches may retain earlier
+published content. No new permissions, label, secret, or workflow is introduced.
 
 With the sibling private checkout, run:
 
@@ -654,28 +668,31 @@ python3 tests/browser_meetings.py
 
 The browser integration uses fictitious records and credentials through the
 actual preview handler and trusted Python workflow. It checks authorization,
-date/time validation, publication order, hidden/archived records, source
-conflicts, retries, mobile layout, and privacy. Actual PAT scopes and queued
+date/time validation, publication order, hide/restore, hidden/archived records,
+slide removal/restoration, conflicts, partial operations, retries, mobile layout,
+and privacy. Actual PAT scopes and queued
 Actions need the two-account live check after merge; Firefox/autofill is manual.
 
-To review this unmerged feature in an existing Codespace, stop the server in its
+To review this unmerged visibility extension in an existing Codespace, stop the server in its
 terminal with **Ctrl+C**, then run:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/meeting-schedule:refs/remotes/origin/feature/meeting-schedule &&
-schedule_preview_script="$(mktemp /tmp/meeting-schedule-preview.XXXXXX.py)" &&
-git show origin/feature/meeting-schedule:scripts/preview_server.py > "$schedule_preview_script" &&
-python3 "$schedule_preview_script" --repository "$PWD" --branch feature/meeting-schedule --port 8003
+git fetch origin refs/heads/feature/schedule-talk-visibility:refs/remotes/origin/feature/schedule-talk-visibility &&
+visibility_preview_script="$(mktemp /tmp/schedule-visibility-preview.XXXXXX.py)" &&
+git show origin/feature/schedule-talk-visibility:scripts/preview_server.py > "$visibility_preview_script" &&
+python3 "$visibility_preview_script" --repository "$PWD" --branch feature/schedule-talk-visibility --port 8003
 ```
 
 In Codespaces **Ports**, open port **8003** in the browser. Open **Meetings**, a
 non-legacy meeting, then **Schedule**. This is a review snapshot. Do not save a
-real scheduling request until the private workflow PR is merged.
+real visibility request until the private handler PR is merged. This review
+branch does not receive Issue updates; use the synchronized preview for full
+functional testing after both feature PRs merge.
 
 For live integration, merge the private PR first, then this public feature into
-`prototype/meeting-management`. Run the private **Prepare meeting** workflow on
-`main` once to regenerate existing buttons. Restart the preview with the default
+`prototype/meeting-management`. Existing Schedule links keep working; no new
+secret or manual workflow setup run is needed for this extension. Restart the preview with the default
 `prototype/meeting-management` branch so it follows synchronization. Keep the
 publication PR to public `main` unmerged until separately approved. Verify with
 an Admin Issues-only PAT (save succeeds), and a Read-account PAT (rejected); use

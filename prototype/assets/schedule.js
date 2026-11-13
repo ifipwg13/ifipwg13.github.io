@@ -24,12 +24,15 @@
   function controls() {
     $('admin-token').readOnly = busy;
     $('check-admin').disabled = busy || !meeting;
-    $('save-schedule').disabled = busy || !account || !!pending || !rows.some(row => row.editable);
+    $('save-schedule').disabled = busy || !account || !!pending || !rows.length;
     $('reload-talks').hidden = !account;
     $('reload-talks').disabled = busy || !!pending && !pending.complete;
     $('check-status').hidden = !pending;
     $('check-status').disabled = busy || !account;
-    for (const row of rows) for (const field of [row.dateField, row.timeField]) field.disabled = busy || !account || !!pending || !row.editable;
+    for (const row of rows) {
+      for (const field of [row.dateField, row.timeField]) field.disabled = busy || !account || !!pending || !row.editable;
+      row.hiddenField.disabled = busy || !account || !!pending;
+    }
   }
   function resetAccess() { credential = ''; account = null; clearTimeout(timer); $('admin-identity').textContent = ''; controls(); }
   function headings(body) {
@@ -97,7 +100,7 @@
     if (date < meeting.date || date > meeting.endDate) correction = true;
     const originalDate = date;
     if (meeting.date === meeting.endDate) date = meeting.date;
-    return {number:issue.number, body, title, authors, date, time, originalDate, originalTime:time, editable,
+    return {number:issue.number, body, title, authors, date, time, originalDate, originalTime:time, editable, hidden:names.includes('talk-hidden'),
       status:[names.includes('talk-hidden') ? 'Hidden' : '', issue.state === 'closed' ? 'Closed' : '',
         !editable ? 'Needs manual correction' : correction ? 'Needs schedule correction' : ''].filter(Boolean).join('; ')};
   }
@@ -117,6 +120,13 @@
         row[kind + 'Text'] = input.value;
         row[kind + 'Field'] = input; td.append(input); tr.append(td);
       }
+      const visibility = document.createElement('td'), checkbox = document.createElement('input');
+      checkbox.type = 'checkbox'; checkbox.checked = row.hidden;
+      checkbox.setAttribute('aria-label', 'Hidden for ' + row.title);
+      checkbox.addEventListener('change', () => {
+        row.statusField.textContent = checkbox.checked === row.hidden ? row.status : checkbox.checked ? 'Will hide on save' : 'Will restore on save';
+      });
+      row.hiddenField = checkbox; visibility.append(checkbox); tr.append(visibility);
       const status = document.createElement('td'); status.className = 'schedule-result'; status.textContent = row.status;
       row.statusField = status; tr.append(status); $('schedule-rows').append(tr);
     }
@@ -186,11 +196,17 @@
     const messages = {saved:'Saved', applying:'Saving…', pending:'Waiting', conflict:'Changed elsewhere — reload', unavailable:'Unavailable or moved', invalid:'Needs manual correction', failed:'Not confirmed — reload'};
     for (const result of latest?.results || []) {
       const row = rows.find(row => row.number === result.number);
-      if (row) row.statusField.textContent = messages[result.state] || 'Not confirmed';
+      if (!row) continue;
+      const requested = pending.changes.find(item => item.number === result.number), parts = [];
+      if (result.schedule_state) parts.push(('hidden' in requested ? 'Schedule: ' : '') + (messages[result.schedule_state] || 'Not confirmed'));
+      if (result.visibility_state && result.publication !== 'changed-elsewhere') parts.push(result.visibility_state === 'saved' ? requested.hidden ? 'Hidden' : 'Restored' : 'Visibility: ' + (messages[result.visibility_state] || 'Not confirmed'));
+      if (result.publication === 'not-published') parts.push(requested.hidden ? 'Hiding not confirmed' : 'Not published — check proposal content and meeting status');
+      if (result.publication === 'changed-elsewhere') parts.push('Visibility changed elsewhere — reload');
+      row.statusField.textContent = parts.length ? parts.join('; ') : messages[result.state] || 'Not confirmed';
     }
     if (['synchronized', 'partial'].includes(latest?.state) && /^[a-f0-9]{40}$/.test(latest.revision)) {
       pending.complete = true; clearTimeout(timer);
-      $('submission-status').textContent = latest.state === 'synchronized' ? 'Schedule synchronized. Return to the meeting to see the updated programme.' : 'Some changes were not saved. Saved changes are synchronized. Reload talks to review and retry the remaining changes.';
+      $('submission-status').textContent = latest.state === 'synchronized' ? 'Schedule synchronized. Return to the meeting to see the updated programme.' : 'Some changes need attention. Review the talk results, then reload talks before retrying.';
     } else if (latest?.state === 'needs-attention') {
       pending.complete = true; clearTimeout(timer);
       $('submission-status').textContent = 'Scheduling needs attention. Some changes may already be saved; synchronization is not confirmed. Reload talks to review the current schedule.';
@@ -210,13 +226,19 @@
     error(); busy = true; controls();
     try {
       checked(); const changes = [];
-      for (const row of rows.filter(row => row.editable)) {
-        if (row.dateField.value.trim() === row.dateText && row.timeField.value.trim() === row.timeText && row.date === row.originalDate) continue;
-        let date, time;
-        try { date = memberAPI.calendar(row.dateField.value.trim()); time = memberAPI.clock(row.timeField.value.trim()); }
-        catch { throw problem('Enter valid dates and HH:MM times for the talks.'); }
-        if (date < meeting.date || date > meeting.endDate) throw problem('Choose talk dates within the meeting dates.');
-        if (date !== row.originalDate || time !== row.originalTime) changes.push({number:row.number, body_hash:row.bodyHash, date, time});
+      for (const row of rows) {
+        const change = {number:row.number, body_hash:row.bodyHash};
+        const visibilityChanged = row.hiddenField.checked !== row.hidden;
+        if (visibilityChanged) Object.assign(change, {hidden:row.hiddenField.checked, expected_hidden:row.hidden});
+        const slotChanged = row.dateField.value.trim() !== row.dateText || row.timeField.value.trim() !== row.timeText;
+        if (row.editable && (slotChanged || !visibilityChanged && row.date !== row.originalDate)) {
+          let date, time;
+          try { date = memberAPI.calendar(row.dateField.value.trim()); time = memberAPI.clock(row.timeField.value.trim()); }
+          catch { throw problem('Enter valid dates and HH:MM times for the talks.'); }
+          if (date < meeting.date || date > meeting.endDate) throw problem('Choose talk dates within the meeting dates.');
+          if (date !== row.originalDate || time !== row.originalTime) Object.assign(change, {date, time});
+        }
+        if ('date' in change || 'hidden' in change) changes.push(change);
       }
       if (!changes.length) { $('submission-status').textContent = 'No scheduling changes to save.'; return; }
       if (changes.length > 100) throw problem('Save at most 100 changed talks at a time.');
