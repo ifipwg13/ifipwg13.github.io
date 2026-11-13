@@ -116,6 +116,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
 
     def ready(self): self.page.wait_for_function("() => !document.getElementById('save-schedule').disabled")
     def field(self, number, column): return self.page.locator(f'tr[data-talk-number="{number}"] td:nth-child({column}) input')
+    def hidden_field(self, number): return self.page.locator(f'tr[data-talk-number="{number}"] input[type="checkbox"]')
     def save(self): self.page.get_by_role('button',name='Save changes',exact=True).click()
     def done(self): self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Schedule synchronized.')")
 
@@ -128,6 +129,8 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.page.get_by_role('link',name='Schedule',exact=True).click()
         self.page.locator('#admin-token').fill(ADMIN)
         self.page.get_by_role('button',name='Check credentials',exact=True).click(); self.ready()
+        self.assertEqual(self.page.get_by_role('columnheader',name='Hidden',exact=True).evaluate(
+            'node=>{const range=document.createRange();range.selectNodeContents(node);return range.getClientRects().length;}'),1)
         self.assertEqual(self.page.locator('select').count(),0)
         self.assertEqual(self.page.locator('#schedule-rows tr').count(),2)
         before = copy.deepcopy(self.api.issues[12])
@@ -266,6 +269,140 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
         self.assertEqual(self.page.locator('#schedule-rows tr').count(),2)
         self.assertNotIn('PRIVATE DISCUSSION CANARY',self.page.content())
+
+    def test_hide_restore_without_password_reentry_and_private_record_preserved(self):
+        original = copy.deepcopy(self.api.issues[7])
+        self.open_editor(); self.ready()
+        self.assertFalse(self.hidden_field(7).is_checked())
+        self.hidden_field(7).check()
+        self.assertEqual(self.page.locator('tr[data-talk-number="7"] .schedule-result').inner_text(),'Will hide on save')
+        self.save(); self.done()
+        self.assertIn(m.TALK_HIDDEN,m.label_names(self.api.issues[7]))
+        self.assertEqual(self.page.locator('#schedule-rows tr').count(),2)
+        public = self.page.request.get(self.base+'/prototype/meetings/meeting-4/').text()
+        self.assertNotIn('data-talk-number="7"',public); self.assertIn('data-talk-number="8"',public)
+        self.page.get_by_role('button',name='Reload talks',exact=True).click(); self.ready()
+        self.assertTrue(self.hidden_field(7).is_checked())
+        self.hidden_field(7).uncheck(); self.save(); self.done()
+        self.assertEqual(self.api.issues[7],original)
+        self.assertEqual(self.page.locator('#admin-token').input_value(),ADMIN)
+        self.assertEqual(self.posts,2)
+        public = self.page.request.get(self.base+'/prototype/meetings/meeting-4/').text()
+        self.assertIn('data-talk-number="7"',public)
+        self.assertFalse(any('/labels' in request['url'] or request['method'] in {'PATCH','DELETE'} for request in self.requests))
+        self.assertFalse(self.errors); self.assertFalse(self.workflow_errors)
+
+    def test_mixed_visibility_and_scheduling_changes_and_time_only_keeps_talk_hidden(self):
+        self.open_editor(); self.ready(); self.hidden_field(7).check(); self.field(8,3).fill('10:00')
+        self.save(); self.done()
+        rows = m.scheduler.parse(self.last_event['comment']['body'],m.web)['changes']
+        self.assertNotIn('date',rows[0]); self.assertNotIn('hidden',rows[1])
+        self.page.get_by_role('button',name='Reload talks',exact=True).click(); self.ready()
+        self.field(7,3).fill('11:00'); self.save(); self.done()
+        row = m.scheduler.parse(self.last_event['comment']['body'],m.web)['changes'][0]
+        self.assertNotIn('hidden',row)
+        self.assertIn(m.TALK_HIDDEN,m.label_names(self.api.issues[7]))
+        self.page.get_by_role('button',name='Reload talks',exact=True).click(); self.ready()
+        self.hidden_field(7).uncheck(); self.save(); self.done()
+        self.page.get_by_role('link',name='Return to meeting',exact=True).click()
+        self.assertEqual(self.page.locator('li[data-talk-number]').evaluate_all('(items)=>items.map(item=>item.dataset.talkNumber)'),['8','7'])
+        self.assertIn('11:00',self.page.locator('li[data-talk-number="7"]').inner_text())
+
+    def test_checkbox_cancel_before_save_is_not_a_visibility_request(self):
+        self.open_editor(); self.ready(); self.hidden_field(7).check(); self.hidden_field(7).uncheck(); self.save()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'No scheduling changes to save.'")
+        self.assertEqual(self.posts,0)
+        self.assertNotIn(m.TALK_HIDDEN,m.label_names(self.api.issues[7]))
+
+    def test_hide_only_malformed_talk_is_allowed_and_restore_does_not_claim_publication(self):
+        self.api.issues[7]['body'] = m.web.MARKER+'\nMalformed proposal'
+        original = self.api.issues[7]['body']
+        self.open_editor(); self.ready()
+        self.assertTrue(self.field(7,3).is_disabled()); self.assertTrue(self.hidden_field(7).is_enabled())
+        self.hidden_field(7).check(); self.save(); self.done()
+        self.assertEqual(self.api.issues[7]['body'],original)
+        self.page.get_by_role('button',name='Reload talks',exact=True).click(); self.ready()
+        self.hidden_field(7).uncheck(); self.save()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Some changes need attention.')")
+        self.assertIn('Restored; Not published',self.page.locator('tr[data-talk-number="7"] .schedule-result').inner_text())
+        self.assertNotIn('Schedule synchronized',self.page.locator('#submission-status').inner_text())
+        self.assertNotIn('data-talk-number="7"',self.api.file(m.PUBLIC,'prototype/meetings/meeting-4/index.html',m.PREVIEW_BRANCH))
+
+    def test_archived_visibility_changes_keep_registration_closed(self):
+        self.api.issues[7]['labels'].append(m.TALK_HIDDEN)
+        m.manage_meeting(self.api,{'number':4,'id':'meeting-4','action':'archive'}); self.flush_pages()
+        registration = copy.deepcopy(self.api.issues[4])
+        self.open_editor(); self.ready()
+        self.assertTrue(self.hidden_field(7).is_checked()); self.assertFalse(self.hidden_field(8).is_checked())
+        self.hidden_field(7).uncheck(); self.hidden_field(8).check(); self.save(); self.done()
+        self.assertEqual(self.api.issues[4],registration)
+        public = self.api.file(m.PUBLIC,'prototype/meetings/meeting-4/index.html',m.PREVIEW_BRANCH)
+        self.assertIn('data-talk-number="7"',public); self.assertNotIn('data-talk-number="8"',public)
+        self.assertNotIn('submit-talk.html?',public)
+
+    def test_concurrent_visibility_change_is_reported_without_overwriting(self):
+        self.mode='pending'; self.open_editor(); self.ready(); self.hidden_field(7).check(); self.save()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Request submitted.')")
+        self.api.issues[7]['labels'].append(m.TALK_HIDDEN)  # Another administrator acted first.
+        self.api.calls.clear(); self.process_batch()
+        self.page.get_by_role('button',name='Check progress',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Some changes')")
+        self.assertIn('Visibility: Changed elsewhere',self.page.locator('tr[data-talk-number="7"] .schedule-result').inner_text())
+        self.assertFalse(any(method in {'POST','DELETE'} and '/issues/7/labels' in path for method,path,_ in self.api.calls))
+
+    def test_failed_scheduling_correction_keeps_restoration_hidden_until_retry(self):
+        self.api.issues[7]['labels'].append(m.TALK_HIDDEN)
+        self.open_editor(); self.ready(); self.hidden_field(7).uncheck(); self.field(7,3).fill('14:00')
+        real_api = self.api.api
+        def failed(method,path,data=None,missing_ok=False):
+            if method == 'PATCH' and path.endswith('/issues/7'): raise m.SetupError('Fictitious write failure')
+            return real_api(method,path,data,missing_ok)
+        with patch.object(self.api,'api',side_effect=failed):
+            self.save(); self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Some changes')")
+        self.assertIn(m.TALK_HIDDEN,m.label_names(self.api.issues[7]))
+        self.assertNotIn('Restored',self.page.locator('tr[data-talk-number="7"] .schedule-result').inner_text())
+        self.page.get_by_role('button',name='Reload talks',exact=True).click(); self.ready()
+        self.hidden_field(7).uncheck(); self.field(7,3).fill('14:00'); self.save(); self.done()
+        self.assertNotIn(m.TALK_HIDDEN,m.label_names(self.api.issues[7]))
+
+    def test_keyboard_mobile_and_lost_request_response_recover_without_duplicate(self):
+        self.lost=True; self.open_editor(); self.ready()
+        self.page.set_viewport_size({'width':390,'height':844})
+        self.hidden_field(7).focus(); self.page.keyboard.press('Space'); self.save(); self.done()
+        self.assertEqual(self.posts,1)
+        self.assertIn(m.TALK_HIDDEN,m.label_names(self.api.issues[7]))
+        self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
+        self.assertEqual(self.page.evaluate('Object.keys(localStorage).length+Object.keys(sessionStorage).length'),0)
+        self.page.get_by_role('button',name='Reload talks',exact=True).click(); self.ready()
+        self.hidden_field(7).uncheck(); self.save(); self.done()
+        self.assertEqual(self.posts,2)
+
+    def test_slides_disappear_and_return_with_visibility(self):
+        from test_talk_slides import stage, example_pdf
+        reference = stage(self.api)
+        self.api.issues[7] = proposal(slides=reference,date='12-2-27',time='09:00')
+        self.api.issues[7]['labels'] = ['talk','meeting:meeting-4',m.web.FORMAT_LABEL]
+        m.sync_preview(self.api,maintain_private=False); self.flush_pages()
+        slide=next(talk['slides']['path'] for talk in m.public_talks(self.api,'meeting-4') if talk['number']==7)
+        self.open_editor(); self.ready(); self.hidden_field(7).check(); self.save(); self.done()
+        self.assertEqual(self.page.request.get(self.base+'/'+slide).status,404)
+        self.page.get_by_role('button',name='Reload talks',exact=True).click(); self.ready()
+        self.hidden_field(7).uncheck(); self.save(); self.done()
+        response=self.page.request.get(self.base+'/'+slide)
+        self.assertEqual(response.status,200); self.assertEqual(response.body(),example_pdf())
+
+    def test_retry_after_later_admin_restore_reports_current_visibility_without_rehiding(self):
+        self.mode='sync-failure'; self.open_editor(); self.ready(); self.hidden_field(7).check(); self.save()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Scheduling needs attention.')")
+        self.assertIn(m.TALK_HIDDEN,m.label_names(self.api.issues[7]))
+        self.api.issues[7]['labels'].remove(m.TALK_HIDDEN)
+        self.mode='automatic'; self.process_batch()
+        self.page.get_by_role('button',name='Check progress',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Some changes')")
+        self.assertEqual(self.page.locator('tr[data-talk-number="7"] .schedule-result').inner_text(),'Visibility changed elsewhere — reload')
+        self.assertNotIn(m.TALK_HIDDEN,m.label_names(self.api.issues[7]))
+        self.page.get_by_role('button',name='Reload talks',exact=True).click(); self.ready()
+        self.assertFalse(self.hidden_field(7).is_checked())
 
 
 if __name__ == '__main__': unittest.main()
