@@ -29,6 +29,29 @@ def meeting_page(title, stylesheet="assets/style.css"):
 
 
 class PreviewTests(unittest.TestCase):
+    def test_legacy_slide_formats_have_restricted_paths_correct_mime_and_binary_bytes(self):
+        base='prototype/slides/legacy-20200301-123456789abc/talk-2-'+'b'*64
+        content=b'\x00\xff\x80Preserve binary slide bytes'
+        for ext in ('pdf','ppt','pptx','ppsx'):
+            path=self.remote/(base+'.'+ext)
+            path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(content)
+        git(self.remote,'add','prototype');git(self.remote,'commit','-m','Original-format legacy slide fixtures')
+        server=self.server()
+        for prefix in ('/','/__preview/synchronized/'):
+            for ext in ('pdf','ppt','pptx','ppsx'):
+                status,headers,body=self.request(server,prefix+base+'.'+ext)
+                self.assertEqual(status,200);self.assertEqual(body,content)
+                self.assertEqual(headers['Content-Type'],p.SLIDE_MIME[ext])
+                self.assertEqual(headers['X-Content-Type-Options'],'nosniff')
+                if ext!='pdf':self.assertTrue(headers['Content-Disposition'].startswith('attachment;'))
+                self.assertEqual(self.request(server,prefix+base+'.'+ext,method='HEAD')[2],b'')
+        for path in (base+'.html',base+'.exe',base.replace('talk-2-','other-2-')+'.pdf',
+                     base.replace('slides/legacy-','slides/.legacy-')+'.pdf'):
+            if path.endswith('.html'):
+                # HTML remains subject to the existing file lookup; no new broad binary rule.
+                self.assertEqual(self.request(server,'/'+path)[0],404)
+            else:self.assertEqual(self.request(server,'/'+path)[0],404)
+
     def test_versioned_pdf_is_binary_with_correct_mime_and_other_pdf_paths_rejected(self):
         name = '12345678-1234-4567-8123-123456789abc-' + 'a'*64 + '.pdf'
         relative = 'prototype/slides/meeting-4/' + name

@@ -11,6 +11,34 @@ ROOT = Path(__file__).resolve().parents[1]
 START, END = '<!-- legacy-meetings:start -->', '<!-- legacy-meetings:end -->'
 GENERATED = '<!-- generated-legacy-meeting -->'
 SCRIPT = '<script src="assets/meetings-list.js" defer></script>'
+MAX_SLIDE_BYTES = 10_000_000
+SLIDE_TYPES = {'pdf': 'application/pdf', 'ppt': 'application/vnd.ms-powerpoint',
+               'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+               'ppsx': 'application/vnd.openxmlformats-officedocument.presentationml.slideshow'}
+SLIDE_PATH = re.compile(r'slides/(legacy-[0-9]{8}-[a-f0-9]{12})/talk-([1-9][0-9]*)-([a-f0-9]{64})\.(pdf|ppt|pptx|ppsx)')
+
+
+def slide_path(record, talk_number, path):
+    match = SLIDE_PATH.fullmatch(path) if isinstance(path, str) else None
+    if not match or match[1] != meeting_key(record) or int(match[2]) != talk_number:
+        raise ValueError('A slide file must belong to its own legacy meeting and talk.')
+    return match
+
+
+def check_slide_files(records, root):
+    """Verify bytes as well as references before generating any page."""
+    for record in records:
+        for number, talk in enumerate(record['talks'], 1):
+            if 'slides' not in talk:
+                continue
+            match = slide_path(record, number, talk['slides'])
+            path = root / 'prototype' / talk['slides']
+            if (path.is_symlink() or not path.is_file()
+                    or not path.resolve().is_relative_to(root.resolve() / 'prototype/slides')
+                    or not 0 < path.stat().st_size <= MAX_SLIDE_BYTES):
+                raise ValueError('A referenced legacy slide file is missing, unsafe, empty, or larger than 10 MB.')
+            if hashlib.sha256(path.read_bytes()).hexdigest() != match[3]:
+                raise ValueError('A legacy slide file differs from its recorded checksum.')
 
 
 def validate(records):
@@ -32,13 +60,16 @@ def validate(records):
             raise ValueError('The excluded meeting must not be imported.')
         if not isinstance(record['talks'], list):
             raise ValueError('Talks must be a list.')
-        for talk in record['talks']:
-            if not isinstance(talk, dict) or set(talk) != {'title', 'authors', 'abstract'}:
-                raise ValueError('Only talk titles, authors, and abstracts are allowed.')
+        for number, talk in enumerate(record['talks'], 1):
+            if (not isinstance(talk, dict) or not {'title', 'authors', 'abstract'}.issubset(talk)
+                    or set(talk) - {'title', 'authors', 'abstract', 'slides'}):
+                raise ValueError('Only talk titles, authors, abstracts, and optional local slides are allowed.')
             if (not isinstance(talk['title'], str) or not talk['title'].strip()
                     or not isinstance(talk['authors'], str) or not talk['authors'].strip()
                     or not isinstance(talk['abstract'], str)):
                 raise ValueError('Invalid talk content.')
+            if 'slides' in talk:
+                slide_path(record, number, talk['slides'])
         key = meeting_key(record)
         if key in identifiers:
             raise ValueError('Duplicate historical meeting.')
@@ -60,13 +91,18 @@ def schedule(record):
     return result
 
 
-def talks_html(record):
+def talks_html(record, slides_prefix=''):
     if not record['talks']:
         return ''
     rows = []
     for number, talk in enumerate(record['talks'], 1):
         ident = meeting_key(record) + '-talk-' + str(number)
-        content = ('<span class="talk-title">' + html.escape(talk['title']) + '</span> by '
+        title = '<span class="talk-title">' + html.escape(talk['title']) + '</span>'
+        if 'slides' in talk:
+            slide_path(record, number, talk['slides'])
+            href = html.escape(slides_prefix + talk['slides'], quote=True)
+            title = '<a class="talk-title" href="' + href + '">' + html.escape(talk['title']) + '</a>'
+        content = (title + ' by '
                    '<span class="talk-authors">' + html.escape(talk['authors']) + '</span>')
         if talk['abstract']:
             escaped = html.escape(talk['abstract'])
@@ -94,7 +130,7 @@ def card(record):
 
 
 def page(record):
-    talks = talks_html(record)
+    talks = talks_html(record, slides_prefix='../../')
     section = '<section aria-labelledby="talks-heading"><h2 id="talks-heading">Talks</h2>' + talks + '</section>' if talks else ''
     result = f'''<!doctype html>
 {GENERATED}
@@ -146,6 +182,7 @@ def update_index(source, records):
 
 def generate(root=ROOT, check=False):
     records = validate(json.loads((root / 'prototype/data/legacy-meetings.json').read_text()))
+    check_slide_files(records, root)
     index = root / 'prototype/index.html'
     outputs = {index: update_index(index.read_text(), records)}
     directory = root / 'prototype/legacy-meetings'

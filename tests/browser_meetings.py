@@ -4,6 +4,7 @@ Uses an already installed Playwright/Chromium; no production dependencies,
 GitHub credentials, external requests, or private repository writes.
 """
 import functools
+import hashlib
 import http.server
 import importlib.util
 import json
@@ -50,6 +51,50 @@ class QuietFiles(http.server.SimpleHTTPRequestHandler):
 
 @unittest.skipUnless(sync_playwright and shutil.which('chromium'), 'Optional installed Playwright/Chromium required')
 class BrowserTests(unittest.TestCase):
+    def test_every_imported_legacy_slide_link_serves_the_original_file_in_all_preview_modes(self):
+        for server,prefix in ((self.static,''),(self.preview,''),(self.review,'/__preview/synchronized')):
+            self.open(server,prefix+'/prototype/')
+            cards={card.locator('h3').inner_text():card for card in self.page.locator('.legacy-meeting-card').all()}
+            for record in self.records:
+                for number,talk in enumerate(record['talks'],1):
+                    if 'slides' not in talk:continue
+                    row=cards[record['name']].locator(f'li[id$="-talk-{number}"]')
+                    title=row.locator('a.talk-title')
+                    self.assertEqual(title.count(),1)
+                    self.assertEqual(title.text_content(),talk['title'])
+                    self.assertEqual(row.locator('.talk-authors').text_content(),talk['authors'])
+                    self.assertEqual(title.get_attribute('href'),talk['slides'])
+                    url=title.evaluate('node => node.href')
+                    response=self.page.request.get(url)
+                    self.assertEqual(response.status,200,url)
+                    content=response.body()
+                    self.assertEqual(content,(ROOT/'prototype'/talk['slides']).read_bytes())
+                    self.assertTrue(0<len(content)<=10_000_000)
+                    self.assertIn(hashlib.sha256(content).hexdigest(),talk['slides'])
+                    ext=talk['slides'].rsplit('.',1)[-1]
+                    self.assertEqual(response.headers['content-type'],p.SLIDE_MIME[ext])
+                    if server is not self.static and ext!='pdf':
+                        self.assertTrue(response.headers['content-disposition'].startswith('attachment;'))
+            self.no_overflow()
+        self.assertFalse(self.external);self.assertFalse(self.errors)
+
+    def test_original_powerpoint_title_downloads_without_changing_abstract_behavior(self):
+        record=next(r for r in self.records if any(t.get('slides','').endswith('.pptx') for t in r['talks']))
+        number,talk=next((n,t) for n,t in enumerate(record['talks'],1) if t.get('slides','').endswith('.pptx'))
+        self.open(self.preview)
+        card=next(c for c in self.page.locator('.legacy-meeting-card').all() if c.locator('h3').inner_text()==record['name'])
+        card.locator('details.talks-overview > summary').click()
+        row=card.locator(f'li[id$="-talk-{number}"]')
+        if talk['abstract']:self.assertIsNone(row.locator('.talk-abstract').get_attribute('open'))
+        with self.page.expect_download() as pending:
+            row.locator('a.talk-title').click()
+        download=pending.value
+        self.assertIsNone(download.failure())
+        self.assertEqual(Path(download.path()).read_bytes(),(ROOT/'prototype'/talk['slides']).read_bytes())
+        if talk['abstract']:
+            row.locator('.talk-abstract > summary').click()
+            self.assertEqual(row.locator('.abstract-text').text_content(),talk['abstract'])
+
     @classmethod
     def setUpClass(cls):
         cls.records = json.loads((ROOT / 'prototype/data/legacy-meetings.json').read_text())
@@ -249,8 +294,12 @@ class BrowserTests(unittest.TestCase):
                     for row in rows:
                         self.assertEqual(row.locator('span.help').count(), 0)
                         title = row.locator('.talk-title')
-                        self.assertEqual(row.locator('a').count(), 0)
-                        self.assertIsNone(title.get_attribute('href'))
+                        href=title.get_attribute('href')
+                        if href:
+                            self.assertEqual(row.locator('a').count(),1)
+                            self.assertRegex(href,r'^../../slides/(?:demo-001|meeting-[1-9][0-9]*)/[a-f0-9-]+\.pdf$')
+                            self.assertTrue((ROOT/'prototype'/href.removeprefix('../../')).is_file())
+                        else:self.assertEqual(row.locator('a').count(),0)
                         self.assertIsNone(title.get_attribute('target'))
                         self.assertIn('underline', row.locator('.talk-authors').evaluate('node => getComputedStyle(node).textDecorationLine'))
                     disclosures = [row for row in rows if row.locator('.talk-abstract').count()]
@@ -541,7 +590,8 @@ class BrowserTests(unittest.TestCase):
                 for row, talk in zip(rows.all(), record['talks']):
                     self.assertEqual(row.locator('.talk-title').text_content(), talk['title'])
                     self.assertEqual(row.locator('.talk-authors').text_content(), talk['authors'])
-                    self.assertEqual(row.locator('a').count(), 0)
+                    self.assertEqual(row.locator('a').count(),int('slides' in talk))
+                    if 'slides' in talk:self.assertEqual(row.locator('.talk-title').get_attribute('href'),'../../'+talk['slides'])
                     for name in ['.talk-title', '.talk-authors']:
                         self.assertIn('underline', row.locator(name).evaluate('node => getComputedStyle(node).textDecorationLine'))
                     disclosure = row.locator('.talk-abstract')
