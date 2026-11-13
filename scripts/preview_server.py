@@ -22,6 +22,10 @@ REF = "refs/remotes/origin/" + BRANCH
 REPOSITORY = "ifipwg13/ifipwg13.github.io"
 LIST_SCRIPT = '<script src="assets/meetings-list.js" defer></script>'
 LOGO_PATH = 'prototype/assets/ifip-logo.png'
+LEGACY_SLIDE = re.compile(r'/prototype/slides/legacy-[0-9]{8}-[a-f0-9]{12}/talk-[1-9][0-9]*-[a-f0-9]{64}\.(pdf|ppt|pptx|ppsx)')
+SLIDE_MIME = {'pdf': 'application/pdf', 'ppt': 'application/vnd.ms-powerpoint',
+              'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+              'ppsx': 'application/vnd.openxmlformats-officedocument.presentationml.slideshow'}
 LOGO_IMAGE = re.compile(r'''(<img\b[^>]*\bsrc=["'])(?:(?:\.\./){1,2}|prototype/)?assets/ifip-logo\.png(["'])''', re.IGNORECASE)
 SYNCHRONIZED_VIEW = '/__preview/synchronized/'
 
@@ -51,7 +55,7 @@ def resource_path(url):
     if not path.startswith("/prototype/"):
         raise FileNotFoundError
     pdf = re.fullmatch(r"/prototype/slides/(?:demo-001|meeting-[1-9][0-9]*)/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}-[a-f0-9]{64}\.pdf", path)
-    if not pdf and not path.endswith((".html", ".css")) and path not in {"/prototype/assets/meetings-list.js", "/prototype/assets/talk-submission.js", '/' + LOGO_PATH}:
+    if not pdf and not LEGACY_SLIDE.fullmatch(path) and not path.endswith((".html", ".css")) and path not in {"/prototype/assets/meetings-list.js", "/prototype/assets/talk-submission.js", '/' + LOGO_PATH}:
         raise FileNotFoundError
     return path.lstrip("/")
 
@@ -237,9 +241,12 @@ def make_server(source, host="0.0.0.0", port=8001):
                 self.send_error(503, "Preview could not update from GitHub. Check the Codespaces terminal and refresh again.")
                 return
             self.send_response(200)
-            mime = ('application/pdf' if path.endswith('.pdf') else 'image/png' if path.endswith('.png') else 'text/javascript' if path.endswith('.js')
+            extension = path.rsplit('.', 1)[-1]
+            mime = (SLIDE_MIME[extension] if extension in SLIDE_MIME else 'image/png' if path.endswith('.png') else 'text/javascript' if path.endswith('.js')
                     else 'text/css' if path.endswith('.css') else 'text/html')
-            self.send_header("Content-Type", mime + ('' if mime in {'image/png', 'application/pdf'} else "; charset=utf-8"))
+            self.send_header("Content-Type", mime + ('' if extension in SLIDE_MIME or mime == 'image/png' else "; charset=utf-8"))
+            if extension in {'ppt', 'pptx', 'ppsx'}:
+                self.send_header("Content-Disposition", 'attachment; filename="' + path.rsplit('/', 1)[-1] + '"')
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Length", str(len(content)))
             self.send_header("X-Preview-Revision", revision)

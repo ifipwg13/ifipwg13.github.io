@@ -195,7 +195,8 @@ opens its detail page. Cards have no View meeting, Archive, or Hide buttons.
 ### Historical meeting content
 
 `prototype/data/legacy-meetings.json` contains only meeting names, start/end dates,
-locations, talk titles, authors, and abstracts. It has no private-repository records or
+locations, talk titles, authors, abstracts, and optional local `slides` references.
+It has no private-repository records or
 administrative state. Dates are stored as ISO dates and displayed as DD-MM-YYYY.
 The Python standard-library renderer writes static cards inside the same meeting
 list and detail pages under `prototype/legacy-meetings/`:
@@ -210,8 +211,10 @@ For each historical talk, `authors` is the presenter identified by the explicit
 after the original text separated by a blank line. If there is no abstract text,
 that supplied collaboration line can be the entire `abstract` value. Leave
 `abstract` empty when neither was supplied. Do not infer names or content.
-Talk titles and presenters display as plain **Title by Presenter** text; they
-are not links. The **Abstract** disclosure contains the full abstract value.
+Talk titles and presenters display as **Title by Presenter**. A title links to
+its original slide file when one was imported; otherwise it stays non-clickable.
+Presenters remain underlined plain text. The **Abstract** disclosure contains the
+full abstract value. No new visitor-facing source or coverage information is added.
 
 The renderer preserves the `generated-meetings` region exactly. Its own
 `legacy-meetings` markers are ownership boundaries inside the same section,
@@ -250,7 +253,7 @@ In a Codespace opened from this feature PR, stop an existing preview with Ctrl+C
 then run:
 
 ```sh
-python3 scripts/preview_server.py --branch feature/talk-pdf-uploads --port 8003
+python3 scripts/preview_server.py --branch feature/legacy-meeting-slides --port 8003
 ```
 
 Open port **8003** using **Ports → Open in Browser**. Firefox displays the review
@@ -260,13 +263,10 @@ This optional branch selection leaves the existing prototype preview default
 unchanged. Issue-backed pages in this feature draft are a review snapshot.
 The bar must say **Review snapshot**, name this feature branch, and offer
 **Switch to synchronized preview**. Use the review view for unmerged presentation
-changes. This feature adds optional PDF uploads and simplifies the forms. Add talk
-asks only for Password alongside its public fields; Participation keeps Name and
-Password. Meeting creation defaults the end date to the start date.
-The private compatibility change must be integrated before real submissions from
-these member forms.
-Read-account testing and private editing instructions are in
-[the feature guide](https://github.com/ifipwg13/meetings/blob/feature/talk-pdf-uploads/README.md).
+changes. This feature attaches original PDFs and PowerPoint files to matched legacy
+talks. Stay in **Review snapshot** to review these unmerged imports; the synchronized
+branch receives them only after the feature PR is merged. Existing member forms
+and private automation are unchanged.
 No PR is merged or Pages website published by starting a preview.
 
 In an existing Codespace with older local scripts, press **Ctrl+C** to stop its
@@ -275,10 +275,10 @@ switching branches or overwriting local work:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/talk-pdf-uploads:refs/remotes/origin/feature/talk-pdf-uploads &&
+git fetch origin refs/heads/feature/legacy-meeting-slides:refs/remotes/origin/feature/legacy-meeting-slides &&
 group_preview_script="$(mktemp /tmp/group-preview.XXXXXX.py)" &&
-git show origin/feature/talk-pdf-uploads:scripts/preview_server.py > "$group_preview_script" &&
-python3 "$group_preview_script" --repository "$PWD" --branch feature/talk-pdf-uploads --port 8003
+git show origin/feature/legacy-meeting-slides:scripts/preview_server.py > "$group_preview_script" &&
+python3 "$group_preview_script" --repository "$PWD" --branch feature/legacy-meeting-slides --port 8003
 ```
 
 Open port **8003** from **Ports**, keeping it **Private**. The first page must be
@@ -288,13 +288,13 @@ branch, or the published site. For current Issue states, click **Switch to
 synchronized preview**; the status must then say **Synchronized preview** and
 name `prototype/meeting-management`.
 
-After the paired implementation is approved, integrate the private parser first,
-then this public feature into `prototype/meeting-management`. Distribute a shared
-Read-account password with the upload repository selected and Contents read/write
-for PDF tests. Complete the private PDF setup guide first.
-Keep website-publication PR #1 unmerged.
-Refresh the existing **Synchronized preview** tab; no Codespace restart or new
-port is needed. Do not test new live submissions before both integrations.
+After this public feature is approved, merge it into `prototype/meeting-management`;
+keep website-publication PR #1 unmerged. The preview server has new legacy-file
+rules: stop the old server with **Ctrl+C** and start the updated script once, using
+the fetch-and-run procedure above (or the synchronized procedure earlier in this
+README after integration). Keep the same port if desired. A Firefox refresh updates
+HTML but cannot replace an already running Python server; that older server may
+return 404 for new legacy file types. A full Codespace restart is unnecessary.
 
 The public feature PR targets the existing prototype branch. Public website PR
 #1 stays draft and unmerged. After the paired feature is approved and integrated, use
@@ -538,4 +538,75 @@ has no new runtime dependencies. For local integration tests, install it using:
 
 ```sh
 python3 -m pip install --require-hashes -r ../meetings/.github/scripts/pdf-requirements.txt
+```
+
+
+## Import original legacy slides
+
+`scripts/import_legacy_slides.py` is a one-time/maintenance importer using only
+Python's standard library. It reads explicitly labelled slides links on the old
+site, matches the meeting name/location/dates and the exact talk/presenter pair,
+and cross-checks source talk IDs. It never selects a file by its filename alone.
+The existing Pisa meeting exclusion remains. No private Issues, upload-staging
+repository, member tokens, new service, or scheduled job is involved.
+
+Run a dry scan from this public checkout, keeping source caches and reports
+outside the website tree:
+
+```sh
+python3 scripts/import_legacy_slides.py --cache /tmp/ifip-legacy-slide-cache --report /tmp/legacy-slides-review.json
+```
+
+Review the report, then import the matched files:
+
+```sh
+python3 scripts/import_legacy_slides.py --apply --cache /tmp/ifip-legacy-slide-cache --report /tmp/legacy-slides-import.json
+python3 scripts/build_legacy_meetings.py --check
+```
+
+Add `--refresh` to retrieve source content again instead of using a previous
+successful cache. Source HTTP errors have two bounded attempts per run. Current
+HTTP access works despite the old site's HTTPS certificate/proxy failure. Downloads
+are restricted to that host and to the explicit source slide links. Short reads
+are accumulated; incomplete declared transfers are retried rather than cached.
+The **10,000,000-byte** cap is checked on actual received bytes, not just headers.
+PDF/PPT/PPTX/PPSX originals are retained without conversion; type checks reject
+HTML error pages. Broken or ambiguous sources are reported, not guessed. Partial
+source availability is distinct from a successfully checked meeting with no slides.
+
+The importer adds only an optional `slides` field to a legacy talk. Its value is
+`slides/<existing legacy meeting ID>/talk-<existing talk position>-<SHA256>.<ext>`.
+Meeting/title/presenter matching happens before that position is used for storage.
+Names, dates, locations, titles, presenters and abstracts remain unchanged. Files
+are under `prototype/slides/legacy-.../`; their checksums, size, association and
+local paths are validated by offline page generation. Existing references are
+preserved when an old source is temporarily unavailable. The importer refuses to
+overwrite independently modified destination files. Reordering legacy talks or
+changing a meeting's identity requires updating its file paths consistently;
+validation stops cross-meeting or cross-talk references.
+
+The initial import retained 71 originals (68 PDF, one PPT, one PPTX and one PPSX),
+about 132 MB. Five linked files exceeded 10 MB. Seven source meeting pages returned
+HTTP 500 and remain coverage gaps. Details are in the feature PR's import report,
+not visitor-facing pages. Source bytes were checked against saved checksums and
+live size metadata for every retained file. Existing content and current meeting
+regions were independently compared with the pre-import version.
+
+PDF title links open the original PDFs; PowerPoint files download in browsers
+without native presentation support. The preview server uses a narrow allowlist,
+correct binary MIME types, `nosniff`, and attachment headers for PowerPoint.
+Restart it from this feature's updated script before reviewing those URLs.
+The static website uses ordinary links and needs no new JavaScript or dependency.
+Source reports/caches are not copied to the website. Original slide files are
+public, including Git history; no backup automation is introduced.
+
+Tests include exact/oversized limits, silently incomplete transfers, unavailable
+sources, duplicate titles/filenames, identifier mismatches, paper-link exclusion,
+idempotence, all legacy file formats, original bytes, current-meeting preservation,
+and every imported link through static and synchronized previews. Run the public
+unit suite and browser checks with:
+
+```sh
+python3 -m unittest discover -s tests
+python3 tests/browser_meetings.py
 ```

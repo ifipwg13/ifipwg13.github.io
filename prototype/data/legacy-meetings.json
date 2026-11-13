@@ -96,12 +96,14 @@
       {
         "title": "Something About Teaching Quantum Programming",
         "abstract": "",
-        "authors": "Luis S. Barbosa"
+        "authors": "Luis S. Barbosa",
+        "slides": "slides/legacy-20250613-37d7db711335/talk-9-f5c46df206d05f90f2e8ff9a069d84df732630caf790a13ad7c64775de3e3263.pdf"
       },
       {
         "title": "Symbolic Executions of Epistemic Ensembles",
         "abstract": "An epistemic ensemble is composed of knowledge-based agents capable of retrieving and sharing knowledge and beliefs about themselves and their peers. These agents access a global knowledge state and use actions to communicate and cooperate, altering the collective knowledge state. Executing epistemic ensemble directly on epistemic states, given in the traditional way by pointed Kripke structures, quickly becomes computationally expensive due to the semantic update constructions. Based on an abstraction to formulæ of interest, we introduce a symbolic epistemic state representation and a notion of representable epistemic action with efficient symbolic updates.  We investigate the equivalence of executing epistemic ensemble on the concrete and the symbolic level.\n\nJoint work with: Rolf Hennicker, Martin Wirsing",
-        "authors": "Alexander Knapp"
+        "authors": "Alexander Knapp",
+        "slides": "slides/legacy-20250613-37d7db711335/talk-10-0f698b633af1d087d0c9113c3221d0eca0de2fd9cd97bb4a7a4d9bd669ed4bdd.pdf"
       },
       {
         "title": "Partial Markov Categories",
@@ -121,7 +123,8 @@
       {
         "title": "Discussion on FM for AI",
         "abstract": "",
-        "authors": "Holger Schlingloff"
+        "authors": "Holger Schlingloff",
+        "slides": "slides/legacy-20250613-37d7db711335/talk-14-794f8894b3d248ef81190b3c781d11e7f68195d9be445f8cd140ba7a2cc05506.pdf"
       }
     ]
   },
@@ -134,7 +137,8 @@
       {
         "title": "Initial Algebras Unchained",
         "abstract": "The initial algebra for an endofunctor 𝐹 provides a recursion and induction scheme for data structures qhose constructors are described by 𝐹. The initial-algebra construction by Adámek (1974) starts with the initial object (e.g. the empty set) and successively\napplies the functor until a fixed point is reached, an idea inspired by Kleene’s fixed point theorem. Depending on the functor of interest, this may require transfinitely many steps indexed by ordinal numbers until termination. We provide a new initial algebra construction which is not based on an ordinal-indexed chain. Instead, our construction is loosely inspired by Pataraia’s fixed point theorem and forms the colimit of all finite recursive coalgebras. This is reminiscent of the construction of the rational fixed point of an endofunctor that forms the colimit of all finite coalgebras. For our main correctness theorem,\nwe assume the given endofunctor is accessible on a (weak form of) locally presentable category. Our proofs are constructive and fully formalized in Agda.\n\nJoint work with: Thorsten Wißmann",
-        "authors": "Stefan Milius"
+        "authors": "Stefan Milius",
+        "slides": "slides/legacy-20241101-e293a0e73654/talk-1-7d1df4593f1b9aec82c0d084d0e689a6970366f2fa7f3b9bd400e34f2352b6a2.pdf"
       },
       {
         "title": "Relational Connectors",
@@ -179,7 +183,8 @@
       {
         "title": "Symbolic Runtime Verification for Monitoring under Uncertainties and Assumptions",
         "abstract": "Runtime Verification deals with the question of whether a run of a system adheres to its specification. This paper studies runtime verification in the presence of partial knowledge about the observed run, particularly where input values may not be precise or may not be observed at all. We also allow declaring assumptions on the execution which permits to obtain more precise verdicts also under imprecise inputs. We encode the specification into a symbolic formula that the monitor solves iteratively, when more observations are given. We base our framework on stream runtime verification, which allows to express temporal correctness properties not only in the Boolean but also in richer logical theories. While in general our approach requires to consider larger and larger sets of formulas, we identify domains (including Booleans and Linear Algebra) for which pruning strategies exist, which allow to monitor with constant memory (i.e. independent of the length of the observation) while preserving the same inference power as the monitor that remembers all observations. We empirically exhibit the power of our technique using a prototype implementation under two important cases studies: software for testing car emissions and heart-rate monitoring.\n\nJoint work with: Hannes Kallwies, César Sánchez",
-        "authors": "Martin Leucker"
+        "authors": "Martin Leucker",
+        "slides": "slides/legacy-20241101-e293a0e73654/talk-10-16a80f7255f2c4fd0e8259b110868f85552e6881e76d0cebb5ed7ce6876aaaff.pdf"
       },
       {
         "title": "Refinement strategies for correct by construction algorithms",
@@ -202,7 +207,8 @@
       {
         "title": "Verification of software artifacts in the nuclear domain (an experience report)",
         "abstract": "Software systems are ubiquitous and, while absence of errors is know to be a highly undecidable problem, there are domains where the expected behavior of the system must come with some form of certification. Paradigmatic examples of such domains are the nuclear field, aerospace, unmanned vehicles and health and, still, all of them have registered tragic events due to software “mishaps”.\n\tMost of the software involved in the development of critical systems runs embedded in microcontrollers under very tight constraints regarding the use of resources (i.e., computation time, memory usage, specific hardware devices’ specifications, etc.). These specificities have a huge impact in the guidelines ruling the development process, sometime yielding software artifacts that can be thought of as an integral part of the hardware design. This is specially the case in fields where the development of the required software artifacts is done by the same electronic engineering teams designing the hardware over which they run, like in the case of the nuclear domain.\n\tEven in critical domains, like the ones we mentioned before, current quality assurance processes for software artifacts mostly rely only on testing techniques without any formal support and, as a counterpart argument, formal methods are usually presented as tools tailored to analyze application-level characteristics of the software artifacts.\n\tIn a recent collaboration with INVAP S.E., a leading company in the construction of experimental nuclear reactors, we put forward a set of tools aiming at aiding teams of engineers in the process of design, implement and analyze embedded systems. The toolset consists of a formal, yet reasonably simple, language whose analysis is supported by an automatic tool for runtime verification.\n\nJoint work with: Germán Regis & INVAP S.E.",
-        "authors": "Carlos Gustavo Lopez Pombo"
+        "authors": "Carlos Gustavo Lopez Pombo",
+        "slides": "slides/legacy-20240205-2d168f96915f/talk-1-ec388af0477a42f66d5615a33801a29bdfe844abac972de21596bacbb216c46b.pdf"
       },
       {
         "title": "Positive Data Languages",
@@ -217,12 +223,14 @@
       {
         "title": "Hybrid Ehrenfeucht-Fraïssé Games",
         "abstract": "We propose a notion of Ehrenfeucht-Fraïssé game in hybrid logic by generalizing the classical Ehrenfeucht-Fraïssé games defined for first-order logic. We consider both finite and countably infinite versions of the games and we use them to give some characterization theorems for hybrid propositional logic and their fragments.\n\nJoint work with: Guillermo Badia, Daniel Gaina, Tomasz Kowalski, Martin Wirsing",
-        "authors": "Alexander Knapp"
+        "authors": "Alexander Knapp",
+        "slides": "slides/legacy-20240205-2d168f96915f/talk-4-d6e205523f007db50f4edc4861660334adc48f37ebfa21b00e900a20231755a1.pdf"
       },
       {
         "title": "Joint Specification and Testing of Safety and Security Requirements",
         "abstract": "We motivate the need for safety and security co-engineering, introduce the domain-specific language LESS, describe refinement and testing methods based on LESS, and report on the outcome of some industrial case studies from the medical and automotive domain.\n\nJoint work with: Prof. Dr. Mirko Conrad, Dr. Sadegh Sadeghipour, Harald Schülzke",
-        "authors": "Holger Schlingloff"
+        "authors": "Holger Schlingloff",
+        "slides": "slides/legacy-20240205-2d168f96915f/talk-5-1fe03165f59157c4741dbbcbe8194086975a010c1f6b9788a875e9d3157124a6.pdf"
       },
       {
         "title": "Efficient Quantum Circuit Analysis via Constrained Bisimulation",
@@ -242,7 +250,8 @@
       {
         "title": "Symbolic Analysis and Parameter Synthesis for Parametric Timed Automata and Petri Nets using Maude with SMT Solving",
         "abstract": "We use the rewriting logic framework Maude--which has been\nequipped with support for SMT solving--to provide semantics, symbolic\nreachability and other kinds of analyses, and synthesis of unknown\nsystem parameters for both networks of parametric timed automata with\nglobal variables (NPTAVs) and parametric interval time Petri nets with\ninhibitor arcs (PITPNs). We develop symbolic reachability analysis\nmethods in Maude-with-SMT which are sound and complete for the\ncorresponding models (NPTAVs and PITPNs). Furthermore, our\nMaude-with-SMT reachability analyses terminate when the reachable\nsymbolic state space of the NPTAV, respectively, the PITPN, is finite. \nWe can then perform most of the analysis and parameter synthesis\nmethods provided by the specialized state-of-the-art tools Imitator\nand Romeo for the respective domains. We also benchmark our methods,\nand show that in a number of cases they outperform Romeo.\n\n\nThe practical contributions are: (i) providing new analysis methods, and\nsometimes better performance, for NPTAVs and TIPNSs; and (ii) studying\nand developing symbolic analysis methods for interesting classes of\nreal-time systems as steps in our quest to provide symbolic analysis for more\ngeneral real-time systems in the Real-Time Maude tool.\n\nJoint work with: Carlos Olarte (U Sorbonne Paris-Nord), Laure Petrucci (U Sorbonne Paris-Nord), Kyngmin Bae (POSTECH), Jaime Arias (U Sorbonne Paris-Nord), Fredrik Rømming (Cambridge)",
-        "authors": "Peter Ölveczky"
+        "authors": "Peter Ölveczky",
+        "slides": "slides/legacy-20240205-2d168f96915f/talk-9-c681d1a71f86605456cb012d4345add0e1b39e902c2a9124986089616290569c.pdf"
       },
       {
         "title": "General Anticipatory Monitoring for Temporal Logics on Finite Traces",
@@ -300,7 +309,8 @@
       {
         "title": "Hennessy-Milner Theorems via Galois Connections",
         "abstract": "We introduce a general and compositional, yet simple, framework that allows to derive soundness and expressiveness results for modal logics characterizing behavioural equivalences or metrics (also known as Hennessy-Milner theorems). It is based on Galois connections between sets of (real-valued) predicates on the one hand and equivalence relations/metrics on the other hand and covers a part of the linear-time-branching-time spectrum, both for the qualitative case (behavioural equivalences) and the quantitative case (behavioural metrics). We derive behaviour functions from a given logic and give a condition, called compatibility, that characterizes under which conditions a logically induced equivalence/metric is induced by a fixpoint equation. In particular, this framework allows to derive a new fixpoint characterization of directed trace metrics.\n\nJoint work with: Harsh Beohar, Sebastian Gurke, Karla Messing",
-        "authors": "Barbara König"
+        "authors": "Barbara König",
+        "slides": "slides/legacy-20230424-7d8089f21b9c/talk-5-79acca07be080d3ecc30e876f011084aa7946c7ad0dcbf32137b15b4524ea626.pdf"
       },
       {
         "title": "Optimality-preserving reductions of (Neural) Differential Equations",
@@ -421,7 +431,8 @@
       {
         "title": "Alternating Signal Temporal Logic",
         "abstract": "A collaborative embedded system is an autonomous component of a cyber-physical system which cooperates with other such systems in order to accomplish a common goal. In this talk, we present a logic to reason about collaborative embedded systems. Signal Temporal Logic (STL) has been used to specify hybrid systems, which contain both discrete and continuous state changes. Alternating Temporal Logic (ATL) was suggested to reason about strategies of multi-agent systems. We define a combination of these two logics, analyze its complexity and model checking procedure, and give some applications in the field of autonomous transport robots in intralogistics.",
-        "authors": "Holger Schlingloff"
+        "authors": "Holger Schlingloff",
+        "slides": "slides/legacy-20220118-e5335f5534fa/talk-1-7e4fcd61b12f2a99e32c1a377ede407c6264deafd734dca956c286594bc6a031.pdf"
       },
       {
         "title": "Paraconsistent transition systems and their logics",
@@ -431,17 +442,20 @@
       {
         "title": "Generating Correct-by-Construction Distributed Implementations from Formal Maude Designs",
         "abstract": "Developing a \nreliable distributed system meeting desired\nperformance requirements is \na hard and labor-intensive\ntask.  Formal specification and analysis of a system  \\emph{design} \ncan yield correct designs as well as reliable\nperformance predictions. \nIn this paper we present a correct-by-construction automatic\ntransformation mapping such a verified\nformal specification of a system\ndesign  in Maude to a \\emph{distributed implementation}\nsatisfying the \nsame safety and liveness properties.  Two case studies applying\nthis transformation to state-of-the-art distributed transaction\nsystems show that high-quality implementations with acceptable\nperformance and meeting performance predictions can be automatically generated. \nIn this way, formal\nmodels of distributed\nsystems analyzed within the same formal framework\nfor both \\emph{logical} and \\emph{performance} \nproperties are automatically  transformed into correct-by-construction\nimplementations for which similar performance trends can be shown.\n\nJoint work with: Si Liu, Atul Sandur, Jose Meseguer, Qi Wang",
-        "authors": "Peter Ölveczky"
+        "authors": "Peter Ölveczky",
+        "slides": "slides/legacy-20220118-e5335f5534fa/talk-3-03906123795e0750edd70b60f81f254151f117f344b5575e7bc49ee2687269cd.pdf"
       },
       {
         "title": "Modular design patterns for neural-symbolic integration",
         "abstract": "We recall design patterns for neural-symbolic systems from the literature, and go first steps towards a formalisation of these patterns. We introduce formal notions of neural-symbolic pattern, pattern refinement, and pattern combination.",
-        "authors": "Till Mossakowski"
+        "authors": "Till Mossakowski",
+        "slides": "slides/legacy-20220118-e5335f5534fa/talk-4-f25ee142ed11f5fdc05bde4d077f60ff07e70eda7c90702b1b791a29aa33b4ee.pdf"
       },
       {
         "title": "Nawrotzki's Algorithm for the Countable Splitting Lemma, constructively",
         "abstract": "We reprove the countable splitting lemma by adapting Nawrotzki's algorithm which produces a sequence that converges to a solution. Our algorithm combines Nawrotzki's approach with taking finite cuts. It is constructive in the sense that each term of the iteratively built approximating sequence as well as the error between the approximants and the solution is computable with finitely many algebraic operations. \n\nThis paper was published at CALCO 2021, and I gave this talk there. \nThe talk will be short.\n\nJoint work with: Harald Woracek",
-        "authors": "Ana Sokolova"
+        "authors": "Ana Sokolova",
+        "slides": "slides/legacy-20220118-e5335f5534fa/talk-5-833ba1a8295878128e87f328225a7e588560c46b52aa28dbac3ed5e12244eee8.pdf"
       },
       {
         "title": "Initial Algebras Without Iteration",
@@ -451,17 +465,20 @@
       {
         "title": "Dynamic Logic for Dynamical Systems",
         "abstract": "We study the logic of dynamical systems, that is, logics and proof principles for properties of dynamical systems. Dynamical systems are mathematical models describing how the state of a system evolves over time. They are important in modeling and understanding many applications, including embedded systems and cyber-physical systems. In discrete dynamical systems, the state evolves in discrete steps, one step at a time, as described by a difference equation or discrete state transition relation. In continuous dynamical systems, the state evolves continuously along a function, typically described by a differential equation. Hybrid dynamical systems or hybrid systems combine both discrete and continuous dynamics.\n\nThis talk is a deeper dive into the introductory basics of differential dynamic logic for specifying and verifying properties of hybrid systems. We explain hybrid system models, differential dynamic logic, its semantics, and its axiomatization for proving logical formulas about hybrid systems.",
-        "authors": "Andre Platzer"
+        "authors": "Andre Platzer",
+        "slides": "slides/legacy-20220118-e5335f5534fa/talk-7-0498e02225f2d22e9f50427423f76420b6bb60295fd2e380620462e4a545ea5d.pdf"
       },
       {
         "title": "Lens Semantics of Machine Learning",
         "abstract": "See https://arxiv.org/abs/2103.01931\n\nJoint work with: Geoff Crutwell, Bruno Gavranovic, Neil Ghani, Paul Wilson",
-        "authors": "Fabio Zanasi"
+        "authors": "Fabio Zanasi",
+        "slides": "slides/legacy-20220118-e5335f5534fa/talk-8-dabf709b9ee850df7f074207a32a092909880a1ccbc5e5d015aa24929a492db7.pdf"
       },
       {
         "title": "Probabilistic Sentence Satisfiability: An Approach to PSAT",
         "abstract": "Information analysis often involves heterogeneous sources expressed as logical sentences, numerical models, sensor data, etc. Each of these has its own way to describe uncertainty or error; e.g., frequency analysis, algorithmic truncation, floating point roundoff, Gaussian distributions, etc. A unifying framework is proposed here to represent this information as logical sentences with associated probabilities in order to allow the inference of the probability of a query sentence.\n\nGiven such a knowledge base in Conjunctive Normal Form (CNF) for use by an intelligent agent, with probabilities assigned to the conjuncts, the probability of any new query sentence can be determined by solving the Probabilistic Satisfiability Problem (PSAT). This involves finding a consistent probability distribution over the atoms (if they are independent) or complete conjunction set of the atoms. For each sentence in the knowledge base, we propose to produce an equation in terms of atoms and conditional probabilities. This system of equations is then solved numerically to get a solution consistent with the sentence probabilities. Finding such a solution is called the Probabilistic Sentence Satisfiability (PS-SAT) problem. In particular, findings include:\n1. For independent logical variables:\n(a) atom probabilities which solve PS-SAT also provide a PSAT solution.\n\n(b) numerical experiments demonstrate a q-superlinear convergence rate for most test cases.\n\n(c) problems with up to 1,000 variables and 300 sentences are solved.\n\n\n2. For general knowledge bases (i.e., variables not independent):\n(a) both atom and a subset of conditional probabilities must be found,\n\n(b) a solution to PS-SAT does not guarantee a solution to PSAT, but most empirical results provide such a solution.\n\n(c) The convergence rate for equations with non-independent variables also appears q-superlinear.\n\nJoint work with: T.C. Henderson, R. Simmons, B. Serbinowski, M. Cline, D. Sacharny, A. Mitiche",
-        "authors": "Xiuyi Fan"
+        "authors": "Xiuyi Fan",
+        "slides": "slides/legacy-20220118-e5335f5534fa/talk-9-4464dff60931b713257ed9a8829a30b2ec80822c28962e127d00f9efd55261d4.pptx"
       }
     ]
   },
@@ -474,12 +491,14 @@
       {
         "title": "New book: Formal Methods for Software Engineering",
         "abstract": "The 2020 white paper \"Rooting Formal Methods within Higher Education\nCurricula for Computer Science and Software\nEngineering\"  makes the following propositions:\n\n(i) Current software engineering practices fail to deliver dependable\nsoftware.\n\n(ii)  Formal methods are capable of improving this situation, and are\nbeneficial and cost-effective for mainstream software development.\n\n(iii) Education in formal methods is key to progress things.\n\n(iv) Education in formal methods needs to be transformed.\n\nWith this textbook we hope to have helped improving this situation.\nIn particular, we argue that Formal Methods have come out of the niche of safety critical applications, and that it is reasonable to apply them also in\nmainstream software development.\n\nFor the academic teacher, our book offers an example driven approach\nfor teaching the subject. It puts an emphasis on the application\nof Formal Methods, while still preserving mathematical rigour. The book describes a selected set of Formal Methods in one integrated setting.\n\nFor students of software engineering, the book offers an accessible\naccount to understand what Formal Methods are about. Studying this book should enable them to apply various Formal Methods to concrete software engineering challenges. As different Formal Methods share foundations, we hope that the material of this book will allow the reader to comprehend the essence of newly encountered Formal Methods. In the same spirit, we hope that studying our book may encourage the reader to undertake own research in Formal Methods for software engineering.\n\nIn the talk, Holger Schlingloff and I will present the concept behind together with some sample excerpts.\n\nThe book is due to appear at Springer: https://www.springer.com/gp/book/9783030387990\n\nJoint work with: Antonio Cerone, Bernd-Holger Schlingloff, Gerardo Schneider, Siraj Ahmed Shaikh",
-        "authors": "Markus Roggenbach"
+        "authors": "Markus Roggenbach",
+        "slides": "slides/legacy-20210327-a8d0ad40ebde/talk-1-a718a8bc61074ef34c69421953093a0038dd715f9db7284ef7e57621a4b08df6.pdf"
       },
       {
         "title": "Compositionality of Safe Communication in Systems of Team Automata",
         "abstract": "We study guarantees for safe communication in systems of systems composed of reactive components that communicate through synchronised execution of common actions. Systems are modelled as (extended) team automata, in which, in principle, any number of component automata can participate in the execution of a communicating action, either as a sender or as a receiver.  We extend team automata with synchronisation type specifications, which determine specific synchronisation policies fine-tuned for particular application domains. On the other hand, synchronisation type specifications generate communication requirements for receptiveness and responsiveness, which prevent outputs from not being accepted and inputs from not being provided. Then we turn to the composition of systems and show that composition behaves well with respect to synchronisation type specifications. As a central result, we investigate criteria that ensure the preservation of local communication properties when (extended) team automata are composed. This is particularly challenging in the context of weak requirement satisfaction.\n\nJoint work with: Maurice ter Beek, Jetty Kleijn",
-        "authors": "Rolf Hennicker"
+        "authors": "Rolf Hennicker",
+        "slides": "slides/legacy-20210327-a8d0ad40ebde/talk-2-fe94e69336443de90bec05eb3a27ea3d1eb314ec8d8826607cf2ce33a2e91ece.pdf"
       },
       {
         "title": "Property-Directed Verification of Recurrent Neural Networks",
@@ -489,7 +508,8 @@
       {
         "title": "Reasoning about space: a logical framework based on Simplicial Complexes",
         "abstract": "Collective Adaptive Systems consist of a large number\nof heterogeneous components. These entities are typically\norganised in groups where participants interact to adapt their\nbehaviour to environmental settings pursuing an individual or\ncollective goal. In this context, the concept of locality is strictly\nrelated to the spatial distribution of system entities. Therefore, the\ncharacterisation and verification of the spatial properties play a\nfundamental role in understanding CAS behaviour and its design.\nRecently, different tools and languages have been introduced to\nspecify and verify properties of space. However, these formalisms\ndo not handle surfaces and volumes and relationships among a\nlarge number of entities, the so-called higher-order relationships,\nthat may characterise interactions and relations among entities\nof a CAS. In this work, we propose a methodology to verify\nspatial properties on surfaces and volumes and that considers\nhigher-order relationships among entities. We define a spatial\nlogic interpreted on simplicial complexes. These are topological\nobjects able to represent surfaces and volumes efficiently and\nthat generalise graphs with higher-order edges. In the paper\nwe present a correct and complete model checking algorithm,\nthat is linear to the dimension of the simplicial complex and\nthe logical formula. Finally, the expressiveness of the proposed\nspatial logic is studied in terms of bisimulation and branching\nbisimulation relations defined over simplicial complexes.\n\nJoint work with: Michela Quadrini",
-        "authors": "Michele Loreti"
+        "authors": "Michele Loreti",
+        "slides": "slides/legacy-20210327-a8d0ad40ebde/talk-4-be6bcc0436879f49f9e175b0424d976b080b00311439a3d10ab166447f718967.pdf"
       },
       {
         "title": "Combining probabilistic and non-deterministic choice via weak distributive laws",
@@ -499,17 +519,20 @@
       {
         "title": "Logical Foundations of Cyber-Physical Systems",
         "abstract": "Logical foundations of cyber-physical systems (CPS) study systems that combine cyber aspects such as communication and computer control with physical aspects such as movement in space. CPS applications abound.  Ensuring their correct functioning, however, is a serious challenge.  Scientists and engineers need analytic tools to understand and predict the behavior of their systems.  That's the key to designing smart and reliable control.\n\nThis talk identifies a mathematical model for CPS called multi-dynamical systems, i.e. systems characterized by combining multiple facets of dynamical systems, including discrete and continuous dynamics, but also uncertainty resolved by nondeterministic, stochastic, and adversarial dynamics.  Multi-dynamical systems help us understand CPSs better, as being composed of multiple dynamical aspects, each of which is simpler than the full system.  The family of differential dynamic logics surveyed in this talk exploits this compositionality in order to tame the complexity of CPS and enable their analysis.\n\nIn addition to providing a strong theoretical foundation for CPS, differential dynamic logics have also been instrumental in verifying many applications, including the Airborne Collision Avoidance System ACAS X, the European Train Control System ETCS, several automotive systems, mobile robot navigation with the dynamic window algorithm, and a surgical robotic system for skull-base surgery. The approach is implemented in the theorem prover KeYmaera X.",
-        "authors": "Andre Platzer"
+        "authors": "Andre Platzer",
+        "slides": "slides/legacy-20210327-a8d0ad40ebde/talk-6-c522cfb00145128c2e45c69bd56b1e8eb542f6d8b76708c2aad47851bb513da4.pdf"
       },
       {
         "title": "Verification of GPU kernels with VerCors",
         "abstract": "In this talk, I will discuss how we use permission-based separation logic to reason about GPU programs. The logic takes into account the special memory model of the GPU, where a division is made between global and local memory. Synchronisation between threads is organised by barriers and atomics, which is also catered for in the logic. I will also discuss how the VerCors annotations are encoded into Viper. Finally, I will briefly discuss some GPU verification case studies we have worked on.",
-        "authors": "Marieke Huisman"
+        "authors": "Marieke Huisman",
+        "slides": "slides/legacy-20210327-a8d0ad40ebde/talk-7-de88e6cf76c0e7aa474e01eacdb2b212338e12a5bd25a60d11d509cb44c5a827.pdf"
       },
       {
         "title": "Lax Extensions, Behavioural Metrics and Modal Logics",
         "abstract": "Behavioural distances provide a fine-grained measure of equivalence in systems involving quantitative data, such as probabilistic, fuzzy, or metric systems. Like in the classical setting of crisp bisimulation-type equivalences, the wide variation found in system types creates a need for generic methods that apply to many system types at once. Approaches of this kind are emerging within the paradigm of universal coalgebra, based either on lifting pseudometrics along set functors or on lifting general real-valued (fuzzy) relations along functors by means of fuzzy lax extensions. An immediate benefit of the latter is that they allow bounding behavioural distance by means of fuzzy bisimulations that need not themselves be (pseudo-)metrics, in analogy to classical bisimulations (which need not be equivalence relations). The known instances of generic pseudometric liftings, specifically the generic Kantorovich and Wasserstein liftings, both can be extended to yield fuzzy lax extensions, using the fact that both are effectively given by a choice of quantitative modalities. Our central result then shows that in fact all fuzzy lax extensions are Kantorovich extensions for a suitable set of quantitative modalities, the so-called Moss modalities. For non-expansive fuzzy lax extensions, this allows for the extraction of quantitative modal logics that characterize behavioural distance, i.e. satisfy a quantitative version of the Hennessy-Milner theorem; equivalently, we obtain expressiveness of a quantitative version of Moss' coalgebraic logic.\n\nJoint work with: Paul Wild",
-        "authors": "Lutz Schröder"
+        "authors": "Lutz Schröder",
+        "slides": "slides/legacy-20210327-a8d0ad40ebde/talk-8-b2345e4b15070ed789f8fb7025ac107ef2b5f5b05d43f61224a030b3ea94f78a.pdf"
       }
     ]
   },
@@ -610,22 +633,26 @@
       {
         "title": "Optimal Schedulers for Parametric Markov Decision Processes",
         "abstract": "Markov decision processes (MDPs) are a well studied class of models for planning and decision making in presence of uncertainty. They are closely related to probabilistic systems and hence form the basis of probabilistic verification. Unlike for verification purposes, the main goal in AI for such MDPs is to synthesise optimal strategies that optimise a certain goal, e.g. reachability. This is relatively easy for MDPs, but indeed an open and interesting problem for parametric MDPs in which some of the transition probabilities are unknown parameters. \n\nSome work has already been done in synthesising schedulers that optimise maximal reachability probability. In our work we study different notions of optimality and focus in particular on synthesising expectation optimal schedulers. My talk will be a gentle introduction to these topics and a brief presentation of our results so far.\n\nJoint work with: Sebastian Arming, Ezio Bartocci, Krishnendu Chatterjee, Joost-Pieter Katoen",
-        "authors": "Ana Sokolova"
+        "authors": "Ana Sokolova",
+        "slides": "slides/legacy-20190406-b2978a1f69ec/talk-3-b058cf49734dc7892867d7cda8ba8466ad840edbf65123b12f2d814cd8bf32d3.pdf"
       },
       {
         "title": "Design and Validation of Cloud Storage Systems using Rewriting Logic",
         "abstract": "To deal with large amounts of data while offering high\n     availability and  throughput and low latency,\n     cloud computing systems rely on distributed, partitioned, and replicated\n     data stores. Such cloud storage systems are complex software artifacts that are very hard\n     to design and analyze, also because of the need to analyze both\n     correctness and performance.  Within the context of the University of\n     Illinois' Assured Cloud Computing, we have used rewriting logic,\n     its associated Maude tools, and the PVeStA statistical model\n     checker to model and analyze both the correctness of a range of\n     state-of-the-art industrial and academic data stores, including\n     Apache Cassandra, Google's Megastore, and UC Berkeley's RAMP\n     transactions. Furthermore, we have used a Maude-based methodology\n     to design a new data store satisfying a new consistency property. This talk\n     gives an overview of some of that work.\n\nJoint work with: Si Liu, Jose Meseguer, and others",
-        "authors": "Peter Ölveczky"
+        "authors": "Peter Ölveczky",
+        "slides": "slides/legacy-20190406-b2978a1f69ec/talk-4-2811f1f24a2a7e348dc005aa46ac6701cc036f03145eeb08a573381d1e84ddd9.pdf"
       },
       {
         "title": "Unfolding conditional and attributed graph grammars - Towards efficient solutions to combinatorial graph computation problems",
         "abstract": "In a graph computation problem, for a given attributed input graph, any output graph produced by a non-deterministic graph transformation represents a solution subject to constraints and optimisation.\nNon-deterministic graph computations require search and backtracking. Due to infinite or large data types, attributes increase the degree of non-determinism dramatically, making a search-based approach impractical. \n\nWe propose to use unfolding of graph grammars to address graph computation problems efficiently and systematically. An unfolding gives a compact representations of the derivation tree of a graph grammar, capturing the dependencies and conflicts between rule occurrences rather than explicit states and derivations. We extend the notion of unfolding to lazy symbolic attributed graph transformations, where attribute checks and computations are represented by symbolic constraints for delayed evaluation.  \n\nWe provide a mechanism to designing correct algorithms that first compute the unfolding of the underlying un-attributed grammar, then aggregate the constraints to use external tools, such as linear and finite domain constraint solvers, to implement attribute computations and optimisation problems. \n\nWe illustrate the approach using a simple network optimisation problem, choosing the best topology and bandwidth allocation to serve the needs of all clients and balance server utilisation.\n\nJoint work with: Andrea Corradini, Maryam Ghaffari Saadat, Fernando Orejas",
-        "authors": "Reiko Heckel"
+        "authors": "Reiko Heckel",
+        "slides": "slides/legacy-20190406-b2978a1f69ec/talk-5-5eed178ebf2662c03e36d1bed1e3692aeaf33395a35d58ce36930f737ef0263a.ppt"
       },
       {
         "title": "A Hybrid Dynamic Logic for Event/Data-based Systems",
         "abstract": "We propose E↓-logic as a formal foundation for the specification and development of event-based systems with local data states. The logic is intended to cover a broad range of abstraction levels from abstract requirements specifications up to constructive specifications. Our logic uses diamond and box modalities over structured actions adopted from dynamic logic. Atomic actions are pairs e / ψ where e is an event and ψ a state transition predicate capturing the allowed reactions to the event. To write concrete specifications of recursive process structures we integrate (control) state variables and binders of hybrid logic. The semantic interpretation relies on event/data transition systems; specification refinement is defined by model class inclusion. For the presentation of constructive specifications we propose operational event/data specifications allowing for familiar, diagrammatic representations by state transition graphs. We show that E↓-logic is powerful enough to characterise the semantics of an operational specification by a single E↓-sentence. Thus the whole development process can rely on E↓-logic and its semantics as a common basis. This includes also a variety of implementation constructors to support, among others, event refinement and parallel composition.\n\nJoint work with: Rolf Hennicker, Alexandre Madeira",
-        "authors": "Alexander Knapp"
+        "authors": "Alexander Knapp",
+        "slides": "slides/legacy-20190406-b2978a1f69ec/talk-6-51d0afc47399fda8ef57a3702398d861a2c8bf79044ea50a49b1b0a8da2752ea.pdf"
       },
       {
         "title": "Reachability for Coalgebras",
@@ -635,22 +662,26 @@
       {
         "title": "Graded Monads for the Linear-Time / Branching-Time Spectrum",
         "abstract": "State-based models of concurrent systems are traditionally considered under a variety of notions of process equivalence. In the case of labelled transition systems, these equivalences range from trace equivalence to (strong) bisimilarity, and are organized in what is known as the linear time - branching time spectrum. A combination of universal coalgebra and graded monads provides a generic framework in which the semantics of concurrency can be parametrized both over the branching type of the underlying transition systems and over the granularity of process equivalence. We show in the present paper that this framework of graded semantics does subsume the most important equivalences from the linear time - branching time spectrum. An important feature of graded semantics is that it allows for the principled extraction of characteristic modal logics. We have established invariance of these graded logics under the given graded semantics in earlier work; in the present paper, we extend the logical framework with an explicit propositional layer and provide a generic expressiveness criterion that generalizes the classical Hennessy-Milner theorem to coarser notions of process equivalence. We extract graded logics for a range of graded semantics on labelled transition systems and probabilistic systems, and give exemplary proofs of their expressiveness based on our generic criterion.\n\nJoint work with: Ulrich Dorsch, Stefan Miius, DIrk Pattinson",
-        "authors": "Lutz Schröder"
+        "authors": "Lutz Schröder",
+        "slides": "slides/legacy-20190406-b2978a1f69ec/talk-8-66f9103678d2d0193341afe772616d756a8a3805b8ec6347c6c4cb52f347497b.pdf"
       },
       {
         "title": "Modelling by Patterns for Correct-by-Construction Process",
         "abstract": "The verification of distributed algorithms is a challenge for formal\ntechniques supported by tools, as model checkers and proof assistants.\nThe difficulties, even for powerful tools, lie in the derivation of\nproofs of required properties, such as safety and eventuality, for\ndistributed algorithms. Verification by construction can be achieved\nby using  a formal framework in which models are constructed at\ndifferent levels of abstraction; each level of abstraction is refined\nby the one below, and this refinement relationships is documented by\nan abstraction relation   namely  a gluing invariant.\nThe highest levels of abstraction are used to express the required\nbehavior in terms of the problem domain and the lowest level of\nabstraction corresponds to  an implementation from which an efficient\nimplementation can be derived automatically. In this talk, we will  show  a methodology based\non the general concept of refinement and used for developing\ndistributed algorithms satisfying a given list of safety and liveness\nproperties. The modelling methodology  is defined in the Event-B\nmodelling language using the IDE RODIN. More precisely, we  show  how\nEvent-B  models    can\nbe developed for specific problems and how they can be simply reused\nby controlling the composition of state-based models through the\nrefinement relationship. Following Polya, we have identified  patterns\nexpressed as Event-B models which can be replayed for  developing\ndistributed algorithms from  requirements. \nConsequently, we obtain a (re)development of\n\\textit{correct-by-construction} existing distributed algorithms and a\nframework for deriving new distributed algorithms (by integrating\nmodels) and for ensuring the correctness of resulting distributed\nalgorithms by construction.  We illustrate our methodology  using \nclassical problems as  communication in a network, leader election protocol,\nself-stabilisation. These works have\nbeen carried out in collaboration with  partners of the  ANR project RIMEL\n(http://rimel.loria.fr)  which have considered  as well the local computation model\ndefining distributed  computations as graph rewriting rules (see\nhttp://visidia.labri.fr).  We  will show how the local computation\nmodel can be used   within the Event-B framework.\nResources are available  at the link\nhttp://eb2all.loria.fr and are part of the current project   on\ndeveloping an atlas of correct-by-construction distributed algorithms.",
-        "authors": "Dominique Méry"
+        "authors": "Dominique Méry",
+        "slides": "slides/legacy-20190406-b2978a1f69ec/talk-9-4b45671e6a63b86a8a0a6a47366c31cf99bd0ff1ee7bc4c4823cbfcdb91a107e.pdf"
       },
       {
         "title": "On the Essence and Initiality of Conflicts",
         "abstract": "Understanding conflicts between transformations and rules is an important topic in algebraic graph transformation. A conflict occurs when two transformations are not parallel independent, that is, when after applying one of them the other can no longer occur. A static analysis technique called Critical Pair Analysis allows the detection of all potential conflicts between pairs of rules, by enumerating Critical Pairs. Since these are often too numerous for even simple rules, finding appropriate subsets of critical pairs is the topic of ongoing research. We contribute to this thread by proposing a new characterization of the root causes of conflicts, called ``conflict essences'', exploiting a recently proposed characterization of parallel independence. Furthermore we show that conflict essences are smaller than the ``conflict reasons'' previously proposed, and that they uniquely determine the so-called ``initial conflicts'', an appropriate subset of critical pairs, under relatively mild assumptions of the underlying category. All results hold in categories of Set-valued functors, which include the categories of graphs and typed graphs, and several of them hold in the more general adhesive categories.\n\nJoint work with: Guilherme Grochau Azzi and Leila Ribeiro",
-        "authors": "Andrea Corradini"
+        "authors": "Andrea Corradini",
+        "slides": "slides/legacy-20190406-b2978a1f69ec/talk-10-a3e09720a400eeaf6573eb1cdbacc049bc75c358831454c1f2afd93609b9bf1f.pdf"
       },
       {
         "title": "Teaching Formal Methods for Software Engineering - Ten Principles",
         "abstract": "We report and reflect about the didactic principles underlying our endeavour to write a book on \"Formal Methods for Software Engineering - Languages, Methods, Application Domains\", and to teach its contents at international summer schools. Target audience for the book are taught master students, possibly striving for a career in industry, and doctoral students in their early years, possibly in search of a suitable topic for their dissertation. We outline ten principles underlying the design of the book, coin a recommendation from each principle, and give appropriate examples. We report about the feedback from participants to the schools and lectures, and relate our principles to other pedagogical suggestions for teaching Formal Methods.\n\nJoint work with: Markus Roggenbach",
-        "authors": "Holger Schlingloff"
+        "authors": "Holger Schlingloff",
+        "slides": "slides/legacy-20190406-b2978a1f69ec/talk-11-d3941d338e607f3922c1272c0ee49758113ba38941633eaf6cf2b1fdd51886d2.pdf"
       }
     ]
   },
@@ -741,7 +772,8 @@
       {
         "title": "On Modeling Software Engineering Models' Intentions with Institutions",
         "abstract": "Institution theory is a categorical approach to abstract model theory free of commitment to any particular logical system.  As regards to modeling, institution theoretic thinking contributed to a better understanding of various modeling concepts, and permitted the elaboration of satisfactory answers to questions raised by the semantic correctness of model transformation. In the context of intentional modeling, intention sharing is relevant to model transformation and to answering the crucial question of when a model of a system view can be used to represent a model of a different view. The objective of this paper is twofold: First, show how to represent sharing of intentions in a uniform way using an institutional theoretic approach; second, show how to capture the consistency of such a sharing, answering by the way the upper asked question. Our approach is illustrated by a case study using the Model Driven Architecture approach. The underlying motivation is to contribute to the effort aiming at a better understanding of the concepts of modeling and model transformation conducted by the concerned community. \n\n\nKeywords: model driven architecture; model driven engineering methodolgy; intentional modeling; categories; institutions\n\nJoint work with: Mourad Maouche",
-        "authors": "Mohamed Bettaz"
+        "authors": "Mohamed Bettaz",
+        "slides": "slides/legacy-20170904-64b9ac488620/talk-2-7022e2ec057cac2de781f83e469d3c3e23c4e1f4bc452b38c16b34ae3c7dccfb.pdf"
       },
       {
         "title": "Least and Alternating Fixed-Point Specifications in Coalgebraic System Modeing",
@@ -756,17 +788,20 @@
       {
         "title": "Proper Convex Functors for Probabilistic Systems Semantics",
         "abstract": "A large part of my talk will be a high-level overview on basic and recent results regarding the semantics of probabilistic systems. In particular I will give a brief summary of results on (1) branching-time semantics, (2) linear-time semantics, and (3) the role of convexity in probabilistic systems semantics and verification. The approach is always generic, coalgebraic.  \n\nThen, I will provide a brief technical report on a very recent result: certain functors on the category of convex algebras are proper. This is a non-trivial result (joint work with Harald Woracek, continuing the work of Stefan Milius on proper functors) with important consequences for axiomatisations of trace semantics of probabilistic systems.\n\nJoint work with: Harald Woracek",
-        "authors": "Ana Sokolova"
+        "authors": "Ana Sokolova",
+        "slides": "slides/legacy-20170904-64b9ac488620/talk-5-d853cb14c437263c93aebb75b60dbf4bb7bf578d0904786691a0b7fa34163641.pdf"
       },
       {
         "title": "Domains and Event Structures for Fusions",
         "abstract": "Stable event structures, and their duality with prime algebraic domains (arising as partial orders of configurations), are a landmark of concurrency theory, providing a clear char- acterisation of causality in computations. They have been used for defining a concurrent semantics of several formalisms, from Petri nets to linear graph rewriting systems, which in turn lay at the basis of many visual frameworks. Stability however is restrictive for dealing with formalisms where a computational step can merge parts of the state, like graph rewriting systems with non-linear rules, which are needed to cover some relevant applications (such as the graphical encoding of calculi with name passing). We characterise, as a natural generalisation of prime algebraic domains, a class of domains that is well-suited to model the semantics of formalisms with fusions. We then identify a corresponding class of event structures, that we call connected event structures, via a duality result formalised as an equivalence of categories. We show that connected event structures are exactly the class of event structures the arise as the semantics of non- linear graph rewriting systems. Interestingly, the category of general unstable event structures coreflects into our category of domains, so that our result provides a characterisation of the partial orders of configurations of such event structures.\n\nJoint work with: Andrea Corradini, Fabio Gadducci",
-        "authors": "Paolo Baldan"
+        "authors": "Paolo Baldan",
+        "slides": "slides/legacy-20170904-64b9ac488620/talk-6-5417c5bfb49b0075e7efaafe94886fbccba3a1a28c9e276a76fbadab83008292.pdf"
       },
       {
         "title": "PALS: Virtual Synchrony for Cyber-Physical Systems",
         "abstract": "Many cyber-physical systems (CPSs)--including avionics systems,\nautomotive systems, power plant controllers, etc.--are virtually\nsynchronous: logically they operate in rounds, but must be\nrealized in a distributed real-time environment with hard real-time\nbounds. Such systems are hard to design because of asynchronous\ncommunication, network delays, and clocks skews. In addition, their\nmodel checking typically becomes unfeasible due to the large state\nspaces caused by the interleavings.\n\nFor virtual synchronous CPSs where the underlying infrastructure\nprovides a bound on the network delays and clocks skews, we have\ndeveloped, formalized, and formally verified the PALS (physically\nasynchronous, logically synchronous) architectural pattern. PALS\nsignificantly reduces the design and verification of virtually\nsynchronous CPSs by allowing us to design and verify the underlying\nsynchronous design; PALS then generates a correct-by-construction\ndistributed design. For example, PALS reduces the state space\nencountered in an integrated modular avionics design developed at\nRockwell Collins from 3 million---in the over-simplified case with no\nmessage delays and no clock skew--to a mere 185 states.\n\nTo make the PALS design and verification methodology available to\ndomain experts, we have defined the Synchronous AADL modeling\nlanguage. Synchronous AADL allows engineers to define their\nsynchronous PALS designs in the industrial modeling standard AADL.\nWe have also integrated Real-Time Maude model checking of such Synchronous\nAADL models  into the OSATE modeling environment for AADL, so that\nengineers can model check their designs directly in OSATE.\n\nSince some CPSs are multi-rate systems, we have extended both PALS and\nSynchronous AADL to the multi-rate setting, and have applied our\nmethodology to analyze a textbook algorithm for turning an airplane;\nour analysis indicated that the algorithm did not provide a safe turn,\nso we also designed and model checked a modified turning algorithm.\n\nIf time allows, I will also briefly discuss our recent extension of\nthe PALS methodology to the hybrid setting, where the verification of\nsynchronous Hybrid PALS models can be reduced to SMT solving over\nnonlinear theories of the real numbers.\n\nThis talk is based on joint work with:\n\n- Kyungmin Bae (now at POSTECH Korea), José Meseguer, Lui Sha, and others at UIUC\n- Darren Cofer and Steve Miller at Rockwell Collins\n- colleagues at CMU",
-        "authors": "Peter Ölveczky"
+        "authors": "Peter Ölveczky",
+        "slides": "slides/legacy-20170904-64b9ac488620/talk-7-49be139bbe957ffc454f753f72d1c5f8d99eac58e468b9ab3b17aeeb0f5fc0c3.pdf"
       },
       {
         "title": "Behavioural and Abstractor Specifications Revisited",
@@ -781,7 +816,8 @@
       {
         "title": "Partial Pushout Semantics of Generics in GDOL",
         "abstract": "We combine CASL's pushout-style generic specification with DOL's\n  filtering, the latter being a syntactic removal of parts of a specification.\n  The challenge is that now the body of a generic specification can\n  remove parts of the formal parameter. This cannot be handled with\n  usual pushout semantics, but calls for a semantics of \"match,\n  delete, glue in\" as used in the theory of graph grammars.\n  We hence employ Heindel's theory of MipMap categories as a basis\n  for the use of pushouts in categories of partial maps.\n  We introduce a notion of MipMap institution that can serve\n  as a semantic background for a partial pushout semantics of\n  generics with filtering.\n\nJoint work with: Bernd Krieg-Brückner",
-        "authors": "Till Mossakowski"
+        "authors": "Till Mossakowski",
+        "slides": "slides/legacy-20170904-64b9ac488620/talk-10-d40622d8fe800b7312ce07c2ffd4ae2e2dc8b324ae405756ce3de934943cec1c.pdf"
       }
     ]
   },
@@ -862,27 +898,32 @@
       {
         "title": "Probabilistic NetKAT",
         "abstract": "We present a new language for network programming\nbased on a probabilistic semantics. We extend the NetKAT language\nwith new primitives for expressing probabilistic behaviors and\nenrich the semantics from one based on deterministic functions to one\nbased on measurable functions on sets of packet histories. We establish\nfundamental properties of the semantics, prove that it is a conservative\nextension of the deterministic semantics, show that it satis\fes a number\nof natural equations, and develop a notion of approximation. We present\ncase studies that show how the language can be used to model a diverse\ncollection of scenarios drawn from real-world networks.\n\nJoint work with: Nate Foster, Dexter Kozen, Kostas Mamouras and Mark Reitblatt",
-        "authors": "Alexandra Silva"
+        "authors": "Alexandra Silva",
+        "slides": "slides/legacy-20160331-aeb1288917c8/talk-1-28d3a68eb8985a21bcd8fa22cd7f7ee316694d8d9f5a822d5d9b333e66cb13f5.pdf"
       },
       {
         "title": "A General Account of Coinduction Up-To",
         "abstract": "Bisimulation up-to enhances the coinductive proof method for bisimilarity, providing efficient proof techniques for checking properties of different kinds of systems. We prove the soundness of such techniques in a fibrational setting, building on the seminal work of Hermida and Jacobs.  This allows us to systematically obtain up-to techniques not only for bisimilarity but for a large class of coinductive predicates modelled as coalgebras.\n\nJoint work with: Daniela Petrisan, Damien Pous and Jurriaan Rot",
-        "authors": "Filippo Bonchi"
+        "authors": "Filippo Bonchi",
+        "slides": "slides/legacy-20160331-aeb1288917c8/talk-2-c82c2e614d38f78a81c464fa86a709ec1f262572c7f2fe298437a4de09183e56.pdf"
       },
       {
         "title": "OnPlan: A Framework for Simulation-Based Online Planning",
         "abstract": "In this talk we propose a modeling framework for\nautonomous systems operating in domains with large probabilistic state\nspaces and high branching factors [1]. The framework defines components\nfor acting and deliberation, and specifies their interactions. It comprises a\nmathematical specification of requirements for autonomous systems. We\ndiscuss the role of such a specification in the context of simulation-based\nonline planning. We also consider two instantiations of the framework:\nMonte Carlo Tree Search for discrete domains, and Cross Entropy Open\nLoop Planning for continuous state and action spaces. The framework's\nability to provide system autonomy is illustrated empirically on a robotic\nrescue example.\n\n[1] Lenz Belzner, Rolf Hennicker, Martin Wirsing: OnPlan: A Framework for Simulation-based Online-Planning. In Christiano Braga, Peter Olvecky (eds.): FACS 2015, Niteroi. Springer Lecture Notes in Computer Science 9539, 2016, 1-30.\n\nJoint work with: Lenz Belzner and Rolf Hennicker",
-        "authors": "Martin Wirsing"
+        "authors": "Martin Wirsing",
+        "slides": "slides/legacy-20160331-aeb1288917c8/talk-3-a687e020a1ceb26b638273f6348106e20c6474499f650ba046f0a179dcbb41d7.pdf"
       },
       {
         "title": "Towards a UML-MARTE/CSP-OZ Based Software Development Methodology",
         "abstract": "Multiscale Modeling and Simulation is an emerging field widely recognized by various (e)-science communities. Providing adequate and efficient multiscale computing environments for (e)-scientists is one of the major challenges of this field. A synergy between the multiscale modeling community, which sets theoretical foundations of this field, and the software engineering community seems to be a step towards addressing this challenge. In this ongoing work we propose a development methodology aiming to bridge the gap between approaches used by (e)-science communities to develop their modeling frameworks and model driven engineering approaches used to develop modeling frameworks with similar complexity.\n\nJoint work with: Mourad Maouche",
-        "authors": "Mohamed Bettaz"
+        "authors": "Mohamed Bettaz",
+        "slides": "slides/legacy-20160331-aeb1288917c8/talk-4-c4f9327685c4f7daef4c4b27f3d38bae35389900a111c26c539842a3bc1f5474.pdf"
       },
       {
         "title": "Modeling and reasoning with I-polynomial data types",
         "abstract": "Most constructor-or destructor-based models can be presented as I-polynomial data types. I is a set that consists of the base sets (constant functors) and the index sets of the sum or product types involved in the model's signature. The trees representing the elements of a (co)free model of an I-polynomial data type reveal the duality between constructors and destructors more clearly than previous (co)term notions do. Well-known methods of equational, first-order or modal specification and reasoning - such as the solution of  iterative equations - can be generalized smoothly to I-polynomial data types.",
-        "authors": "Peter Padawitz"
+        "authors": "Peter Padawitz",
+        "slides": "slides/legacy-20160331-aeb1288917c8/talk-5-e1b7004356a39095b746f4c24aeb684921af779f6c3856975101a473bcdcd498.pdf"
       },
       {
         "title": "Extracting Visual Contracts from Java Programs",
@@ -892,17 +933,20 @@
       {
         "title": "Continuous components, monadically",
         "abstract": "In the specification of component-based systems, the underlying behaviour model --- related e.g., to partial, nondeterministic or probabilistic evolution --- can be nicely captured by a (strong) monad. A  suitable component algebra is then developed on top of its Kleisli category. This talk shows how continuous evolution, a major issue in the design of hybrid systems, can be encoded in a similar way  and discusses the resulting component calculus.\n\nJoint work with: Renato Neves",
-        "authors": "Luis S. Barbosa"
+        "authors": "Luis S. Barbosa",
+        "slides": "slides/legacy-20160331-aeb1288917c8/talk-7-ec769e9e34e5a15aeef48c10fddbf233a0aa622a2e051c85c7cbc57e75205467.pdf"
       },
       {
         "title": "About some practical problems concerning UML, BPMN and database integration",
         "abstract": "This talk addresses some pratical problems arising in a research projct. Questions are:\n* what are useful UML tools that take some formal semantics or formal methods into account?\n* what are frameworks to solve a problem of database schema integration?",
-        "authors": "Till Mossakowski"
+        "authors": "Till Mossakowski",
+        "slides": "slides/legacy-20160331-aeb1288917c8/talk-8-c968f814dafdd63b5ac53a3d51ef26d436657807759572f4f3cff56966c1236c.pdf"
       },
       {
         "title": "Nominal Automata with Name Binding",
         "abstract": "Automata models for data languages (i.e. languages over infinite alphabets) often feature either global or local freshness\noperators. We show that Bollig et al.'s session automata, which focus on global freshness, are equivalent to regular nondeterministic nominal automata (RNNA)}, a natural nominal automaton model with explicit name binding that has appeared implicitly in the semantics of nominal Kleene algebra (NKA), an extension of Kleene algebra with name binding. The expected Kleene theorem for NKA is known to fail in one direction, i.e. there are nominal languages that can be accepted by an RNNA but are not definable in NKA; via session automata, we obtain a full Kleene theorem for RNNAs for an expression language that extends NKA with unscoped name binding. Based on the equivalence with RNNAs, we then slightly rephrase the known equivalence checking algorithm for session automata. Reinterpreting the data language semantics of name binding by unrestricted instead of clean alpha-equivalence, we obtain a local freshness semantics as a quotient of the\nglobal freshness semantics. Under local freshness semantics, RNNAs turn out to be equivalent to a natural subclass of Bojanczyk et\nal.'s nondeterministic orbit-finite automata. We establish decidability of inclusion under local freshness by modifying the RNNA-based algorithm; in summary, we obtain a formalism for local freshness in data languages that is reasonably expressive and has a decidable inclusion problem.\n\nJoint work with: Dexter Kozen, Stefan Milius, Thorsten WIßmann",
-        "authors": "Lutz Schröder"
+        "authors": "Lutz Schröder",
+        "slides": "slides/legacy-20160331-aeb1288917c8/talk-9-0c0e18762b6a8d3159f7fd8eeca7b84a5b86434d46f1354b71c2986add834ea3.pdf"
       }
     ]
   },
@@ -915,37 +959,44 @@
       {
         "title": "Towards a Metalanguage for Corecursive Definitions",
         "abstract": "In recent decades, the theory of coalgebras has proven to\nprovide a suitable general platform for defining and reasoning by\ncorecursion and coinduction. Various results in automata theory, game\ntheory, functional programming can be couched in coalgebraic terms and\ngeneric coalgebraic arguments can be applied to ensure existence and\nuniqueness of the defined concepts. A well-established umbrella principle for\ncoalgebraic definitions is guarded corecursion. Here we propose a syntactic calculus\nfor formalizing and reasoning about guarded corecursion. In particular, we show\nhow this calculus can be used for defining operations by guarded corecursion.\nWe compare this approach with the traditional GSOS-style semantics and clarify \nconnections to the theories of completely iterative monads and complete Elgot \nmonads introduced and actively studied recently.",
-        "authors": "Sergey Goncharov"
+        "authors": "Sergey Goncharov",
+        "slides": "slides/legacy-20150627-9b08e0b54bbe/talk-1-8cec15396ff472942c5448e969d8bce433624f044bcc9896540de6786a693a58.pdf"
       },
       {
         "title": "A demonic lattice of information",
         "abstract": "In between the Lattice of Information pioneered by Landauer and Redmond (1993), and recent work in Quantitative Information Flow that introduced hyper-distributions (ICALP 2010 -> LiCS 2015), there seems to be a vacancy  for a demonic lattice of information. That is, whereas Landauer considered deterministic leaks (simple)  and QIF considers leaking (probabilistic) channels (complicated), we should also be able to treat leaks that are unpredictable (not deterministic) but also unquantified (i.e. not governed by a distribution). That is of course demonic nondeterminism.\n\nThis talk will describe such a model, based on union-closed sets of subsets of the hidden state, and will show how it generalises L&R's partitions, how it specialises hyper-distributions, and how it admits a backwards weakest-precondition style of reasoning about demonic security.\n\n[ Disclaimer: These models, in an earlier form,  were the subject of a talk I gave at WG1.3 in 2011; but the current talk takes advantage of much more recent insights in order to put everything in its proper place and to produce a much clearer structure. ]\n\nJoint work with: Annabelle McIver, Tahiry Rabehaja",
-        "authors": "Carroll Morgan"
+        "authors": "Carroll Morgan",
+        "slides": "slides/legacy-20150627-9b08e0b54bbe/talk-2-5f5dc450efd9cdceea9297b4d43fe20ba7220cc463313879d701611c2ba6e434.pdf"
       },
       {
         "title": "Who counts your vote, and how?",
         "abstract": "We give an overview of electronic vote counting and discuss the implications on public trust engendered by various approaches.\n\nJoint work with: Carsten Schuermann",
-        "authors": "Dirk Pattinson"
+        "authors": "Dirk Pattinson",
+        "slides": "slides/legacy-20150627-9b08e0b54bbe/talk-3-bca3c411346472a408eabe8736139bc9ede58392ae7c4aa870669b0fb1282596.pdf"
       },
       {
         "title": "Full Abstraction for Signal Flow Graphs",
         "abstract": "Signal flow graphs are classical structures in control theory, signal processing and a cornerstone in the study of feedback. Usually they are considered at an intuitive level and then translated into systems of linear equations. In this talk, we introduce the signal flow calculus, a formalism where signal flow graphs are first class objects. We introduce its graphical syntax (given in terms of string diagrams), a structural operational semantics (that makes it similar to a process calculus) and a denotational semantics (in terms of subspaces of streams). We then relate the operational and the denotational semantics by a full abstraction result.\n\nJoint work with: Pawel Sobocinski, Fabio Zanasi",
-        "authors": "Filippo Bonchi"
+        "authors": "Filippo Bonchi",
+        "slides": "slides/legacy-20150627-9b08e0b54bbe/talk-4-ceb1358ba407d3555fcf987f92769101a0ea2bcf022ea12407fd7aecbcad8640.pdf"
       },
       {
         "title": "A formal framework for privacy policies",
         "abstract": "Social Network Services (SNSs) have changed the way people communicate, bringing many benefits but also the possibility of new threats. Privacy is one of them. We present here a framework to write privacy policies for SNSs and to reason about such policies in the presence of events making the network to evolve. The framework includes a model of SNSs, a logic to specify properties and reason about the knowledge of SNS users, and a formal language to write privacy policies. To describe how SNSs evolve, we provide operational semantics rules which are classified into four categories: epistemic, topological, policy, and hybrid, depending on whether the events under consideration change the knowledge of the SNS' users, the structure of the social graph, the privacy policies, or a combination of the above, respectively.  We have instantiated the above in order to formalize Twitter and Facebook behaviour, and prove that it is privacy-preserving. \n\nThe paper in attachment only presents the \"static\" case. The case for \"evolving SNS\" is under submission.\n\n* R. Pardo and G. Schneider. A formal privacy policy framework for social networks. In SEFM'14, vol. 8702 of LNCS, pages 378-392. Springer, 2014.\n\nJoint work with: Raúl Pardo",
-        "authors": "Gerardo Schneider"
+        "authors": "Gerardo Schneider",
+        "slides": "slides/legacy-20150627-9b08e0b54bbe/talk-5-f9fb8127b2e66ecf82b78dd0e7ef305e504fe4fe61480232f0f95ed5aa0a5c2f.pdf"
       },
       {
         "title": "NetKAT - a formal system for the verification of networks ",
         "abstract": "NetKAT is a domain-specific language and logic for specifying\nand verifying network packet-processing functions. It consists\nof Kleene algebra with tests (KAT) augmented with primitives\nfor testing and modifying packet headers and encoding network\ntopologies. Previous work developed the design of the language\nand its standard semantics, proved the soundness and completeness\nof the logic, defined a PSPACE algorithm for deciding equivalence,\nand presented several practical applications. In our POPL 15 paper we developed the coalgebraic theory of NetKAT, including\na specialized version of the Brzozowski derivative, and presented \na new efficient algorithm for deciding the equational theory using\nbisimulation.  In this talk I will present NetKAT and the main results concerning the language semantics and equivalence checking.\n\nJoint work with: Nate Foster, Dexter Kozen, Matthew Milano, Laure Thompson",
-        "authors": "Alexandra Silva"
+        "authors": "Alexandra Silva",
+        "slides": "slides/legacy-20150627-9b08e0b54bbe/talk-6-b8688b78bc92bd7d936462ee7aac460c1259e9934cbf5b35850c9d3c6417ea51.pdf"
       },
       {
         "title": "Interoperability of Asynchronous Relational Nets using Communicating machines",
         "abstract": "Distributed software is becoming more and more dynamic to support applications able to respond and adapt to the changes of their execution environment. For instance, service-oriented computing (SOC) envisages applications as services running over globally available computational resources where discovery and binding between them is transparently performed by a middleware. Asynchronous Relational Networks (ARNs) is a well-known formal orchestration model, based on hypergraphs, for the description of service-oriented software artefacts. Choreography and orchestration are the two main design principles for the development of distributed software. In this work, we propose Communicating Relational Networks (CRNs), which is a variant of ARNs, but relies on choreographies for the characterisation of the communicational aspects of a software artefact, and for making their automated analysis more efficient.\n\nJoint work with: Ignacio Vissani, Emilio Tuosto, Hernán Melgratti",
-        "authors": "Carlos Gustavo Lopez Pombo"
+        "authors": "Carlos Gustavo Lopez Pombo",
+        "slides": "slides/legacy-20150627-9b08e0b54bbe/talk-7-448e13f7554131aa2170d3e0f62eeaa07ff78e1ac1a35a4372653de31bc3a9c0.pdf"
       }
     ]
   },
@@ -958,52 +1009,62 @@
       {
         "title": "Monads and Trace Semantics",
         "abstract": "The analysis of concurrent and reactive systems is based to a large degree on various notions of process equivalence, ranging, on the so-called linear-time/branching-time spectrum, from fine-grained equivalences such as strong bisimilarity to coarse-grained ones such as trace equivalence. The theory of concurrent systems at large has benefited from developments in coalgebra, which has enabled uniform definitions and results that provide a common umbrella for seemingly disparate system types including non-deterministic, weighted, probabilistic, and game-based systesm. In particular, there has been some success in identifying a generic coalgebraic theory of bisimulation that matches known definitions in many concrete cases. The situation is currently somewhat less settled regarding trace equivalence. A number of coalgebraic approaches to trace equivalence have been proposed, none of which however cover all cases of interest; notably, all these approaches depend on explicit termination, which is not always imposed in standard systems, e.g. LTS. Here, we discuss a joint generalization of these approaches based on embedding functors modelling various aspects of the system, such as transition and braching, into a global monad; this approach appears to cover all cases considered previously and some additional ones, notably standard LTS and probabilistic labelled transition systems.\n\nJoint work with: Alexander Kurz, Stefan Milius, Dirk Pattinson",
-        "authors": "Lutz Schröder"
+        "authors": "Lutz Schröder",
+        "slides": "slides/legacy-20140902-d0574f3cf48f/talk-1-fe6f6086f29dbb94175a51fdff56ca8a2e9d5c405b1c4f6a6f61a822cc3bfe05.pdf"
       },
       {
         "title": "Uniform Eilenberg Theorem: Syntactic Algebras For Free",
         "abstract": "We investigate the duality between algebraic and coalgebraic recognition of languages to derive a generalization of the version of Eilenberg’s theorem. This theorem states that the lattice of all boolean algebras of regular languages closed under derivatives and preimages of homomorphisms is isomorphic to the lattice of all pseudovarieties monoids. By applying our method to different\ncategories, we obtain several previously known and also new Eilenberg-type theorems as special instances. And we also have uniform proofs for local versions of Eilenberg-type theorems, e.g. one due to Gehrke, Grigorieff and Pin, weakens boolean algebras to distributive lattices, one due to Polák weakens them to join-semilattices, and the last one considers vector spaces over Z_2.\n\nJoint work with: Jiri Adamek, Rob Myers, Henning Urbat",
-        "authors": "Stefan Milius"
+        "authors": "Stefan Milius",
+        "slides": "slides/legacy-20140902-d0574f3cf48f/talk-2-5833de24a480aad5488e37303025a3f2e4477a1be25253c3c7f7b9d0ac4a721f.pdf"
       },
       {
         "title": "The art of lying, with the proof assistant Coq",
         "abstract": "A \"lie-to-children\" is a simplified explanation of technical or complex subjects as a teaching method for children. This method can also be used for adults, as well as for programs. In this talk it is used in different ways (dynamic evaluation, computational effects) for computing the rank of a matrix. The Coq implementation of the corresponding proofs is briefly presented.\n\nJoint work with: Jean-Guillaume Dumas, Burak Ekici, Jean-Claude Reynaud and Damien Pous",
-        "authors": "Dominique Duval"
+        "authors": "Dominique Duval",
+        "slides": "slides/legacy-20140902-d0574f3cf48f/talk-3-01551a9877f01bf13e8db6f2b7ac881eab459217191cb648a7cc29cd3a6b0d2a.pdf"
       },
       {
         "title": "Equational abstractions in rewriting logic and Maude",
         "abstract": "Maude is a high-level language and high-performance system supporting both equational and rewriting computation for a wide range of applications. Maude also provides a model checker for linear temporal logic. This procedure can be used to prove properties when the set of states reachable from an initial state in a system is finite; when this is not the case, it may be possible to use an equational abstraction technique for reducing the size of the state space.\n\nAbstraction reduces the problem of whether an infinite state system satisfies a temporal logic property to model checking that property on a finite state abstract version. The most common abstractions are \nquotients of the original system. We present a simple method of defining quotient abstractions by means of equations collapsing the set of states. Our method yields the minimal quotient system together with a set of proof obligations that guarantee its executability and can be discharged with tools such as those available in the Maude formal environment. The proposed method will be illustrated in a couple of detailed examples.\n\nJoint work with: J. Meseguer, M. Palomino, and F. Durán",
-        "authors": "Narciso Martí-Oliet"
+        "authors": "Narciso Martí-Oliet",
+        "slides": "slides/legacy-20140902-d0574f3cf48f/talk-4-a0e0cafbd4d1054ce9601ba9211e58e5afc78fb3fe59c1bbed623f44761b9b30.pdf"
       },
       {
         "title": "An exercise on confined separation logic",
         "abstract": "We discuss a relational semantics for confined separation logic parametric on the shapes of both the store and the heap. This provides a simple interpretation of the new confinement connectives and helps in seeking for their duals. A number of properties of this logic are proved by calculation.\n\nJoint work with: J. N. Oliveira and Shuling Wang",
-        "authors": "Luis S. Barbosa"
+        "authors": "Luis S. Barbosa",
+        "slides": "slides/legacy-20140902-d0574f3cf48f/talk-5-355a708ded3a40ae0a2364a980834bc2909782ce78535bfa35de91f2987110f5.pdf"
       },
       {
         "title": "Distributive laws and decidable properties of SOS",
         "abstract": "Some formats of well-behaved operational specifications correspond to natural transformations of certain types (for example, GSOS and coGSOS laws). These transformations have a common generalization: distributive laws of monads over comonads. We prove that this elegant theoretical generalization has limited practical benefits: it does not translate to any concrete rule format that would be complete for specifications that contain both GSOS and coGSOS rules. This is shown for the case of labeled transition systems and deterministic stream systems.\n\nJoint work with: Beata Nachyła",
-        "authors": "Bartek Klin"
+        "authors": "Bartek Klin",
+        "slides": "slides/legacy-20140902-d0574f3cf48f/talk-6-379416f80a52861b30f7094b85faab5e5de4c7da73eee2dbed4149884dc1b59c.pdf"
       },
       {
         "title": "Full Operational Semantics for Asynchronous Relational Nets",
         "abstract": "Service-oriented computing is the name received by a new paradigm where applications run in a global computational network and are formed by services discovered and bonded in run-time through the intervention of a middleware. Asynchronous Relational Nets (ARNs) were presented Fiadeiro and Lopes with the aim of formalising the elements of interface theory for service-oriented software designs. ARNs are hypergraph-based mathematical objects in which hyperarcs represent either the computation of a part of the service, or the logic ruling the communication along a requires / provides point. The semantics of ARNs was originally given in terms of sequences of sets of messages corresponding to the behaviour of the service, being its description a linear temporal logic theory. Later, they were given an institutions-based semantics where signatures are ARNs and models of a given ARN are the ground ARNs to which the latter has a morphism. In this work we provide an operational semantics capable of reflecting the dynamic nature of service execution by making explicit the reconfigurations that take place at run-time as the result of the discovery and binding of other required services.\n\nJoint work with: Ignacio Vissani, Ionut Tutu and José Luiz Fiadeiro",
-        "authors": "Carlos Gustavo Lopez Pombo"
+        "authors": "Carlos Gustavo Lopez Pombo",
+        "slides": "slides/legacy-20140902-d0574f3cf48f/talk-7-f2e8dad72a2cd5e6c49e47fc1376eb8b758f7501508be0293d1f32e64df71506.pdf"
       },
       {
         "title": "Towards a Coalgebraic Chomsky Hierarchy",
         "abstract": "The Chomsky hierarchy plays a prominent role in the foundations of theoretical computer science relating classes of formal languages of primary importance. In this paper we use recent developments on coalgebraic and monad-based semantics to obtain a generic notion of a \\emph{$\\BBT$-automaton}, where $\\BBT$ is a monad, which allows the uniform study of various notions of machines (e.g.~finite state machines, multi-stack machines, Turing machines, \\iffull valence automata, \\fi weighted automata). We use the \\emph{generalized powerset construction} to define a generic (trace) semantics for $\\BBT$-automata, and we show by numerous examples that it correctly instantiates for some known classes of machines/languages captured by the Chomsky hierarchy. Moreover, our approach provides new generic techniques for studying expressivity power of various machine-based models.\n\nJoint work with: Stefan Milius, Alexandra Silva",
-        "authors": "Sergey Goncharov"
+        "authors": "Sergey Goncharov",
+        "slides": "slides/legacy-20140902-d0574f3cf48f/talk-8-561237b143af9b8711b21f5e07f19066c26c8eabd70ec7068158d1623de70206.pdf"
       },
       {
         "title": "The distributed ontology, modeling and specification language - recent developments",
         "abstract": "There is a diversity of ontology languages in use, among them OWL, RDF, OBO,Common Logic, and F-logic. Modeling languages such as UML, entity-relationship diagrams and object role modelling provide bridges from ontology modelling to applications, e.g. in software engineering and databases. Also in specification (for formal software and hardware development), a variety of languages is used, e.g. VDM, Z, B, CASL, various temporal logics, higher-order logics etc. Let us abbreviate ontologies, specifications and models as OSMs. Another diversity appears at the level of OSM modularity and relations among OSMs. There is OSM matching and alignment, module extraction, interpolation, OSM linked by bridges, interpretation and refinement, and combination of OSMs. The Distributed Ontology, Modelling and Specification Language (DOL) aims at providing a unified meta language for handling this diversity. In particular, DOL provides constructs for \"as-is\" use of OSMs formulated in a specific logical language, OSMs formalised in heterogeneous logics, modular OSMs, and links between OSMs. This work sketches the design of the DOL language and its institution-independent semantics. DOL will be submitted as a proposal within the (Ontology, Specificationa and Modeling Integration and Interoperability, see http://www.ontoiop.org) standardisation activity of the Object Management Group (OMG). A correspondingrequest for proposals has been issued by the OMG in December 2013, available at http://www.omg.org/cgi-bin/doc?ad/2013-12-02\n\n\nIn this talk, we present some recent developments about hiding, alignments, combinations and queries.\n\nJoint work with: Oliver Kutz, Christoph Lange, Mihai Codescu",
-        "authors": "Till Mossakowski"
+        "authors": "Till Mossakowski",
+        "slides": "slides/legacy-20140902-d0574f3cf48f/talk-9-bc1cf963f23ceebced9b708c19549bb915607df69759667028da5e753acf770d.pdf"
       },
       {
         "title": "Specification of Asynchronous Component Systems with Modal I/O-Petri Nets",
         "abstract": "Modal transition systems are an elegant way to formalise the design process of a system through refinement\nand composition. Here we propose to adapt this methodology to asynchronous composition via Petri nets. \nThe Petri nets that we consider have distinguished labels for inputs, outputs, internal communications and silent actions and  ``must'' and ``may''\nmodalities for transitions. The input/output labels show the interaction capabilities of a net to the outside used to build\nlarger nets by asynchronous composition via communication channels. The modalities express constraints for Petri net refinement\ntaking into account observational abstraction from silent transitions.\nModal I/O-Petri nets are equipped with a modal transition system semantics.\nWe show that refinement  is preserved by asynchronous composition and by hiding of communication channels.\nWe study compatibility properties which express communication\nrequirements for composed systems and we show that these properties are decidable,\nthey are preserved in larger contexts and also by modal refinement.\nOn this basis we propose a methodology for the specification of distributed systems\nin terms of modal I/O-Petri nets which supports incremental design, encapsulation of components, stepwise refinement and independent implementability.\n\nJoint work with: Serge Haddad, Mikael H. Moller",
-        "authors": "Rolf Hennicker"
+        "authors": "Rolf Hennicker",
+        "slides": "slides/legacy-20140902-d0574f3cf48f/talk-10-16f12bc9092b2eadb612ccdeef5017dc59b427f1185d7b7f3607f10b1e82e8b7.pdf"
       }
     ]
   },
@@ -1109,52 +1170,62 @@
       {
         "title": "Coalgebras and Generalized Regular Expressions",
         "abstract": "Calculi of (generalized) regular expression that allow to reason about\nthe equivalence up to behavioral equivalence of states of coalgebras\nhave recently been investigated by Silva et al. In this talk I present\na setting in which one can extend an expression calculus for\nbehavioral equivalence to one for a new and coarser coalgebraic\nlanguage equivalence; the latter equivalence arises from a generalized\npowerset construction that determinizes coalgebras. It is shown that\nsoundness and completeness are established by proving that expressions\nmodulo axioms of a calculus form the rational fixpoint of the functor\ndescribing the type of the systems one wants to reason about. The main\nresult is that the rational fixpoint of the functor $FT$, where $T$ is\na monad describing the branching of the systems (e.g.~non-determinism,\nweights, probability etc.), has as a quotient the rational fixpoint of\nthe ``determinised'' type functor $\\bar F$, a lifting of $F$ to the\ncategory of $T$-algebras. As an application, I consider weighted\nautomata, and I present a new sound and complete expression calculus\nfor weighted language equivalence. As a special case, we obtain\nnon-deterministic automata, where we recover Rabinovich's sound and\ncomplete calculus for language equivalence.\n\nJoint work with: Marcello Bonsangue and Alexandra Silva",
-        "authors": "Stefan Milius"
+        "authors": "Stefan Milius",
+        "slides": "slides/legacy-20130316-6c9bb64de38a/talk-1-1255a0a014121a29bf0f601f877291bc01e259ce18db1baa11d83971a3fdc163.ppsx"
       },
       {
         "title": "Algorithmic games for full ground references",
         "abstract": "We present a full classification of decidable and undecidable cases\nfor contextual equivalence in a finitary ML-like language equipped with\nfull ground storage (both integers and reference names can be stored).\nThe simplest undecidable type is unit -> unit -> unit. At the technical level, our results marry game semantics with automata-theoretic techniques developed to handle infinite alphabets. On the automata-theoretic front, we show decidability of the emptiness problem for register pushdown automata extended with fresh-symbol generation.\n\nJoint work with: Nikos Tzevelekos (Queen Mary, University of London)",
-        "authors": "Andrzej Murawski"
+        "authors": "Andrzej Murawski",
+        "slides": "slides/legacy-20130316-6c9bb64de38a/talk-2-fff6818b674aa1d6473786edd40b1879d9a3bdea49bb60f4c9d86a8175e915a4.pdf"
       },
       {
         "title": "Coalgebraic bisimulation up-to",
         "abstract": "We present a systematic study of\nbisimulation-up-to techniques for coalgebras. \nThis enhances the bisimulation proof method for a large class of state based systems, \nincluding labelled transition systems but also stream systems and weighted automata.\n\nOur approach allows for compositional reasoning about the soundness of enhancements.\nApplications include the soundness of bisimulation up to bisimilarity, up to equivalence and up to congruence. All in all, this gives a powerful and modular framework for\nsimplifi\fed coinductive proofs of equivalence.\n\nJoint work with: Filippo Bonchi, Damien Pous, Jurriaan Rot, Jan Rutten, Alexandra Silva",
-        "authors": "Marcello Bonsangue"
+        "authors": "Marcello Bonsangue",
+        "slides": "slides/legacy-20130316-6c9bb64de38a/talk-3-3d677c2bd45d5f26c7aa9b81cfab45d19f28425f22a51e21ae296e4c50555a1b.pdf"
       },
       {
         "title": "Component Interfaces with Contracts on Ports: Meta-Theory and Instantiation",
         "abstract": "We show how the abstract concept of a (labeled) interface theory can be canonically extended to a meta-theory of component interfaces with assume/guarantee specifications on ports. The resulting component framework satisfies itself the general laws of an interface theory for composition, refinement and communication compatibility.  As a particular instance we consider modal component interfaces with weak modal refinement and weak compatibility. We provide methodological guidelines to construct reliable component interfaces and we propose a method for their adaptation to changing environemnts.\n\nJoint work with: S. Bauer, A. Legay",
-        "authors": "Rolf Hennicker"
+        "authors": "Rolf Hennicker",
+        "slides": "slides/legacy-20130316-6c9bb64de38a/talk-4-603f3a22b2d7a6bb4250bed20a400f1bf9dd13cd073db0e7c5f8f4faf06208fc.pdf"
       },
       {
         "title": "Satisfiability calculus: the semantic counterpart of a proof calculus in general logics",
         "abstract": "Since its introduction by Goguen and Burstall in 1984, the theory of Institutions has been one of the most widely accepted formal- izations of abstract model theory. This work was extended by a number of researchers, Jos ́e Meseguer among them, who presented General Log- ics; an abstract framework that complements the model theoretical view of Institutions by defining the categorical structures that provide a proof theory for any given logic. In this paper we intend to complete this pic- ture by providing the notion of Satisfiability Calculus, which might be thought of as the semantical counterpart of the notion of proof calculus, that provides the formal foundations for those proof systems that use model construction techniques to prove or disprove a given formula, thus “implementing” the satisfiability relation of an institution.\n\nJoint work with: Tomas S.E. Maibaum, Pablo Castro, Nazareno Aguirre, Paula Chocrón",
-        "authors": "Carlos Gustavo Lopez Pombo"
+        "authors": "Carlos Gustavo Lopez Pombo",
+        "slides": "slides/legacy-20130316-6c9bb64de38a/talk-5-eaa3d998c33a6c629633e8300a32aad1f87f812b9b00ad3fbe47274dfe3d18b6.pdf"
       },
       {
         "title": "A causal view of non-interference",
         "abstract": "The concept of non-interference has been introduced to characterise the absence of undesired information flows in a computer system. Although its definition often refers to an intuitive notion of causality - the activity involving the part of the system with higher level of confidentiality should not influence the behaviour at lower levels - it is almost invariably formalised in terms of interleaving semantics.  In this work we focus on non-interference for Petri nets, as previously defined in the literature, and we discuss possibile characterisations in terms of a causal, true concurrent semantics, with special interest in the unfolding semantics.\n\nJoint work with: Alberto Carraro",
-        "authors": "Paolo Baldan"
+        "authors": "Paolo Baldan",
+        "slides": "slides/legacy-20130316-6c9bb64de38a/talk-6-24d1fa17a0417ac5f875588934cdae04cbb36bd253bb70fd45dbe9fd71311211.pdf"
       },
       {
         "title": "Model-based Testing of Software Product Lines",
         "abstract": "In a model-based development process of a software product line, the feature model determines which functions are present in each instance. The functional model elaborates the features to be transformed into an implementation. Both feature model and functional model are constantly enhanced and extended to allow for the incorporation of new features and functionalities.\nA frequent problem in this process is to decide which test cases can be reused from one instance to the next one. New features can extend the existing ones, or be in conflict with them. Thus, for some enhancements test cases remain  valid for the new product, while for others they have to be reworked. In this talk, we formalize some of these notions and ask how to decide which parts of a test suite can be reused in a controlled product line development.\n\nJoint work with: Markus Roggenbach",
-        "authors": "Holger Schlingloff"
+        "authors": "Holger Schlingloff",
+        "slides": "slides/legacy-20130316-6c9bb64de38a/talk-7-f4c6d07c68c42d2442f73dc6c8cca9e2e4d3c16e6a54b8bc5d7b37a6eca83e40.pdf"
       },
       {
         "title": "Coalgebraic Traces Revisited",
         "abstract": "We revisit existing work on finite and maximal coalgebraic traces and describe an attempt to unify the two. We also show how recent work by Hasuo et al on coinductive predicates can be used to give a fibrational account of maximal traces.",
-        "authors": "Corina Cirstea"
+        "authors": "Corina Cirstea",
+        "slides": "slides/legacy-20130316-6c9bb64de38a/talk-8-1acf613b8b323fe4198efb38e530b26a08b1e92e3a06e7303bf5cae53eb80ffa.pdf"
       },
       {
         "title": "Model Checking Knowledge-based Programs",
         "abstract": "Knowledge-based programs include epistemic guards for abstracting from the details how agents may learn certain facts.  The interpretation of knowledge-based programs depends on which states are reached in executions, which itself depends on what may be known by the agents.  We outline an approach to model checking such programs by applying the must/cannot analysis of synchronous programming languages.\n\nJoint work with: Heribert Mühlberger",
-        "authors": "Alexander Knapp"
+        "authors": "Alexander Knapp",
+        "slides": "slides/legacy-20130316-6c9bb64de38a/talk-9-0f1ad05977310c638bd696125f3f2269f38016dbebb9e8dee880734f83b32280.pdf"
       },
       {
         "title": "Component models in typed linear algebra",
         "abstract": "In the specification of component-based systems, relations nicely capture nondeterminism and vagueness of requirements. Probabilistic functions go a step further by quantifying the likelihood of each possible, expected or faulty, behaviour. Such a shift from qualitative to quantitative reasoning, which is becoming pervasive in Computer Science, calls for a language able to accommodate both these aspects, while preserving the polymorphic and calculational style of relational program derivation.  Recently, typed linear algebra has been suggested as a suitable candidate for such a unifying rôle, when restricting to discrete probability spaces. In this talk, this framework is put at work to discuss weighted automata, and related models for software components, as coalgebras in categories of dimensions and matrices.\n\nJoint work with: José Nuno Oliveira",
-        "authors": "Luis S. Barbosa"
+        "authors": "Luis S. Barbosa",
+        "slides": "slides/legacy-20130316-6c9bb64de38a/talk-10-5096a99288b9ad2effc91be5ea43548cc51a7d51fd70e99e4d40a8d539b526fe.pdf"
       }
     ]
   },

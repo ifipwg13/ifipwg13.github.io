@@ -1,5 +1,6 @@
 """Historical content has a strict public-only schema and survives synchronization."""
 import copy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -49,6 +50,20 @@ class LegacyTests(unittest.TestCase):
             record['talks'][0]['authors'] = authors
             with self.subTest(authors=authors), self.assertRaises(ValueError):
                 b.validate([record])
+
+    def test_only_talks_with_slides_have_local_title_links_and_content_is_unchanged(self):
+        record=copy.deepcopy(RECORD)
+        reference='slides/' + b.meeting_key(record) + '/talk-1-' + 'a'*64 + '.pptx'
+        record['talks'][0]['slides']=reference
+        b.validate([record])
+        self.assertIn('<a class="talk-title" href="'+reference+'">A talk</a>',b.card(record))
+        self.assertIn('<a class="talk-title" href="../../'+reference+'">A talk</a>',b.page(record))
+        self.assertIn('by <span class="talk-authors">Example presenter</span>',b.page(record))
+        self.assertIn('First paragraph.\n\nSecond paragraph.',b.page(record))
+        self.assertNotIn('source_url',b.page(record))
+        self.assertNotIn('class="button"',b.page(record))
+        record['talks'].append({'title':'Without slides','authors':'Another presenter','abstract':''})
+        self.assertIn('<span class="talk-title">Without slides</span>',b.page(record))
 
     def test_separator_removal_keeps_punctuation_in_legacy_content(self):
         record = copy.deepcopy(RECORD)
@@ -151,15 +166,22 @@ class SynchronizerCompatibilityTests(unittest.TestCase):
         site_pages = {path: (ROOT/path).read_text() for path in ['index.html','members/index.html']}
         files.update(site_pages)
         legacy_path='prototype/legacy-meetings/'+b.meeting_key(RECORD)+'/index.html'
-        files[legacy_path]=b.page(RECORD)
-        expected=b.card(RECORD)
+        historical=copy.deepcopy(RECORD)
+        content=b'%PDF-1.7\nHistorical slides\n%%EOF'
+        slide_path='prototype/slides/'+b.meeting_key(historical)+'/talk-1-'+hashlib.sha256(content).hexdigest()+'.pdf'
+        historical['talks'][0]['slides']=slide_path.removeprefix('prototype/')
+        files['prototype/index.html']=b.update_index(files['prototype/index.html'],[historical])
+        files[legacy_path]=b.page(historical)
+        files[slide_path]=content
+        expected=b.card(historical)
         for maintain in [True,False]:
             api.issues[7]={'number':7,'title':'New fixture proposal','state':'open','body':'### Authors\n\nSpeaker\n\n### Abstract\n\nPublic abstract',
                            'labels':['talk','meeting:meeting-4']}
             m.sync_preview(api,maintain_private=maintain)
             files=api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)
             self.assertIn(expected,files['prototype/index.html'])
-            self.assertEqual(files[legacy_path],b.page(RECORD))
+            self.assertEqual(files[legacy_path],b.page(historical))
+            self.assertEqual(files[slide_path],content)
             for path, source in site_pages.items():
                 self.assertEqual(files[path], source)
             record={'id':'meeting-4','manifest':m.load_manifest(api,'meeting-4','main'),'status':'active','approved':True,
