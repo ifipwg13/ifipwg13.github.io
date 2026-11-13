@@ -65,6 +65,14 @@ a:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }
   text-decoration: none;
 }
 .actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-block: 1rem; }
+.schedule-scroll { overflow-x: auto; }
+.schedule-table { width: 100%; border-collapse: collapse; }
+.schedule-table caption { text-align: left; font-weight: 600; margin-block: .5rem; }
+.schedule-table th, .schedule-table td { text-align: left; vertical-align: top; padding: .65rem .5rem; border-bottom: 1px solid #d6dee8; }
+.schedule-table th[scope="row"] { min-width: 12rem; font-weight: 400; }
+#talk-form .schedule-table input { min-width: 6rem; }
+#talk-form .schedule-table td:nth-child(2) input { min-width: 8rem; }
+.schedule-result { min-width: 6rem; }
 .talks-overview { margin-block: 1rem; }
 .talks-overview summary { cursor: pointer; font-weight: 600; }
 .talks-overview summary:focus-visible { outline: 3px solid #875400; outline-offset: 4px; }

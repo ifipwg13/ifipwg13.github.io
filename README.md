@@ -610,3 +610,74 @@ unit suite and browser checks with:
 python3 -m unittest discover -s tests
 python3 tests/browser_meetings.py
 ```
+
+## Schedule editor
+
+Each Issue-backed meeting page has **Participation | Add talk | Schedule**.
+**Schedule** opens a form fixed to that meeting, without a meeting selector.
+An administrator checks one password, edits dates/times for several talks, and
+clicks **Save changes**. The password is a fine-grained PAT belonging to an Admin
+of `ifipwg13/meetings`, restricted to that repository with **Issues: Read and
+write** and automatic Metadata read access. No Contents scope is needed.
+It stays in the masked field and page memory, never browser storage or comments.
+
+The form uses the existing API helper and an inline bundle with an exact CSP
+hash; no extra script route, dependency, backend, or database is required.
+Edit `prototype/assets/schedule.js`, then run
+`python3 scripts/build_talk_form.py` to update `prototype/schedule.html`.
+The matching private workflow checks the real administrator role again, updates
+only changed dates/times, and synchronizes the meeting once. Archived meetings
+permit corrections; hidden talk/meeting states are preserved. Legacy meetings
+have no editor. Single-day dates are fixed; old proposals default to the first
+meeting day at 09:00 without an automatic rewrite. Equal slots remain permitted.
+An administrator may edit at most 100 changed talks per request.
+
+Per-talk results identify conflicts and partial failures. **Reload talks** reads
+current values (discarding unsaved edits), so remaining edits can be retried
+without entering the password again. **Check progress** checks a queued request;
+automatic polling stops after about a minute. A lost POST response is recovered
+without posting a duplicate. The form confirms synchronization, not Pages
+deployment. GitHub does not provide atomic multi-Issue updates; concurrent edits
+should be avoided while a save is in progress. See the private README for the
+workflow, recovery, and credential details.
+
+With the sibling private checkout, run:
+
+```sh
+python3 -m unittest discover -s tests
+python3 tests/browser_schedule.py
+python3 tests/browser_talk_submission.py
+python3 tests/browser_participation.py
+python3 tests/browser_create_meeting.py
+python3 tests/browser_meetings.py
+```
+
+The browser integration uses fictitious records and credentials through the
+actual preview handler and trusted Python workflow. It checks authorization,
+date/time validation, publication order, hidden/archived records, source
+conflicts, retries, mobile layout, and privacy. Actual PAT scopes and queued
+Actions need the two-account live check after merge; Firefox/autofill is manual.
+
+To review this unmerged feature in an existing Codespace, stop the server in its
+terminal with **Ctrl+C**, then run:
+
+```sh
+cd "$(git rev-parse --show-toplevel)" &&
+git fetch origin refs/heads/feature/meeting-schedule:refs/remotes/origin/feature/meeting-schedule &&
+schedule_preview_script="$(mktemp /tmp/meeting-schedule-preview.XXXXXX.py)" &&
+git show origin/feature/meeting-schedule:scripts/preview_server.py > "$schedule_preview_script" &&
+python3 "$schedule_preview_script" --repository "$PWD" --branch feature/meeting-schedule --port 8003
+```
+
+In Codespaces **Ports**, open port **8003** in the browser. Open **Meetings**, a
+non-legacy meeting, then **Schedule**. This is a review snapshot. Do not save a
+real scheduling request until the private workflow PR is merged.
+
+For live integration, merge the private PR first, then this public feature into
+`prototype/meeting-management`. Run the private **Prepare meeting** workflow on
+`main` once to regenerate existing buttons. Restart the preview with the default
+`prototype/meeting-management` branch so it follows synchronization. Keep the
+publication PR to public `main` unmerged until separately approved. Verify with
+an Admin Issues-only PAT (save succeeds), and a Read-account PAT (rejected); use
+a fictitious meeting/talk. The page has no ability to hide links by role without
+adding a sign-in backend; authorization is enforced by GitHub and trusted Actions.
