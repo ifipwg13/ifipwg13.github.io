@@ -36,10 +36,12 @@ class GroupHomeTests(unittest.TestCase):
         self.assertIn('name="group-people-revision" content="'+hashlib.sha256(source.encode()).hexdigest()+'"',home)
         self.assertIn('name="group-people-version" content="'+str(data['version'])+'"',home)
 
-    def test_members_and_emeriti_are_sequential_static_sections(self):
+    def test_paired_static_sections_preserve_reading_order(self):
         home=(ROOT/'index.html').read_text()
         self.assertLess(home.index('id="members"'),home.index('id="emeriti"'))
-        self.assertNotIn('members-grid',home)
+        self.assertEqual(home.count('class="members-grid"'),2)
+        self.assertIn('>Current Chairs</h2>',home)
+        self.assertIn('>Former Chairs</h2>',home)
         self.assertNotRegex(home,r'<script\b')
 
     def test_old_members_url_redirects_without_maintaining_another_roster(self):
@@ -55,7 +57,7 @@ class GroupHomeTests(unittest.TestCase):
         self.assertIn('href="prototype/admin.html"',nav)
         page=(ROOT/'prototype/admin.html').read_text()
         self.assertEqual(re.findall(r'<textarea id="([^"]+)"',page),['current-chairs','past-chairs','members','emeriti'])
-        self.assertIn('id="people-fields" disabled',page)
+        self.assertIn('id="people-fields" disabled hidden',page)
         self.assertIn('id="admin-token" type="password"',page)
 
 

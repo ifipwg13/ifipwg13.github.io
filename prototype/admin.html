@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-xuIByy/N79eEv8WatUlUx5BBSQ/FJex8lmtdJz1CvSU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-Uih6hjIX8gHRa3SWndl8P/iy3g7KXL+z24is0E3frGo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Admin · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -28,12 +28,12 @@
         <p><button id="check-admin" type="button" class="button button-secondary">Check credentials</button></p>
         <p id="admin-identity" role="status" aria-live="polite"></p>
       </fieldset>
-      <fieldset id="people-fields" disabled>
+      <fieldset id="people-fields" disabled hidden>
         <legend>Home lists</legend>
         <p>Keep the order you want on Home. Blank lines are ignored. Clearing a box clears that list when saved.</p>
-        <label for="current-chairs">Current chairs</label>
+        <label for="current-chairs">Current Chairs</label>
         <textarea id="current-chairs" rows="4" spellcheck="false"></textarea>
-        <label for="past-chairs">Past chairs</label>
+        <label for="past-chairs">Former Chairs</label>
         <textarea id="past-chairs" rows="7" spellcheck="false"></textarea>
         <label for="members">Members</label>
         <textarea id="members" rows="12" spellcheck="false"></textarea>
@@ -237,12 +237,19 @@ const memberAPI = (() => {
     return value;
   }
   function checked() {
-    if (!account || !credential || password()!==credential || pending && account.login!==pending.login) throw problem('Check the original administrator credentials before continuing.');
+    if (!account || !credential || password()!==credential || pending && account.login!==pending.login) {
+      reset(); throw problem('Check the original administrator credentials before continuing.');
+    }
   }
-  function api(path,method='GET',body) { checked(); return memberAPI.request(path,method,body,credential); }
+  async function api(path,method='GET',body) {
+    checked();
+    try { return await memberAPI.request(path,method,body,credential); }
+    catch (failure) { if ([401,403].includes(failure.httpStatus)) reset(); throw failure; }
+  }
   function controls() {
     $('admin-token').readOnly=busy;
     $('check-admin').disabled=busy;
+    $('people-fields').hidden=!account || !loaded;
     $('people-fields').disabled=busy || !account || !loaded || !!pending;
     $('save-people').disabled=busy || !account || !loaded || !controller || !!pending;
     $('reload-people').disabled=busy || !account || !!pending && !pending.complete;
@@ -251,7 +258,10 @@ const memberAPI = (() => {
   }
   function reset() { credential=''; account=null; clearTimeout(timer); $('admin-identity').textContent=''; controls(); }
   async function verify() {
-    const candidate=password(), user=await memberAPI.administrator(candidate);
+    const candidate=password();
+    let user;
+    try { user=await memberAPI.administrator(candidate); }
+    catch (failure) { reset(); throw failure; }
     if (password()!==candidate || pending && user.login!==pending.login) throw problem('Check the original administrator credentials before continuing.');
     credential=candidate; account=user; $('admin-identity').textContent='Administrator access confirmed.';
   }

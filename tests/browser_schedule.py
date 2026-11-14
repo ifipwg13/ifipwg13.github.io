@@ -404,5 +404,129 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.page.get_by_role('button',name='Reload talks',exact=True).click(); self.ready()
         self.assertFalse(self.hidden_field(7).is_checked())
 
+    def test_all_three_actions_appear_together_only_after_admin_verification(self):
+        self.page.goto(self.base+'/prototype/schedule.html?meeting=meeting-4')
+        self.page.wait_for_function("() => !document.getElementById('admin-fields').disabled")
+        for id in ('save-schedule','reload-talks','hide-meeting'):self.assertFalse(self.page.locator('#'+id).is_visible())
+        self.page.locator('#admin-token').fill(TOKEN)
+        self.page.get_by_role('button',name='Check credentials',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
+        for id in ('save-schedule','reload-talks','hide-meeting'):self.assertFalse(self.page.locator('#'+id).is_visible())
+        self.open_editor();self.ready()
+        boxes=[self.page.get_by_role('button',name=name,exact=True).bounding_box() for name in ('Save changes','Reload talks','Hide Meeting')]
+        self.assertLess(max(box['y'] for box in boxes)-min(box['y'] for box in boxes),2)
+        self.page.locator('#admin-token').fill('')
+        for id in ('save-schedule','reload-talks','hide-meeting'):self.assertFalse(self.page.locator('#'+id).is_visible())
+        self.assertEqual(self.posts,0)
+
+    def test_unsaved_talk_edits_must_be_saved_before_hiding_without_password_reentry(self):
+        self.open_editor();self.ready()
+        button=self.page.get_by_role('button',name='Hide Meeting',exact=True)
+        self.assertTrue(button.is_enabled())
+        for column,value in [(2,'13-02-2027'),(3,'10:30')]:
+            self.field(7,column).fill(value)
+            self.assertTrue(button.is_disabled())
+            self.assertIn('Save your talk changes',self.page.locator('#hide-meeting-help').inner_text())
+        button.dispatch_event('click')
+        self.assertEqual(self.posts,0)
+        self.save();self.done()
+        self.assertEqual(m.web.parse(self.api.issues[7])['date'],'2027-02-13')
+        self.assertEqual(m.web.parse(self.api.issues[7])['time'],'10:30')
+        self.assertTrue(button.is_enabled())
+        button.click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.assertEqual(self.posts,2)
+        self.assertEqual(self.page.locator('#admin-token').input_value(),ADMIN)
+        self.assertIn('hidden',m.label_names(self.api.issues[4]))
+        self.assertEqual(self.page.request.get(self.base+'/prototype/meetings/meeting-4/').status,404)
+        self.assertTrue(self.page.get_by_role('button',name='Reload talks',exact=True).is_disabled())
+        self.assertTrue(button.is_disabled())
+        self.assertFalse(any('/labels' in req['url'] or req['method'] in {'PATCH','DELETE'} for req in self.requests))
+        self.page.get_by_role('link',name='Return to all meetings',exact=True).click()
+        self.assertNotIn('data-meeting-id="meeting-4"',self.page.content())
+        self.assertFalse(self.errors);self.assertFalse(self.workflow_errors)
+
+    def test_unsaved_visibility_and_inflight_saves_block_meeting_hiding(self):
+        self.mode='pending';self.open_editor();self.ready()
+        button=self.page.get_by_role('button',name='Hide Meeting',exact=True)
+        self.hidden_field(7).check();self.assertTrue(button.is_disabled())
+        self.hidden_field(7).uncheck();self.assertTrue(button.is_enabled())
+        self.field(7,3).fill('10:30');self.save()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Request submitted.')")
+        self.assertTrue(button.is_disabled());self.assertEqual(self.posts,1)
+        button.dispatch_event('click');self.assertEqual(self.posts,1)
+        self.process_batch();self.page.get_by_role('button',name='Check progress',exact=True).click();self.done()
+        self.assertTrue(button.is_enabled())
+
+    def test_equivalent_date_and_time_spellings_do_not_leave_hide_blocked_after_save(self):
+        self.open_editor();self.ready();before=copy.deepcopy(self.api.issues[7])
+        self.field(7,2).fill('12-2-27');self.field(7,3).fill('9:00')
+        button=self.page.get_by_role('button',name='Hide Meeting',exact=True)
+        self.assertTrue(button.is_disabled())
+        self.save()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'No scheduling changes to save.'")
+        self.assertTrue(button.is_enabled());self.assertEqual(self.posts,0)
+        self.assertEqual(self.api.issues[7],before)
+        button.click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.assertEqual(self.posts,1)
+
+    def test_empty_meeting_can_be_hidden_and_unsaved_cancellation_restores_availability(self):
+        self.open_editor();self.ready();button=self.page.get_by_role('button',name='Hide Meeting',exact=True)
+        self.field(7,3).fill('10:30');self.assertTrue(button.is_disabled())
+        self.field(7,3).fill('09:00');self.assertTrue(button.is_enabled())
+        for number in (7,8):del self.api.issues[number]
+        self.page.get_by_role('button',name='Reload talks',exact=True).click()
+        self.page.wait_for_function("() => !document.getElementById('hide-meeting').disabled")
+        self.assertTrue(self.page.get_by_role('button',name='Save changes',exact=True).is_disabled())
+        self.assertEqual(self.page.locator('#schedule-rows tr').count(),0)
+        button.click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.assertEqual(self.posts,1)
+
+    def test_role_revoked_after_loading_cannot_hide_a_meeting(self):
+        self.open_editor();self.ready();self.api.permissions['manager']='read'
+        self.page.get_by_role('button',name='Hide Meeting',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
+        self.assertFalse(self.page.locator('#hide-meeting').is_visible())
+        self.assertEqual(self.posts,0);self.assertNotIn('hidden',m.label_names(self.api.issues[4]))
+
+    def test_lost_hiding_response_and_spoofed_receipt_do_not_duplicate_or_confirm_early(self):
+        self.mode='pending';self.lost=True;self.open_editor();self.ready()
+        self.page.get_by_role('button',name='Hide Meeting',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Request submitted.')")
+        data=m.scheduler.parse(self.last_event['comment']['body'],m.web)
+        fake=dict(schema_version=1,operation='hide-meeting',request_id=data['request_id'],comment_id=self.last_event['comment']['id'],
+            request_hash=m.scheduler.digest(self.last_event['comment']['body']),meeting_id='meeting-4',state='synchronized',
+            results=[{'number':4,'state':'saved'}],revision='b'*40)
+        self.api.comments[4].append({'body':m.scheduler.STATUS+json.dumps(fake)+' -->','user':{'login':'member','type':'User'}})
+        self.page.get_by_role('button',name='Check progress',exact=True).click()
+        self.assertNotEqual(self.page.locator('#submission-status').inner_text(),'Meeting hidden.')
+        self.process_batch();self.page.get_by_role('button',name='Check progress',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.assertEqual(self.posts,1)
+
+    def test_hiding_sync_failure_is_not_reported_as_success_and_can_be_recovered(self):
+        self.mode='sync-failure';self.open_editor();self.ready()
+        self.page.get_by_role('button',name='Hide Meeting',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting hiding is not confirmed.')")
+        self.assertEqual(self.posts,1);self.assertIn('hidden',m.label_names(self.api.issues[4]))
+        self.assertTrue(self.page.get_by_role('button',name='Hide Meeting',exact=True).is_disabled())
+        self.mode='automatic';self.process_batch()
+        self.page.get_by_role('button',name='Check progress',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.assertEqual(self.posts,1)
+
+    def test_archived_meeting_hiding_works_with_keyboard_on_mobile(self):
+        self.api.issues[7]['labels'].append('talk-hidden')
+        m.manage_meeting(self.api,{'number':4,'id':'meeting-4','action':'archive'});self.flush_pages()
+        self.page.set_viewport_size({'width':390,'height':844})
+        self.open_editor();self.ready()
+        self.page.get_by_role('button',name='Hide Meeting',exact=True).focus();self.page.keyboard.press('Enter')
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
+        self.assertIn('talk-hidden',m.label_names(self.api.issues[7]))
+        self.assertTrue(self.api.issues[4]['locked']);self.assertEqual(self.api.issues[4]['state'],'closed')
+
 
 if __name__ == '__main__': unittest.main()

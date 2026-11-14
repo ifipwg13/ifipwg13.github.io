@@ -112,6 +112,11 @@ class FormBrowserFixture(unittest.TestCase):
 
     def flush_pages(self):
         files = self.api.branch_files(m.PUBLIC, m.PREVIEW_BRANCH)
+        # Model Git-backed preview deletions as well as writes. A hidden meeting
+        # must not retain a stale detail page in this temporary HTTP fixture.
+        for old in self.directory.glob('prototype/meetings/*/index.html'):
+            if str(old.relative_to(self.directory)) not in files:
+                old.unlink()
         for old in self.directory.glob('prototype/slides/*/*.pdf'):
             if str(old.relative_to(self.directory)) not in files:
                 old.unlink()

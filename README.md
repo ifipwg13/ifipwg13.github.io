@@ -108,10 +108,12 @@ an error rather than silently displaying an old meeting list.
 
 ## Home list administration
 
-Home contains Current chairs, Past chairs, Members and Emeriti, with membership
-sections stacked vertically. Open **Admin** in **Home | Meetings | Admin**,
+Home pairs **Current Chairs | Former Chairs** and **Members | Emeriti** in two
+columns; each pair stacks left-first on narrow screens. Open **Admin** in **Home | Meetings | Admin**,
 enter the existing administrator password/PAT, and **Check credentials**. The
-four boxes prefill only after successful authentication and complete loading.
+four boxes are hidden initially and appear, prefilled, only after successful
+Admin verification and complete loading. Changing the password or losing access
+hides the editors again. Former Chairs keeps the internal `past_chairs` data key.
 Edit one name per line, then **Save changes**. Wait for **Home lists updated**
 and refresh Home. **Reload lists** reads the current values without another
 password entry and discards unsaved edits.
@@ -141,14 +143,16 @@ For this feature review, stop the Codespaces server with **Ctrl+C**, then run:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/home-group-editor:refs/remotes/origin/feature/home-group-editor &&
+git fetch origin refs/heads/feature/home-layout-hide-meeting:refs/remotes/origin/feature/home-layout-hide-meeting &&
 home_editor_preview="$(mktemp /tmp/home-editor-preview.XXXXXX.py)" &&
-git show origin/feature/home-group-editor:scripts/preview_server.py > "$home_editor_preview" &&
-python3 "$home_editor_preview" --repository "$PWD" --branch feature/home-group-editor --port 8003
+git show origin/feature/home-layout-hide-meeting:scripts/preview_server.py > "$home_editor_preview" &&
+python3 "$home_editor_preview" --repository "$PWD" --branch feature/home-layout-hide-meeting --port 8003
 ```
 
 Open **Ports → 8003 → Open in Browser** in Firefox. Inspect Home, then click
-**Admin**. This is a review snapshot, so it does not receive Issue updates.
+**Admin** to check that list editors are initially hidden. From Meetings, open a
+meeting and **Schedule** to inspect the initially hidden action buttons. This is
+a review snapshot, so it does not receive Issue updates.
 Do not submit real edits until the private handler and paired public feature are
 merged. For full testing after integration, restart with the default
 `prototype/meeting-management` branch and use the synchronized preview.
@@ -166,7 +170,7 @@ with the sibling private checkout, plus the existing browser suites.
 - `index.html`: group information and all four public name lists. Edit the group
   introduction, Aims and Scope outside the `group-people` markers as ordinary
   HTML. Use **Admin** to edit lists; the marked sections are generated.
-- `prototype/data/group-people.json`: the source for Current chairs, Past chairs,
+- `prototype/data/group-people.json`: the source for Current Chairs, Former Chairs,
   Members and Emeriti. Admin updates this file and static Home together. Preserve
   country codes and deceased markers unless intentionally editing them. A manual
   JSON edit needs the private **Prepare meeting → Run workflow → rebuild-home**
@@ -673,11 +677,33 @@ python3 tests/browser_meetings.py
 
 Each Issue-backed meeting page has **Participation | Add talk | Schedule**.
 **Schedule** opens a form fixed to that meeting, without a meeting selector.
-An administrator checks one password, edits dates/times or **Hidden** checkboxes for several talks, and
+After a successful administrator check, **Save changes | Reload talks | Hide Meeting**
+appear together. An administrator checks one password, edits dates/times or **Hidden** checkboxes for several talks, and
 clicks **Save changes**. The password is a fine-grained PAT belonging to an Admin
 of `ifipwg13/meetings`, restricted to that repository with **Issues: Read and
 write** and automatic Metadata read access. No Contents scope is needed.
 It stays in the masked field and page memory, never browser storage or comments.
+
+**Hide Meeting** hides the entire selected meeting, including its public talks
+and current slide copies. Save talk date, time and visibility edits first: the
+button is disabled while edits are unsaved or a request is still processing,
+with a short message explaining why. A successful **Schedule synchronized** save
+enables Hide Meeting without another password entry or mandatory Reload. Partial
+or failed saves require reviewing the current talks and saving remaining changes.
+Empty meetings and archived meetings can also be hidden. No talk edits are silently
+included in the hide request. After verified **Meeting hidden**, the editor is
+disabled and links back to all meetings.
+
+This reuses existing meeting Hide semantics: add `hidden`, archive/close/lock
+registration, preserve private records and individual `talk-hidden` settings,
+and verify public removal. Remove **hidden first** in the private repository to
+restore the public meeting as archived; subsequently remove **archived** to
+reactivate it. No Show Meeting button is added; per-talk Hide/Show stays available.
+The new version-2 `hide-meeting` request shares the existing trusted Schedule
+workflow/receipt mechanism, including original-author Admin checks. Old version-1
+talk batches remain valid. Interrupted writes are verified rather than repeated,
+and a rerun never re-hides a meeting subsequently restored by an administrator.
+No new PAT scope, secret, workflow trigger or setup run is needed.
 
 The form uses the existing API helper and an inline bundle with an exact CSP
 hash; no extra script route, dependency, backend, or database is required.

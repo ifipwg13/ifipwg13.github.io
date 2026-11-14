@@ -103,7 +103,7 @@ span.talk-title, span.talk-authors { cursor: text; }
 .site-footer { background: #fff; border-radius: .7rem; margin-block: 1.25rem; color: #46566a; font-size: .9rem; }
 .members-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; margin-top: 1.5rem; }
 .members-grid h2 { margin-top: 0; }
-.member-list { list-style: none; padding: 0; }
+.member-list { list-style: none; padding: 0; overflow-wrap: anywhere; }
 .member-list li { margin-block: .35rem; }
 .skip-link { position: absolute; top: -10rem; left: 1rem; background: #fff; padding: .75rem; z-index: 1; }
 .skip-link:focus { top: 1rem; }
