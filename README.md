@@ -30,7 +30,7 @@ abstract. An optional PDF makes the title a link to the public slide file.
    beside **Terminal**, find port **8001**, and click its **Open in Browser**
    globe icon. If the port is missing, choose **Add Port** and enter `8001`.
 6. The group homepage opens in a new Firefox tab with a **Synchronized preview** bar.
-   Use **Members** and **Meetings** in its navigation. On the meetings page,
+   The member lists are on Home. Use **Meetings** or **Admin** in its navigation. On the meetings page,
    click a meeting's name to inspect it.
 
 Keep port visibility **Private**. This preview is separate from GitHub Pages:
@@ -95,7 +95,7 @@ feature in an existing Codespace, use **Preview this feature draft** below.
    meetings. Subsequent updates need only a browser refresh.
 
 The preview uses the same paths as static hosting: `/` is the group homepage,
-`/members/` is the roster, and `/prototype/` is the meetings list. Old preview
+`/members/` redirects to Home's Members section, and `/prototype/` is the meetings list. Old preview
 links under `/meetings/`, `/legacy-meetings/`, and `/assets/` redirect beneath
 `/prototype/`. Directory links without a final slash redirect to the correct URL. HTML, styling,
 redirects, and errors all instruct browsers not to cache preview responses. A
@@ -106,24 +106,82 @@ new meetings or activate their talk buttons. The server must stay running and
 the Codespace must be able to reach GitHub. If an update fails, the preview shows
 an error rather than silently displaying an old meeting list.
 
+## Home list administration
+
+Home contains Current chairs, Past chairs, Members and Emeriti, with membership
+sections stacked vertically. Open **Admin** in **Home | Meetings | Admin**,
+enter the existing administrator password/PAT, and **Check credentials**. The
+four boxes prefill only after successful authentication and complete loading.
+Edit one name per line, then **Save changes**. Wait for **Home lists updated**
+and refresh Home. **Reload lists** reads the current values without another
+password entry and discards unsaved edits.
+
+Unicode names, accents, umlauts, punctuation, country codes and deceased markers
+are supported. Entries keep their order; blank lines and surrounding spaces are
+ignored. Clearing a box clears that list on Save. Cross-list overlap is allowed.
+Names are escaped plain text, not executable HTML. These public lists do not
+control repository membership, permissions, credentials or meeting attendance.
+
+The source is `prototype/data/group-people.json`; static Home sections and revision
+metadata are generated from it. The browser needs only the private repository's
+Admin-account PAT with **Issues: Read and write**, not public Contents permissions.
+The trusted private workflow updates JSON and Home in one commit and verifies
+the output. Concurrent edits return a conflict; lost responses can be recovered
+without overwriting newer lists. Credentials stay in page memory, with no local
+or session storage. See the private README for the control record and maintenance.
+
+The editor is `prototype/admin.html`, built from `prototype/assets/group-admin.js`
+plus the shared API helper. Run `python3 scripts/build_talk_form.py` after script
+changes. Prefill reads Home's list markup/revision through the same preview
+origin; it needs no new preview-server route or standalone JavaScript request.
+Loading failures keep Save disabled and offer a working Reload path. The former
+Members URL redirects to `/#members` without maintaining duplicate content.
+
+For this feature review, stop the Codespaces server with **Ctrl+C**, then run:
+
+```sh
+cd "$(git rev-parse --show-toplevel)" &&
+git fetch origin refs/heads/feature/home-group-editor:refs/remotes/origin/feature/home-group-editor &&
+home_editor_preview="$(mktemp /tmp/home-editor-preview.XXXXXX.py)" &&
+git show origin/feature/home-group-editor:scripts/preview_server.py > "$home_editor_preview" &&
+python3 "$home_editor_preview" --repository "$PWD" --branch feature/home-group-editor --port 8003
+```
+
+Open **Ports → 8003 → Open in Browser** in Firefox. Inspect Home, then click
+**Admin**. This is a review snapshot, so it does not receive Issue updates.
+Do not submit real edits until the private handler and paired public feature are
+merged. For full testing after integration, restart with the default
+`prototype/meeting-management` branch and use the synchronized preview.
+
+Both feature PRs stay unmerged until approval; release private first, public
+second. Keep the publication PR to `main` draft/unmerged. No new token, permission
+scope or setup workflow run is needed; backups remain deferred. Automated tests
+use fictitious credentials; real PAT/Actions and Firefox/autofill checks remain
+manual after merge. Tests compare Home against the JSON source, never fixed
+membership counts. Run the public unit suite and `python3 tests/browser_group_admin.py`
+with the sibling private checkout, plus the existing browser suites.
+
 ## Editing the site
 
-- `index.html`: group name, affiliation, current/past chairs, Aims, and Scope;
-  edit the HTML directly. Corina Cirstea is first among the past chairs as
-  specified by the group. Do not infer appointment dates or terms.
-- `members/index.html`: the Members and Emeriti lists, with one entry per `<li>`.
-  Preserve names, country codes, categories, and deceased markers when updating
-  entries. Leadership roles are listed on Home rather than beside members.
-  This public roster does not grant or remove private GitHub repository access.
+- `index.html`: group information and all four public name lists. Edit the group
+  introduction, Aims and Scope outside the `group-people` markers as ordinary
+  HTML. Use **Admin** to edit lists; the marked sections are generated.
+- `prototype/data/group-people.json`: the source for Current chairs, Past chairs,
+  Members and Emeriti. Admin updates this file and static Home together. Preserve
+  country codes and deceased markers unless intentionally editing them. A manual
+  JSON edit needs the private **Prepare meeting → Run workflow → rebuild-home**
+  operation; increment its `version` when changing names manually.
+- `members/index.html`: a redirect and fallback link to Home; do not maintain a
+  second roster here. Displayed names do not grant or remove repository access.
 - `prototype/assets/style.css`: the shared stylesheet for every page. The
   variables at the top control the main colours and content width. Navigation
-  and member columns wrap for small screens without a framework. The purple
+  wraps for small screens without a framework. The purple
   background, white panels, green navigation, and rounded corners follow the
   original site's appearance; `prototype/assets/ifip-logo.png` is the local logo.
 - `prototype/data/legacy-meetings.json`: historical meeting/talk content; edit
   this dataset and rerun the renderer described below.
 
-The homepage, members page, and meeting list share Home / Members / Meetings
+The homepage, meeting list and administrator form share Home / Meetings / Admin
 navigation. Meeting detail pages link back to the list. Relative paths are the
 same in the preview and static site. Neither the homepage nor the roster depends
 on JavaScript, a login, or another website at page-load time.
@@ -282,7 +340,7 @@ python3 "$group_preview_script" --repository "$PWD" --branch feature/legacy-meet
 ```
 
 Open port **8003** from **Ports**, keeping it **Private**. The first page must be
-the group homepage with Home / Members / Meetings navigation and a **Review
+the group homepage with Home / Meetings / Admin navigation and a **Review
 snapshot** status bar. This block does not change local HTML, the checked-out
 branch, or the published site. For current Issue states, click **Switch to
 synchronized preview**; the status must then say **Synchronized preview** and
@@ -322,8 +380,8 @@ They check sorting across both card types, repeated sorting without duplicates,
 all historical detail pages, exact presenter/abstract text, native keyboard
 disclosures, inline abstract alignment, underlined noninteractive legacy text,
 removed meeting shortcuts, Home link destinations and keyboard focus, and
-overflow. They also check Home / Members /
-Meetings navigation through detail pages, the roster on desktop/mobile, and
+overflow. They also check Home / Meetings / Admin navigation through detail pages,
+the data-driven roster on desktop/mobile, and
 group-page/abstract use with JavaScript disabled. They add no site dependencies.
 
 
