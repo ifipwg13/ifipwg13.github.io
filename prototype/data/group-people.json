@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": 2,
+  "version": 3,
   "current_chairs": [
     "Corina Cirstea",
     "Fabio Gadducci",
@@ -15,6 +15,7 @@
     "Hans-Jörg Kreowski"
   ],
   "members": [
+    "Gauß, Carl-Friedrich (GER)",
     "Bae, Kyungmin (KR)",
     "Baldan, Paolo (IT)",
     "Barbosa, Luis S. (PT)",
@@ -51,6 +52,7 @@
     "Ölveczky, Peter (NO)"
   ],
   "emeriti": [
+    "Turing, Alan (UK)",
     "Astesiano, Egidio (IT)",
     "Bettaz, Mohamed (CZ)",
     "Bidoit, Michel (FR)",
