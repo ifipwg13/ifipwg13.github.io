@@ -18,7 +18,7 @@ class TalkFormBuildTests(unittest.TestCase):
         self.javascript = (ROOT / 'prototype/assets/talk-submission.js').read_text()
 
     def test_served_form_contains_current_script_and_needs_no_script_fetch(self):
-        for filename, source in [('submit-talk.html', 'talk-submission.js'), ('participation.html', 'participation.js'), ('create-meeting.html', 'create-meeting.js'), ('schedule.html', 'schedule.js')]:
+        for filename, source in [('submit-talk.html', 'talk-submission.js'), ('participation.html', 'participation.js'), ('create-meeting.html', 'create-meeting.js'), ('schedule.html', 'schedule.js'), ('admin.html', 'group-admin.js')]:
             page = (ROOT / 'prototype' / filename).read_text()
             javascript = (ROOT / 'prototype/assets' / source).read_text()
             self.assertEqual(page, build.render(page, javascript))
@@ -49,7 +49,7 @@ class TalkFormBuildTests(unittest.TestCase):
 
     def test_shared_helper_changes_invalidate_all_compiled_forms(self):
         shared = (ROOT / 'prototype/assets/member-api.js').read_text()
-        for filename, source in [('submit-talk.html', 'talk-submission.js'), ('participation.html', 'participation.js'), ('create-meeting.html', 'create-meeting.js'), ('schedule.html', 'schedule.js')]:
+        for filename, source in [('submit-talk.html', 'talk-submission.js'), ('participation.html', 'participation.js'), ('create-meeting.html', 'create-meeting.js'), ('schedule.html', 'schedule.js'), ('admin.html', 'group-admin.js')]:
             page = (ROOT / 'prototype' / filename).read_text()
             javascript = (ROOT / 'prototype/assets' / source).read_text()
             self.assertNotEqual(page, build.render(page, javascript, shared + '\n// Changed helper\n'))
