@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "version": 1,
+  "version": 2,
   "current_chairs": [
+    "Corina Cirstea",
     "Fabio Gadducci",
     "Holger Schlingloff"
   ],
   "past_chairs": [
-    "Corina Cirstea",
     "Markus Roggenbach",
     "Lutz Schröder",
     "Till Mossakowski",
