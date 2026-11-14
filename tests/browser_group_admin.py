@@ -93,8 +93,10 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         self.assertEqual(self.page.get_by_role('navigation').get_by_role('link').all_text_contents(),['Home','Meetings','Admin'])
         self.page.get_by_role('link',name='Admin',exact=True).click()
         self.assertEqual(self.page.locator('textarea').count(),4)
+        self.assertEqual(self.page.locator('textarea:visible').count(),0)
         self.assertTrue(self.page.locator('#current-chairs').is_disabled())
         self.page.locator('#admin-token').fill(ADMIN);self.page.get_by_role('button',name='Check credentials',exact=True).click();self.ready()
+        self.assertEqual(self.page.locator('textarea:visible').count(),4)
         for key,id in {'current_chairs':'current-chairs','past_chairs':'past-chairs','members':'members','emeriti':'emeriti'}.items():
             self.assertEqual(self.page.locator('#'+id).input_value(),'\n'.join(profile_tests.PEOPLE[key]))
         before=set(self.api.issues)
@@ -128,6 +130,32 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         self.api.permissions['manager']='read';self.save()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
         self.assertEqual(self.posts,0)
+
+    def test_editors_hide_after_credential_changes_expiry_and_non_admin_checks(self):
+        before=self.api.file(m.PUBLIC,g.DATA_PATH,m.PREVIEW_BRANCH)
+        self.open_admin();self.ready()
+        self.assertEqual(self.page.locator('textarea:visible').count(),4)
+        self.page.locator('#admin-token').fill(TOKEN)
+        self.assertEqual(self.page.locator('textarea:visible').count(),0)
+        self.page.get_by_role('button',name='Check credentials',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
+        self.assertEqual(self.page.locator('textarea:visible').count(),0)
+        self.open_admin();self.ready();self.auth_error=401
+        self.page.get_by_role('button',name='Reload lists',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('rejected')")
+        self.assertEqual(self.page.locator('textarea:visible').count(),0)
+        self.assertEqual(self.posts,0)
+        self.assertEqual(self.api.file(m.PUBLIC,g.DATA_PATH,m.PREVIEW_BRANCH),before)
+
+    def test_editors_are_hidden_in_initial_html_when_javascript_is_disabled(self):
+        context=self.browser.new_context(java_script_enabled=False)
+        try:
+            page=context.new_page();page.goto(self.base+'/prototype/admin.html')
+            self.assertEqual(page.locator('textarea:visible').count(),0)
+            notice=page.locator('noscript .notice')
+            self.assertEqual(notice.inner_text(),'Enable JavaScript to edit these lists. No changes have been sent.')
+            self.assertTrue(notice.is_visible())
+        finally:context.close()
 
     def test_loading_failure_disables_save_and_reload_recovers_without_empty_overwrite(self):
         original=self.api.file(m.PUBLIC,'index.html',m.PREVIEW_BRANCH)

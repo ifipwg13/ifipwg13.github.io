@@ -162,12 +162,18 @@ class BrowserTests(unittest.TestCase):
                     self.assertEqual(self.page.locator('[aria-labelledby="emeriti-heading"] li').all_text_contents(), self.people['emeriti'])
                     self.assertEqual(self.page.locator('.member-list a').count(), 0)
                     self.assertEqual(self.page.locator('#members li > *, #emeriti li > *').count(),0)
-                    self.assertGreater(self.page.locator('#emeriti').bounding_box()['y'],self.page.locator('#members').bounding_box()['y'])
+                    for left,right in [('chairs','past-chairs'),('members','emeriti')]:
+                        a=self.page.locator('#'+left).bounding_box(); b=self.page.locator('#'+right).bounding_box()
+                        if width>560:
+                            self.assertLess(a['x'],b['x']); self.assertLess(abs(a['y']-b['y']),2)
+                        else:
+                            self.assertGreaterEqual(b['y'],a['y']+a['height']); self.assertLess(abs(a['x']-b['x']),2)
                     self.assertEqual(self.page.locator('h1').evaluate('node => [getComputedStyle(node).color, getComputedStyle(document.body).color]'), colors)
                     self.no_overflow()
                     nav.get_by_role('link',name='Admin',exact=True).click()
                     self.assertEqual(self.page.url,base+'/prototype/admin.html')
                     self.assertEqual(self.page.locator('textarea').count(),4)
+                    self.assertEqual(self.page.locator('textarea:visible').count(),0)
                     self.assertTrue(self.page.get_by_role('button',name='Save changes',exact=True).is_disabled())
                     self.page.get_by_role('navigation').get_by_role('link', name='Meetings', exact=True).click()
                     self.assertEqual(self.page.url, base + '/prototype/')

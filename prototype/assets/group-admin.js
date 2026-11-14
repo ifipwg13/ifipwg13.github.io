@@ -15,12 +15,19 @@
     return value;
   }
   function checked() {
-    if (!account || !credential || password()!==credential || pending && account.login!==pending.login) throw problem('Check the original administrator credentials before continuing.');
+    if (!account || !credential || password()!==credential || pending && account.login!==pending.login) {
+      reset(); throw problem('Check the original administrator credentials before continuing.');
+    }
   }
-  function api(path,method='GET',body) { checked(); return memberAPI.request(path,method,body,credential); }
+  async function api(path,method='GET',body) {
+    checked();
+    try { return await memberAPI.request(path,method,body,credential); }
+    catch (failure) { if ([401,403].includes(failure.httpStatus)) reset(); throw failure; }
+  }
   function controls() {
     $('admin-token').readOnly=busy;
     $('check-admin').disabled=busy;
+    $('people-fields').hidden=!account || !loaded;
     $('people-fields').disabled=busy || !account || !loaded || !!pending;
     $('save-people').disabled=busy || !account || !loaded || !controller || !!pending;
     $('reload-people').disabled=busy || !account || !!pending && !pending.complete;
@@ -29,7 +36,10 @@
   }
   function reset() { credential=''; account=null; clearTimeout(timer); $('admin-identity').textContent=''; controls(); }
   async function verify() {
-    const candidate=password(), user=await memberAPI.administrator(candidate);
+    const candidate=password();
+    let user;
+    try { user=await memberAPI.administrator(candidate); }
+    catch (failure) { reset(); throw failure; }
     if (password()!==candidate || pending && user.login!==pending.login) throw problem('Check the original administrator credentials before continuing.');
     credential=candidate; account=user; $('admin-identity').textContent='Administrator access confirmed.';
   }
