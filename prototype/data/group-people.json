@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "version": 4,
+  "schema_version": 2,
+  "version": 5,
   "current_chairs": [
     "Corina Cirstea",
     "Fabio Gadducci",
@@ -87,5 +87,7 @@
     "Tarlecki, Andrzej (PL)",
     "Wagner, Eric (US) ✝",
     "Wirsing, Martin (DE)"
-  ]
+  ],
+  "aims": "To support and promote the systematic development of the fundamental mathematical theory of systems specification. To investigate the theory of formal models for systems specification, development, transformation and verification.",
+  "scope": "The theoretical aspects of the specification and development of computing systems that are based on algebraic and logical concepts, and can be studied systematically within a theory of systems specification."
 }

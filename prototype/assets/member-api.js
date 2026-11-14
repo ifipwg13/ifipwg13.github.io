@@ -111,6 +111,24 @@ const memberAPI = (() => {
     } catch { return null; }
   }
 
+  function registrationNames(comments, ident) {
+    if (!Array.isArray(comments)) throw inputError('Registrations could not be read.');
+    const names = new Map(), identifiers = new Set();
+    let duplicates = false;
+    for (const comment of comments) {
+      if (!comment || !Number.isSafeInteger(comment.id) || comment.id < 1) continue;
+      if (identifiers.has(comment.id)) throw inputError('Registrations changed while loading. Reload talks.');
+      identifiers.add(comment.id);
+      if (comment.user?.type !== 'User' || !Number.isSafeInteger(comment.user.id) || comment.user.id < 1) continue;
+      // Read all issuing accounts, not just the administrator whose PAT is in use.
+      const record = attendanceRecord(comment, ident, comment.user);
+      if (!record) continue;
+      if (names.has(record.key)) duplicates = true;
+      else names.set(record.key, record.name);
+    }
+    return {names:Array.from(names.values()).sort((a,b) => a.localeCompare(b)), duplicates};
+  }
+
   function calendar(value) {
     let year, month, day;
     let match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
@@ -159,6 +177,6 @@ const memberAPI = (() => {
     } finally { clearTimeout(timer); }
   }
 
-  return {repo, uploads, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
+  return {repo, uploads, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, registrationNames, calendar, clock, meetings,
     displayDate: value => value.split('-').reverse().join('-')};
 })();

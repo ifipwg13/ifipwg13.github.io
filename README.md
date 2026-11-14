@@ -108,14 +108,18 @@ an error rather than silently displaying an old meeting list.
 
 ## Home list administration
 
-Home pairs **Current Chairs | Former Chairs** and **Members | Emeriti** in two
-columns; each pair stacks left-first on narrow screens. Open **Admin** in **Home | Meetings | Admin**,
+Home shows **Aims**, **Scope**, then pairs **Current Chairs | Former Chairs** and
+**Members | Emeriti** in two columns; each pair stacks left-first on narrow screens.
+Open **Admin** in **Home | Meetings | Admin**,
 enter the existing administrator password/PAT, and **Check credentials**. The
-four boxes are hidden initially and appear, prefilled, only after successful
+six boxes are hidden initially and appear, prefilled, only after successful
 Admin verification and complete loading. Changing the password or losing access
 hides the editors again. Former Chairs keeps the internal `past_chairs` data key.
-Edit one name per line, then **Save changes**. Wait for **Home lists updated**
-and refresh Home. **Reload lists** reads the current values without another
+Edit Aims and Scope as plain Unicode text; paragraph breaks are preserved and
+HTML is displayed as text. Each accepts at most 10,000 characters within the
+combined request-size limit. Clearing a paragraph keeps its heading. Edit the
+four lists one name per line, then **Save changes**. Wait for **Home updated**
+and refresh Home. **Reload content** reads all six current values without another
 password entry and discards unsaved edits.
 
 Unicode names, accents, umlauts, punctuation, country codes and deceased markers
@@ -124,17 +128,20 @@ ignored. Clearing a box clears that list on Save. Cross-list overlap is allowed.
 Names are escaped plain text, not executable HTML. These public lists do not
 control repository membership, permissions, credentials or meeting attendance.
 
-The source is `prototype/data/group-people.json`; static Home sections and revision
-metadata are generated from it. The browser needs only the private repository's
+The source is version-2 `prototype/data/group-people.json`, containing all four
+lists plus `aims` and `scope`; all six static Home sections and revision metadata
+are generated from it. The migration copies the existing rendered wording and
+preserves the current roster. The browser needs only the private repository's
 Admin-account PAT with **Issues: Read and write**, not public Contents permissions.
 The trusted private workflow updates JSON and Home in one commit and verifies
 the output. Concurrent edits return a conflict; lost responses can be recovered
-without overwriting newer lists. Credentials stay in page memory, with no local
+without overwriting newer content. Older roster-only requests preserve Aims and
+Scope; stale versions conflict instead of clearing fields. Credentials stay in page memory, with no local
 or session storage. See the private README for the control record and maintenance.
 
 The editor is `prototype/admin.html`, built from `prototype/assets/group-admin.js`
 plus the shared API helper. Run `python3 scripts/build_talk_form.py` after script
-changes. Prefill reads Home's list markup/revision through the same preview
+changes. Prefill reads all six Home sections/revision through the same preview
 origin; it needs no new preview-server route or standalone JavaScript request.
 Loading failures keep Save disabled and offer a working Reload path. The former
 Members URL redirects to `/#members` without maintaining duplicate content.
@@ -143,10 +150,10 @@ For this feature review, stop the Codespaces server with **Ctrl+C**, then run:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/home-layout-hide-meeting:refs/remotes/origin/feature/home-layout-hide-meeting &&
+git fetch origin refs/heads/feature/home-text-registration-summary:refs/remotes/origin/feature/home-text-registration-summary &&
 home_editor_preview="$(mktemp /tmp/home-editor-preview.XXXXXX.py)" &&
-git show origin/feature/home-layout-hide-meeting:scripts/preview_server.py > "$home_editor_preview" &&
-python3 "$home_editor_preview" --repository "$PWD" --branch feature/home-layout-hide-meeting --port 8003
+git show origin/feature/home-text-registration-summary:scripts/preview_server.py > "$home_editor_preview" &&
+python3 "$home_editor_preview" --repository "$PWD" --branch feature/home-text-registration-summary --port 8003
 ```
 
 Open **Ports → 8003 → Open in Browser** in Firefox. Inspect Home, then click
@@ -167,14 +174,15 @@ with the sibling private checkout, plus the existing browser suites.
 
 ## Editing the site
 
-- `index.html`: group information and all four public name lists. Edit the group
-  introduction, Aims and Scope outside the `group-people` markers as ordinary
-  HTML. Use **Admin** to edit lists; the marked sections are generated.
+- `index.html`: group information, Aims, Scope and all four public name lists.
+  Use **Admin** for the six marked sections; `group-text` and `group-people`
+  regions are generated. Other introduction/branding markup remains ordinary HTML.
 - `prototype/data/group-people.json`: the source for Current Chairs, Former Chairs,
-  Members and Emeriti. Admin updates this file and static Home together. Preserve
+  Members and Emeriti, plus the `aims` and `scope` strings. Admin updates this file
+  and static Home together. Preserve
   country codes and deceased markers unless intentionally editing them. A manual
   JSON edit needs the private **Prepare meeting → Run workflow → rebuild-home**
-  operation; increment its `version` when changing names manually.
+  operation; increment its `version` when changing any content manually.
 - `members/index.html`: a redirect and fallback link to Home; do not maintain a
   second roster here. Displayed names do not grant or remove repository access.
 - `prototype/assets/style.css`: the shared stylesheet for every page. The
@@ -677,6 +685,17 @@ python3 tests/browser_meetings.py
 
 Each Issue-backed meeting page has **Participation | Add talk | Schedule**.
 **Schedule** opens a form fixed to that meeting, without a meeting selector.
+After Admin verification, **Registered so far: Name1, Name2, …** appears directly
+after When and before the date/time instructions. It reads structured registration
+comments privately from all issuing accounts, including supported older named
+formats; it does not infer real names from account profiles or earlier reactions.
+Names are sorted, duplicate name keys appear once with a review notice, and
+reaction-only registrations are flagged for review. **Reload talks** refreshes
+this snapshot. An empty successful read says None yet; failures say registrations
+could not be loaded. The background read cannot clear unsaved schedule edits or
+prevent scheduling solely because attendance is unavailable. Credentials changing
+or the page closing clears the private summary. Names/fingerprints/comments are
+never copied into public HTML, JSON or other published files.
 After a successful administrator check, **Save changes | Reload talks | Hide Meeting**
 appear together. An administrator checks one password, edits dates/times or **Hidden** checkboxes for several talks, and
 clicks **Save changes**. The password is a fine-grained PAT belonging to an Admin

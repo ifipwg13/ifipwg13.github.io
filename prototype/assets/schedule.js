@@ -7,6 +7,7 @@
   const $ = id => document.getElementById(id);
   let meeting = null, credential = '', account = null, registrationHash = '';
   let busy = false, rows = [], pending = null, timer = null, polls = 0, loaded = false, meetingHidden = false;
+  let registrationLoad = 0;
   const problem = message => Object.assign(new Error(message), {safe:true});
   const labels = issue => (issue.labels || []).map(label => typeof label === 'string' ? label : label.name);
   const hash = text => memberAPI.fingerprint(text);
@@ -55,7 +56,10 @@
       row.hiddenField.disabled = busy || !account || !!pending || meetingHidden;
     }
   }
-  function resetAccess() { credential = ''; account = null; clearTimeout(timer); $('admin-identity').textContent = ''; controls(); }
+  function resetAccess() {
+    credential = ''; account = null; clearTimeout(timer); registrationLoad++;
+    $('registered-people').textContent = ''; $('admin-identity').textContent = ''; controls();
+  }
   function headings(body) {
     const found = []; let offset = 0, fence = null;
     for (const line of body.match(/[^\n]*\n|[^\n]+$/g) || []) {
@@ -158,12 +162,44 @@
     $('form-status').textContent = rows.length ? '' : 'This meeting has no talks to schedule.';
     controls();
   }
+  async function loadRegistrations() {
+    const generation = ++registrationLoad, secret = credential, owner = account?.login;
+    const current = () => generation === registrationLoad && account?.login === owner && credential === secret && $('admin-token').value.trim() === secret;
+    const read = async path => {
+      if (!current()) throw new Error('Stale registration read');
+      const value = await api(path);
+      if (!current()) throw new Error('Stale registration read');
+      return value;
+    };
+    $('registered-people').textContent = 'Registered so far: Loading…';
+    try {
+      const comments = [];
+      for (let page = 1; page <= 100; page++) {
+        const batch = await read(memberAPI.repo + '/issues/' + meeting.registration + '/comments?per_page=100&page=' + page);
+        if (!Array.isArray(batch)) throw new Error('Invalid registrations');
+        comments.push(...batch);
+        if (batch.length < 100) break;
+        if (page === 100) throw new Error('Too many registration records');
+      }
+      const people = memberAPI.registrationNames(comments, ident);
+      const earlier = await read(memberAPI.repo + '/issues/' + meeting.registration + '/reactions?content=%2B1&per_page=1');
+      if (!Array.isArray(earlier)) throw new Error('Earlier registrations unavailable');
+      const notices = [earlier.length ? 'Some earlier registrations need review.' : '', people.duplicates ? 'Duplicate registration records need review.' : ''].filter(Boolean);
+      const names = people.names.length ? people.names.join(', ') : earlier.length ? 'Names for earlier registrations are unavailable.' : 'None yet.';
+      if (current()) $('registered-people').textContent = 'Registered so far: ' + names + (notices.length ? ' ' + notices.join(' ') : '');
+    } catch {
+      if (current()) $('registered-people').textContent = 'Registered so far: Could not load registrations. Use Reload talks to retry.';
+    }
+  }
   async function loadTalks() {
     loaded = false; controls();
     const current = await currentMeeting();
     meeting.date = current.date; meeting.endDate = current.endDate; registrationHash = current.hash;
     $('meeting-name').textContent = current.issue.title.replace(/^\[(?:meeting [0-9]+|meeting-[0-9]+|demo-001)\]\s*/, '');
     $('meeting-dates').textContent = 'When: ' + memberAPI.displayDate(meeting.date) + (meeting.date === meeting.endDate ? '' : ' – ' + memberAPI.displayDate(meeting.endDate));
+    // This read only updates its own text line. It cannot discard unsaved edits
+    // or block scheduling if the attendance endpoint is slow/unavailable.
+    void loadRegistrations();
     const fetched = [], seen = new Set();
     for (let page = 1; page <= 100; page++) {
       const batch = await api(memberAPI.repo + '/issues?state=all&labels=' + encodeURIComponent('talk,meeting:' + ident) + '&per_page=100&page=' + page);
@@ -178,6 +214,7 @@
       if (batch.length < 100) break;
       if (page === 100) throw problem('Too many talks to load safely. Contact the organizer.');
     }
+    checked();
     rows = fetched.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.number - b.number);
     pending = null; polls = 0; clearTimeout(timer); $('submission-status').textContent = '';
     loaded = true;
