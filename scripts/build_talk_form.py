@@ -37,7 +37,8 @@ def main():
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
     for filename, source in (('submit-talk.html', 'talk-submission.js'), ('participation.html', 'participation.js'),
-                             ('create-meeting.html', 'create-meeting.js'), ('schedule.html', 'schedule.js')):
+                             ('create-meeting.html', 'create-meeting.js'), ('schedule.html', 'schedule.js'),
+                             ('admin.html', 'group-admin.js')):
         path = ROOT / 'prototype' / filename
         page = path.read_text()
         expected = render(page, (ROOT / 'prototype/assets' / source).read_text())
