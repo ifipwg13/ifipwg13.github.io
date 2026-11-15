@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "version": 7,
+  "version": 8,
   "current_chairs": [
     "Corina Cirstea",
     "Fabio Gadducci",
@@ -15,6 +15,7 @@
     "Hans-Jörg Kreowski"
   ],
   "members": [
+    "Alice Alisson (AU)",
     "Kyungmin Bae (KR)",
     "Paolo Baldan (IT)",
     "Luis S. Barbosa (PT)",
