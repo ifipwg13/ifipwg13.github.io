@@ -58,7 +58,7 @@
   }
   function resetAccess() {
     credential = ''; account = null; clearTimeout(timer); registrationLoad++;
-    $('registered-people').textContent = ''; $('admin-identity').textContent = ''; controls();
+    $('registered-names').textContent = ''; $('admin-identity').textContent = ''; controls();
   }
   function headings(body) {
     const found = []; let offset = 0, fence = null;
@@ -171,7 +171,7 @@
       if (!current()) throw new Error('Stale registration read');
       return value;
     };
-    $('registered-people').textContent = 'Registered so far: Loading…';
+    $('registered-names').textContent = 'Loading…';
     try {
       const comments = [];
       for (let page = 1; page <= 100; page++) {
@@ -186,9 +186,9 @@
       if (!Array.isArray(earlier)) throw new Error('Earlier registrations unavailable');
       const notices = [earlier.length ? 'Some earlier registrations need review.' : '', people.duplicates ? 'Duplicate registration records need review.' : ''].filter(Boolean);
       const names = people.names.length ? people.names.join(', ') : earlier.length ? 'Names for earlier registrations are unavailable.' : 'None yet.';
-      if (current()) $('registered-people').textContent = 'Registered so far: ' + names + (notices.length ? ' ' + notices.join(' ') : '');
+      if (current()) $('registered-names').textContent = names + (notices.length ? ' ' + notices.join(' ') : '');
     } catch {
-      if (current()) $('registered-people').textContent = 'Registered so far: Could not load registrations. Use Reload talks to retry.';
+      if (current()) $('registered-names').textContent = 'Could not load registrations. Use Reload talks to retry.';
     }
   }
   async function loadTalks() {
@@ -196,7 +196,7 @@
     const current = await currentMeeting();
     meeting.date = current.date; meeting.endDate = current.endDate; registrationHash = current.hash;
     $('meeting-name').textContent = current.issue.title.replace(/^\[(?:meeting [0-9]+|meeting-[0-9]+|demo-001)\]\s*/, '');
-    $('meeting-dates').textContent = 'When: ' + memberAPI.displayDate(meeting.date) + (meeting.date === meeting.endDate ? '' : ' – ' + memberAPI.displayDate(meeting.endDate));
+    $('meeting-date-values').textContent = memberAPI.displayDate(meeting.date) + (meeting.date === meeting.endDate ? '' : ' – ' + memberAPI.displayDate(meeting.endDate));
     // This read only updates its own text line. It cannot discard unsaved edits
     // or block scheduling if the attendance endpoint is slow/unavailable.
     void loadRegistrations();

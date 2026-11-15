@@ -178,7 +178,8 @@ class BrowserTests(unittest.TestCase):
                     self.assertEqual(self.page.url,base+'/prototype/admin.html')
                     self.assertEqual(self.page.locator('textarea').count(),6)
                     self.assertEqual(self.page.locator('textarea:visible').count(),0)
-                    self.assertTrue(self.page.get_by_role('button',name='Save changes',exact=True).is_disabled())
+                    for id in ('save-people','reload-people'):
+                        self.assertFalse(self.page.locator('#'+id).is_visible())
                     self.page.get_by_role('navigation').get_by_role('link', name='Meetings', exact=True).click()
                     self.assertEqual(self.page.url, base + '/prototype/')
                     creation = self.page.get_by_role('link', name='Create meeting', exact=True)

@@ -1,10 +1,11 @@
-/* Shared-account attendance is selected by the entered name, not the token hash. */
+/* Shared-account attendance uses a selected Home roster name, not the token hash. */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
   const ident = new URLSearchParams(location.search).get('meeting');
   const tokenField = $('github-token');
   const nameField = $('participant-name');
+  let roster = new Set();
   let meeting = null;
   let accepting = false;
   let token = '';
@@ -18,11 +19,11 @@
   function message(error) { return error.httpStatus || error.safe ? error.message : 'The service could not be reached. Check status before trying again.'; }
   function action() { return document.querySelector('input[name="participation"]:checked')?.value; }
   function controls() {
-    $('submit-participation').disabled = busy || !!pending || !owner || !accepting || !action();
-    $('check-token').disabled = busy;
+    $('submit-participation').disabled = busy || !!pending || !owner || !accepting || !action() || !roster.has(nameField.value);
+    $('check-token').disabled = busy || !meeting || !roster.size;
     $('check-status').disabled = busy || !owner;
-    tokenField.disabled = busy;
-    nameField.disabled = busy;
+    tokenField.disabled = busy || !meeting || !roster.size;
+    nameField.disabled = busy || !roster.size;
     for (const radio of document.querySelectorAll('input[name="participation"]')) radio.disabled = busy;
   }
   function resetIdentity() {
@@ -39,6 +40,31 @@
     const value = tokenField.value.trim();
     if (!value || !/^[\x21-\x7e]+$/.test(value)) throw problem('Enter the password supplied by the organizer, without spaces.');
     return value;
+  }
+  function selectedName() {
+    const name = nameField.value;
+    if (!roster.has(name)) throw problem('Choose your name from the list.');
+    return name;
+  }
+  async function homeNames() {
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch('../index.html', {credentials: 'same-origin', cache: 'no-store', signal: controller.signal});
+      if (!response.ok) throw new Error();
+      const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const names = new Map();
+      for (const key of ['members', 'emeriti']) {
+        const lists = doc.querySelectorAll('ul[data-group-list="' + key + '"]');
+        if (lists.length !== 1 || lists[0].children.length > 500) throw new Error();
+        for (const item of lists[0].children) {
+          if (item.tagName !== 'LI' || item.children.length) throw new Error();
+          const name = memberAPI.participantName(item.textContent), key = memberAPI.nameKey(name);
+          if (!names.has(key)) names.set(key, name);
+        }
+      }
+      return Array.from(names.values()).sort((a, b) => a.localeCompare(b));
+    } catch { throw problem('Names could not be loaded. Click Retry loading to try again.'); }
+    finally { clearTimeout(timeout); }
   }
   function api(path, method = 'GET', body, credential = token) {
     return memberAPI.request(path, method, body, credential);
@@ -97,7 +123,7 @@
     busy = true;
     controls();
     try {
-      const name = memberAPI.participantName(nameField.value);
+      const name = selectedName();
       const identity = await memberAPI.identify(name, candidate);
       const user = identity.account;
       const person = identity.participant;
@@ -105,7 +131,7 @@
       await currentIssue(!pending, candidate);
       const comment = await ownAttendance(user, person, candidate);
       await checkEarlierRegistrations(candidate);
-      if (tokenField.value.trim() !== candidate || memberAPI.participantName(nameField.value) !== name) throw problem('The credentials changed. Check them again.');
+      if (tokenField.value.trim() !== candidate || selectedName() !== name) throw problem('The credentials changed. Check them again.');
       token = candidate;
       owner = user;
       participant = person;
@@ -117,7 +143,7 @@
 
   async function verifyPending() {
     if (!owner || !participant || readToken() !== token || owner.id !== pending.owner ||
-        memberAPI.nameKey(participant.name) !== pending.name_key || participant.credential_fingerprint !== pending.fingerprint || memberAPI.participantName(nameField.value) !== participant.name) throw problem('Check the original name and password before checking status.');
+        memberAPI.nameKey(participant.name) !== pending.name_key || participant.credential_fingerprint !== pending.fingerprint || selectedName() !== participant.name) throw problem('Check the original name and password before checking status.');
     await currentIssue(false);
     const comment = await ownAttendance(owner, participant);
     displayState(comment);
@@ -144,7 +170,7 @@
     event.preventDefault();
     if (busy || pending || !owner || !meeting || !accepting || !action()) return;
     showError();
-    try { if (readToken() !== token || !participant || memberAPI.participantName(nameField.value) !== participant.name) throw problem('Check your credentials before submitting.'); }
+    try { if (readToken() !== token || !participant || selectedName() !== participant.name) throw problem('Check your credentials before submitting.'); }
     catch (error) { showError(message(error)); return; }
     const desired = action() === 'register';
     $('submission-status').textContent = 'Updating participation…';
@@ -156,7 +182,7 @@
       // Recheck current private state immediately before a mutation.
       await currentIssue();
       const comment = await ownAttendance(owner, participant);
-      if (!owner || !participant || readToken() !== token || memberAPI.participantName(nameField.value) !== participant.name) throw problem('Check your credentials before submitting.');
+      if (!owner || !participant || readToken() !== token || selectedName() !== participant.name) throw problem('Check your credentials before submitting.');
       pending = {owner: owner.id, name_key: memberAPI.nameKey(participant.name), fingerprint: participant.credential_fingerprint, register: desired};
       if (desired && !comment) {
         writing = true;
@@ -190,17 +216,22 @@
 
   async function loadMeeting() {
     meeting = null;
+    roster = new Set();
+    nameField.replaceChildren(new Option('Choose your name', ''));
     accepting = false;
     resetIdentity();
     $('participation-fields').disabled = true;
     $('credential-fields').disabled = true;
     $('retry-meetings').hidden = true;
-    $('form-status').textContent = 'Loading meeting information…';
+    $('form-status').textContent = 'Loading meeting and names…';
     try {
       if (!/^(?:demo-001|meeting-[1-9][0-9]*)$/.test(ident || '')) throw problem('Open a meeting and choose Participation.');
-      const available = await memberAPI.meetings();
+      const [available, names] = await Promise.all([memberAPI.meetings(), homeNames()]);
       const context = available.get(ident);
       if (!context || context.status !== 'active' || !context.registration) throw problem('This meeting is unavailable or closed for participation changes.');
+      if (!names.length) throw problem('No Members or Emeriti are listed on Home. Contact the organizer.');
+      for (const name of names) nameField.append(new Option(name, name));
+      roster = new Set(names);
       meeting = context;
       accepting = true;
       $('meeting-name').textContent = context.name;
@@ -221,7 +252,7 @@
   $('retry-meetings').addEventListener('click', () => { showError(); loadMeeting(); });
   for (const radio of document.querySelectorAll('input[name="participation"]')) radio.addEventListener('change', controls);
   tokenField.addEventListener('input', resetIdentity);
-  nameField.addEventListener('input', resetIdentity);
+  for (const event of ['input', 'change']) nameField.addEventListener(event, resetIdentity);
   window.addEventListener('pagehide', () => { tokenField.value = ''; nameField.value = ''; resetIdentity(); });
   loadMeeting();
 })();

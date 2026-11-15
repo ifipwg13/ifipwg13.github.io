@@ -145,27 +145,31 @@ changes. Prefill reads all six Home sections/revision through the same preview
 origin; it needs no new preview-server route or standalone JavaScript request.
 Loading failures keep Save disabled and offer a working Reload path. The former
 Members URL redirects to `/#members` without maintaining duplicate content.
+Save and Reload stay hidden until administrator verification succeeds, including
+in the initial HTML and after credentials are changed or rejected.
 
 For this feature review, stop the Codespaces server with **Ctrl+C**, then run:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/home-text-registration-summary:refs/remotes/origin/feature/home-text-registration-summary &&
+git fetch origin refs/heads/feature/participation-roster-layout:refs/remotes/origin/feature/participation-roster-layout &&
 home_editor_preview="$(mktemp /tmp/home-editor-preview.XXXXXX.py)" &&
-git show origin/feature/home-text-registration-summary:scripts/preview_server.py > "$home_editor_preview" &&
-python3 "$home_editor_preview" --repository "$PWD" --branch feature/home-text-registration-summary --port 8003
+git show origin/feature/participation-roster-layout:scripts/preview_server.py > "$home_editor_preview" &&
+python3 "$home_editor_preview" --repository "$PWD" --branch feature/participation-roster-layout --port 8003
 ```
 
 Open **Ports → 8003 → Open in Browser** in Firefox. Inspect Home, then click
-**Admin** to check that list editors are initially hidden. From Meetings, open a
-meeting and **Schedule** to inspect the initially hidden action buttons. This is
+**Admin** to check that the editors, Save changes and Reload content are initially
+hidden. From Meetings, open a meeting and **Participation** to inspect the Name
+dropdown. After Admin verification on **Schedule**, Registered so far precedes
+When, with both labels bold. This is
 a review snapshot, so it does not receive Issue updates.
-Do not submit real edits until the private handler and paired public feature are
-merged. For full testing after integration, restart with the default
+For full testing after integration, restart with the default
 `prototype/meeting-management` branch and use the synchronized preview.
 
-Both feature PRs stay unmerged until approval; release private first, public
-second. Keep the publication PR to `main` draft/unmerged. No new token, permission
+Both feature PRs stay unmerged until approval. The private PR updates instructions
+only; no new handler, data migration or setup action is required. Keep the
+publication PR to `main` draft/unmerged. No new token, permission
 scope or setup workflow run is needed; backups remain deferred. Automated tests
 use fictitious credentials; real PAT/Actions and Firefox/autofill checks remain
 manual after merge. Tests compare Home against the JSON source, never fixed
@@ -500,15 +504,22 @@ selection, inactive/invalid context, and the compiled script's CSP hash.
 ## Participation and talk scheduling
 
 Participation fixes the meeting, checks the credentials and current canonical
-registration Issue, and adds/removes a **Yes — Real Name** comment for the entered
-participant. Repeated choices preserve the desired state. Unregister deletes only
+registration Issue, and adds/removes a **Yes — Real Name** comment for the selected
+participant. Name is a dropdown from the published Home Members and Emeriti,
+sorted and deduplicated with Unicode preserved. Both actions use the same list.
+Reloading Participation reads current Home content; missing or invalid lists
+disable submission and offer a retry. No arbitrary names can be entered through
+the form. Historical records whose names no longer match a listed entry require
+administrator reconciliation. Shared credentials still do not prove human identity.
+Repeated choices preserve the desired state. Unregister deletes only
 that participant's recognized comment during normal form use. Existing reactions,
 unrelated comments, other authors and labels remain unchanged. Duplicates require
 organizer review. Earlier reaction registrations are flagged for reconciliation;
 no automatic mapping or deletion is performed. A replacement password on the
 same issuing account can manage existing attendance by name, independent of the
 historical fingerprint. Existing version-2 name/member-ID comments remain readable;
-version-1 comments match their original usernames. Unknown records are preserved.
+version-1 comments match their original usernames only if those name keys are
+still offered by the roster. Unknown records are preserved.
 
 A successful DELETE returns HTTP 204 without JSON. Lost responses require
 read-only status checks using the original name/password instead of
