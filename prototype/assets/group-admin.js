@@ -202,6 +202,6 @@
     reset(); $('admin-token').value=''; loaded=null; pending=null;
     for (const id of [...Object.values(texts),...Object.values(fields)]) $(id).value='';
   });
-  $('form-status').textContent='Check administrator credentials to load the current Home content.';
+  $('form-status').textContent='';
   controls();
 })();

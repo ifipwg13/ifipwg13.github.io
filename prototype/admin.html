@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-VpYyIL1TnE1TulRF3Yy98Vsm0ZjcXMaBZeJfuH+jDKE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-HIbqKIYjYQ/9lYt8l+6XPb+3J5YQm3LFZAIdsiUgioo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Admin · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -17,7 +17,7 @@
   </div></header>
   <main id="main" class="container">
     <h1>Admin</h1>
-    <p>Edit Aims, Scope and the name lists shown on Home. Accents, umlauts and other Unicode characters are welcome.</p>
+    <p>Edit Aims, Scope and the name lists shown on Home.</p>
     <noscript><p class="notice">Enable JavaScript to edit Home. No changes have been sent.</p></noscript>
     <p id="form-status" role="status" aria-live="polite">The form could not start. Please reload this page.</p>
     <form id="talk-form" autocomplete="off">
@@ -446,7 +446,7 @@ const memberAPI = (() => {
     reset(); $('admin-token').value=''; loaded=null; pending=null;
     for (const id of [...Object.values(texts),...Object.values(fields)]) $(id).value='';
   });
-  $('form-status').textContent='Check administrator credentials to load the current Home content.';
+  $('form-status').textContent='';
   controls();
 })();
 
