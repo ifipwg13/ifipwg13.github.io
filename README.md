@@ -152,24 +152,25 @@ For this feature review, stop the Codespaces server with **Ctrl+C**, then run:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/feature/participation-roster-layout:refs/remotes/origin/feature/participation-roster-layout &&
+git fetch origin refs/heads/feature/meeting-notes-archive:refs/remotes/origin/feature/meeting-notes-archive &&
 home_editor_preview="$(mktemp /tmp/home-editor-preview.XXXXXX.py)" &&
-git show origin/feature/participation-roster-layout:scripts/preview_server.py > "$home_editor_preview" &&
-python3 "$home_editor_preview" --repository "$PWD" --branch feature/participation-roster-layout --port 8003
+git show origin/feature/meeting-notes-archive:scripts/preview_server.py > "$home_editor_preview" &&
+python3 "$home_editor_preview" --repository "$PWD" --branch feature/meeting-notes-archive --port 8003
 ```
 
 Open **Ports → 8003 → Open in Browser** in Firefox. Inspect Home, then click
 **Admin** to check that the editors, Save changes and Reload content are initially
-hidden. From Meetings, open a meeting and **Participation** to inspect the Name
-dropdown. After Admin verification on **Schedule**, Registered so far precedes
-When, with both labels bold. This is
+hidden and the two introductory reminder sentences have been removed. On a
+meeting's **Schedule** page, verify administrator access to see Registered,
+the Unicode Notes editor, When, and **Archive Meeting** beside **Hide Meeting**. This is
 a review snapshot, so it does not receive Issue updates.
 For full testing after integration, restart with the default
 `prototype/meeting-management` branch and use the synchronized preview.
 
-Both feature PRs stay unmerged until approval. The private PR updates instructions
-only; no new handler, data migration or setup action is required. Keep the
-publication PR to `main` draft/unmerged. No new token, permission
+Both feature PRs stay unmerged until approval. Merge the private handler before
+using the public form's new notes saves or Archive Meeting operation; its older
+version rejects those requests. No data migration or setup action is required.
+Keep the publication PR to `main` draft/unmerged. No new token, permission
 scope or setup workflow run is needed; backups remain deferred. Automated tests
 use fictitious credentials; real PAT/Actions and Firefox/autofill checks remain
 manual after merge. Tests compare Home against the JSON source, never fixed

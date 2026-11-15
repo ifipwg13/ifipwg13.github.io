@@ -117,6 +117,17 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         self.assertFalse(self.errors);self.assertFalse(self.workflow_errors)
         self.assertFalse(any('/contents/' in r['url'] or r['method'] in {'PATCH','DELETE'} for r in self.requests))
 
+    def test_removed_admin_strings_stay_absent_before_and_after_verification(self):
+        self.page.goto(self.base+'/prototype/admin.html')
+        removed=['Accents, umlauts and other Unicode characters are welcome.',
+                 'Check administrator credentials to load the current Home content.']
+        for value in removed:self.assertNotIn(value,self.page.locator('body').inner_text())
+        self.open_admin();self.ready()
+        for value in removed:self.assertNotIn(value,self.page.locator('body').inner_text())
+        self.page.locator('#members').fill('Zoë Müller\n李明')
+        self.save();self.done()
+        self.assertEqual(g.parse_profile(self.api.file(m.PUBLIC,g.DATA_PATH,m.PREVIEW_BRANCH))[0]['members'],['Zoë Müller','李明'])
+
     def test_reload_reuses_password_and_order_and_all_empty_lists_are_supported(self):
         self.open_admin();self.ready();self.page.locator('#members').fill('B. Example\nA. Example');self.save();self.done()
         self.page.get_by_role('button',name='Reload content',exact=True).click();self.ready()

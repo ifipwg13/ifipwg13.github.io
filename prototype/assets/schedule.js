@@ -3,11 +3,14 @@
   'use strict';
   const MARKER = '<!-- wg13-schedule-request -->';
   const STATUS = '<!-- wg13-schedule-status ';
+  const NOTES = '<!-- wg13-meeting-notes -->';
+  const EMPTY_HASH = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
   const ident = new URLSearchParams(location.search).get('meeting');
   const $ = id => document.getElementById(id);
   let meeting = null, credential = '', account = null, registrationHash = '';
   let busy = false, rows = [], pending = null, timer = null, polls = 0, loaded = false, meetingHidden = false;
   let registrationLoad = 0;
+  let notesLoaded = false, notesBaseline = '', notesHash = EMPTY_HASH;
   const problem = message => Object.assign(new Error(message), {safe:true});
   const labels = issue => (issue.labels || []).map(label => typeof label === 'string' ? label : label.name);
   const hash = text => memberAPI.fingerprint(text);
@@ -33,22 +36,28 @@
   }
   function unsaved() {
     const baseline = pending?.saved ? pending.snapshot : rows.map(row => ({number:row.number, date:row.dateText, time:row.timeText, hidden:row.hidden}));
-    return JSON.stringify(snapshot()) !== JSON.stringify(baseline);
+    const savedNotes = pending?.saved && pending.notesSnapshot !== undefined ? pending.notesSnapshot : notesBaseline;
+    return JSON.stringify(snapshot()) !== JSON.stringify(baseline) || notesLoaded && $('meeting-notes').value !== savedNotes;
   }
   function controls() {
     $('admin-token').readOnly = busy;
     $('check-admin').disabled = busy || !meeting;
     $('schedule-editor').hidden = !account || !loaded;
     $('save-schedule').hidden = !account;
-    $('save-schedule').disabled = busy || !account || !!pending || !rows.length;
+    $('save-schedule').disabled = busy || !account || !loaded || !!pending || !rows.length && !notesLoaded;
     $('reload-talks').hidden = !account;
     $('reload-talks').disabled = busy || meetingHidden || !!pending && !pending.complete;
     $('hide-meeting').hidden = !account;
-    $('hide-meeting').disabled = busy || !account || !loaded || meetingHidden || unsaved() || !!pending && !pending.saved;
+    $('hide-meeting').disabled = busy || !account || !loaded || !notesLoaded || meetingHidden || unsaved() || !!pending && !pending.saved;
+    $('archive-meeting').hidden = !account;
+    $('archive-meeting').disabled = $('hide-meeting').disabled || meeting?.status === 'archived';
+    $('meeting-notes').disabled = busy || !account || !notesLoaded || !!pending || meetingHidden;
+    $('notes-status').hidden = !account || !$('notes-status').textContent;
     const waiting = pending && !pending.complete;
-    $('hide-meeting-help').hidden = !account || !loaded || meetingHidden || !unsaved() && !waiting && (!pending || pending.saved);
-    $('hide-meeting-help').textContent = waiting ? 'Wait for your changes to finish saving before hiding this meeting.' :
-      pending && !pending.saved ? 'Reload talks and save any remaining changes before hiding this meeting.' : 'Save your talk changes before hiding this meeting.';
+    $('hide-meeting-help').hidden = !account || !loaded || meetingHidden || notesLoaded && !unsaved() && !waiting && (!pending || pending.saved);
+    $('hide-meeting-help').textContent = waiting ? 'Wait for your changes to finish saving before hiding or archiving this meeting.' :
+      !notesLoaded ? 'Reload talks to load the notes before hiding or archiving this meeting.' :
+      pending && !pending.saved ? 'Reload talks and save any remaining changes before hiding or archiving this meeting.' : 'Save your changes before hiding or archiving this meeting.';
     $('check-status').hidden = !pending;
     $('check-status').disabled = busy || !account;
     for (const row of rows) {
@@ -58,7 +67,36 @@
   }
   function resetAccess() {
     credential = ''; account = null; clearTimeout(timer); registrationLoad++;
+    notesLoaded = false; notesBaseline = ''; notesHash = EMPTY_HASH;
+    $('meeting-notes').value = ''; $('notes-status').textContent = '';
     $('registered-names').textContent = ''; $('admin-identity').textContent = ''; controls();
+  }
+  function notesText(value) {
+    value = value.replace(/\r\n?/g, '\n').normalize('NFC');
+    if (Array.from(value).length > 10000 || /[\x00-\x08\x0b-\x1f\x7f-\x9f\ud800-\udfff]/u.test(value)) {
+      throw problem('Use valid Unicode notes, at most 10,000 characters; line breaks and tabs are allowed.');
+    }
+    if (credential && value.includes(credential) || /(?:github_pat_|gh[pousr]_)[A-Za-z0-9_]+/.test(value)) throw problem('Never put a password in meeting notes.');
+    return value;
+  }
+  function notesDocument(requestId, text) {
+    return NOTES + '\n```json\n' + JSON.stringify({schema_version:1, meeting_id:ident, request_id:requestId, notes:text}) + '\n```';
+  }
+  async function storedNotes(comments) {
+    const found = comments.filter(comment => memberAPI.bot(comment) && (comment.body || '').startsWith(NOTES));
+    if (found.length > 1) throw problem('More than one trusted notes record exists. Contact the organizer.');
+    if (!found.length) return {text:'', hash:EMPTY_HASH};
+    const comment = found[0], match = /^<!-- wg13-meeting-notes -->\n```json\n([\s\S]+)\n```$/.exec(comment.body);
+    try {
+      const data = JSON.parse(match?.[1] || '');
+      if (Object.keys(data).sort().join(',') !== 'meeting_id,notes,request_id,schema_version' || data.schema_version !== 1 ||
+          data.meeting_id !== ident || !memberAPI.uuid(data.request_id) || typeof data.notes !== 'string' ||
+          !Number.isSafeInteger(comment.id) || comment.id < 1 ||
+          comment.issue_url !== 'https://api.github.com' + memberAPI.repo + '/issues/' + meeting.registration ||
+          new TextEncoder().encode(comment.body).length > 60000 || notesText(data.notes) !== data.notes ||
+          notesDocument(data.request_id, data.notes) !== comment.body) throw new Error();
+      return {text:data.notes, hash:await hash(comment.body)};
+    } catch { throw problem('The stored notes need administrator review. They were not replaced.'); }
   }
   function headings(body) {
     const found = []; let offset = 0, fence = null;
@@ -100,7 +138,7 @@
       endDate = memberAPI.calendar(answer(body, 'End date') || oldEnd || date);
       if (endDate < date) throw new Error();
     } catch { throw problem('The meeting dates need administrator correction before scheduling.'); }
-    return {issue, date, endDate, hash:await hash(body)};
+    return {issue, date, endDate, status:names.includes('archived') || issue.state === 'closed' || issue.locked ? 'archived' : 'active', hash:await hash(body)};
   }
   function talk(issue) {
     const names = labels(issue);
@@ -172,6 +210,8 @@
       return value;
     };
     $('registered-names').textContent = 'Loading…';
+    $('notes-status').textContent = 'Loading notes…';
+    let notesRead = false;
     try {
       const comments = [];
       for (let page = 1; page <= 100; page++) {
@@ -181,6 +221,16 @@
         if (batch.length < 100) break;
         if (page === 100) throw new Error('Too many registration records');
       }
+      try {
+        const note = await storedNotes(comments);
+        if (current()) {
+          notesBaseline = note.text; notesHash = note.hash; notesLoaded = true;
+          $('meeting-notes').value = note.text; $('notes-status').textContent = ''; controls();
+        }
+      } catch (failure) {
+        if (current()) { notesLoaded = false; $('notes-status').textContent = safe(failure); controls(); }
+      }
+      notesRead = true;
       const people = memberAPI.registrationNames(comments, ident);
       const earlier = await read(memberAPI.repo + '/issues/' + meeting.registration + '/reactions?content=%2B1&per_page=1');
       if (!Array.isArray(earlier)) throw new Error('Earlier registrations unavailable');
@@ -189,12 +239,17 @@
       if (current()) $('registered-names').textContent = names + (notices.length ? ' ' + notices.join(' ') : '');
     } catch {
       if (current()) $('registered-names').textContent = 'Could not load registrations. Use Reload talks to retry.';
+      if (current() && !notesRead) {
+        notesLoaded = false; $('notes-status').textContent = 'Notes could not be loaded. Use Reload talks to retry.'; controls();
+      }
     }
   }
   async function loadTalks() {
+    registrationLoad++; notesLoaded = false; notesBaseline = ''; notesHash = EMPTY_HASH;
+    $('meeting-notes').value = ''; $('notes-status').textContent = '';
     loaded = false; controls();
     const current = await currentMeeting();
-    meeting.date = current.date; meeting.endDate = current.endDate; registrationHash = current.hash;
+    meeting.date = current.date; meeting.endDate = current.endDate; meeting.status = current.status; registrationHash = current.hash;
     $('meeting-name').textContent = current.issue.title.replace(/^\[(?:meeting [0-9]+|meeting-[0-9]+|demo-001)\]\s*/, '');
     $('meeting-date-values').textContent = memberAPI.displayDate(meeting.date) + (meeting.date === meeting.endDate ? '' : ' – ' + memberAPI.displayDate(meeting.endDate));
     // This read only updates its own text line. It cannot discard unsaved edits
@@ -254,25 +309,33 @@
       if (!memberAPI.bot(comment) || !(comment.body || '').startsWith(STATUS)) continue;
       try {
         const value = JSON.parse(comment.body.slice(STATUS.length, comment.body.indexOf(' -->')));
-        const numbers = pending.operation === 'hide-meeting' ? [meeting.registration] : pending.changes.map(row => row.number);
+        const lifecycle = ['hide-meeting', 'archive-meeting'].includes(pending.operation);
+        const numbers = lifecycle ? [meeting.registration] : pending.changes.map(row => row.number);
         if (value.schema_version === 1 && value.request_id === pending.id && value.request_hash === pending.hash &&
-            (pending.operation === 'hide-meeting' ? value.operation === 'hide-meeting' : !value.operation) &&
+            (lifecycle ? value.operation === pending.operation : !value.operation) &&
             value.meeting_id === ident && value.comment_id === pending.commentId && Array.isArray(value.results) &&
-            value.results.length === numbers.length && value.results.every((row, i) => row.number === numbers[i])) latest = value;
+            value.results.length === numbers.length && value.results.every((row, i) => row.number === numbers[i]) &&
+            (pending.notesSnapshot === undefined || value.notes && (value.notes.state !== 'saved' || value.notes.after_hash === pending.notesTargetHash))) latest = value;
       } catch { /* Only a matching trusted receipt can confirm synchronization. */ }
     }
-    if (pending.operation === 'hide-meeting') {
+    checked();
+    if (['hide-meeting', 'archive-meeting'].includes(pending.operation)) {
+      const archiving = pending.operation === 'archive-meeting', verb = archiving ? 'archiving' : 'hiding';
       if (latest?.state === 'synchronized' && latest.results[0]?.state === 'saved' && /^[a-f0-9]{40}$/.test(latest.revision)) {
-        pending.complete = pending.saved = meetingHidden = true; clearTimeout(timer);
-        $('submission-status').textContent = 'Meeting hidden.';
-        $('meeting-link').href = './'; $('meeting-link').textContent = 'Return to all meetings';
+        pending.complete = pending.saved = true; clearTimeout(timer);
+        if (archiving) {
+          meeting.status = 'archived'; $('submission-status').textContent = 'Meeting archived.';
+        } else {
+          meetingHidden = true; $('submission-status').textContent = 'Meeting hidden.';
+          $('meeting-link').href = './'; $('meeting-link').textContent = 'Return to all meetings';
+        }
       } else if (['conflict','needs-attention'].includes(latest?.state)) {
         pending.complete = true; clearTimeout(timer);
         $('submission-status').textContent = latest.state === 'conflict' ?
-          'The meeting changed elsewhere. Hiding was not applied again. Reload talks to review its current state.' :
-          'Meeting hiding is not confirmed. Check progress or reload talks to review its current state.';
+          'The meeting changed elsewhere. ' + (archiving ? 'Archiving' : 'Hiding') + ' was not applied again. Reload talks to review its current state.' :
+          'Meeting ' + verb + ' is not confirmed. Check progress or reload talks to review its current state.';
       } else {
-        $('submission-status').textContent = 'Request submitted. Waiting for meeting hiding and synchronization. Use Check progress if this takes longer.';
+        $('submission-status').textContent = 'Request submitted. Waiting for meeting ' + verb + ' and synchronization. Use Check progress if this takes longer.';
         if (++polls < 12) timer = setTimeout(checkProgress, 5000);
       }
       return;
@@ -288,10 +351,24 @@
       if (result.publication === 'changed-elsewhere') parts.push('Visibility changed elsewhere — reload');
       row.statusField.textContent = parts.length ? parts.join('; ') : messages[result.state] || 'Not confirmed';
     }
-    if (['synchronized', 'partial'].includes(latest?.state) && /^[a-f0-9]{40}$/.test(latest.revision)) {
+    const notesOnly = pending.notesSnapshot !== undefined && !pending.changes.length;
+    const completed = ['synchronized', 'partial'].includes(latest?.state) && /^[a-f0-9]{40}$/.test(latest.revision) ||
+      notesOnly && ['saved', 'partial'].includes(latest?.state);
+    let notesSaved = pending.notesSnapshot === undefined;
+    if (pending.notesSnapshot !== undefined && completed) {
+      notesSaved = latest.notes?.state === 'saved' && latest.notes.after_hash === pending.notesTargetHash;
+      if (notesSaved) {
+        try { notesSaved = (await storedNotes(comments)).hash === pending.notesTargetHash; }
+        catch { notesSaved = false; }
+        checked();
+      }
+      $('notes-status').textContent = notesSaved ? '' : 'Notes were not confirmed or changed elsewhere. Reload talks before editing them again.';
+    }
+    if (completed) {
       pending.complete = true; clearTimeout(timer);
-      pending.saved = latest.state === 'synchronized';
-      $('submission-status').textContent = latest.state === 'synchronized' ? 'Schedule synchronized. Return to the meeting to see the updated programme.' : 'Some changes need attention. Review the talk results, then reload talks before retrying.';
+      pending.saved = ['synchronized', 'saved'].includes(latest.state) && notesSaved;
+      $('submission-status').textContent = pending.saved ? notesOnly ? 'Notes saved.' : 'Schedule synchronized. Return to the meeting to see the updated programme.' :
+        'Some changes need attention. Review the results, then reload talks before retrying.';
     } else if (latest?.state === 'needs-attention') {
       pending.complete = true; clearTimeout(timer);
       $('submission-status').textContent = 'Scheduling needs attention. Some changes may already be saved; synchronization is not confirmed. Reload talks to review the current schedule.';
@@ -308,9 +385,15 @@
   }
   async function submitRequest(data, changes = []) {
     const body = MARKER + '\n```json\n' + JSON.stringify(data) + '\n```';
+    if (new TextEncoder().encode(body).length > 60000) throw problem('This update is too large. Save fewer talk changes or shorten the notes.');
     pending = {id:data.request_id, body, hash:await hash(body), login:account.login, commentId:null, changes,
       operation:data.operation || 'schedule', snapshot:snapshot(), complete:false, saved:false};
-    $('submission-status').textContent = data.operation === 'hide-meeting' ? 'Submitting meeting hiding request…' : 'Submitting scheduling request…';
+    if (data.notes) {
+      pending.notesSnapshot = data.notes.text;
+      pending.notesTargetHash = await hash(notesDocument(data.request_id, data.notes.text));
+    }
+    $('submission-status').textContent = data.operation === 'hide-meeting' ? 'Submitting meeting hiding request…' :
+      data.operation === 'archive-meeting' ? 'Submitting meeting archiving request…' : 'Submitting changes…';
     try {
       const result = await api(memberAPI.repo + '/issues/' + meeting.registration + '/comments', 'POST', {body});
       if (!Number.isSafeInteger(result.id) || result.id < 1) throw new Error('Unconfirmed request');
@@ -340,12 +423,15 @@
         }
         if ('date' in change || 'hidden' in change) changes.push(change);
       }
-      if (!changes.length) {
+      const value = notesLoaded ? notesText($('meeting-notes').value) : null;
+      const note = notesLoaded && value !== notesBaseline ? {text:value, base_hash:notesHash} : null;
+      if (!changes.length && !note) {
         // Equivalent spellings (9:00 / 09:00, short dates) need no API write.
         // Restore their displayed baseline so a completed Save can enable Hide.
         for (const row of rows) {
           row.dateField.value = row.dateText; row.timeField.value = row.timeText;
         }
+        if (notesLoaded) $('meeting-notes').value = notesBaseline;
         $('submission-status').textContent = 'No scheduling changes to save.'; return;
       }
       if (changes.length > 100) throw problem('Save at most 100 changed talks at a time.');
@@ -353,22 +439,27 @@
       const current = await currentMeeting();
       if (current.hash !== registrationHash) throw problem('The meeting details changed. Reload talks before saving.');
       const id = crypto.randomUUID();
-      await submitRequest({schema_version:1, request_id:id, meeting_id:ident, registration_hash:registrationHash, changes}, changes);
+      if (notesLoaded) $('meeting-notes').value = value;
+      await submitRequest({schema_version:note ? 3 : 1, request_id:id, meeting_id:ident, registration_hash:registrationHash, changes,
+        ...(note ? {notes:note} : {})}, changes);
     } catch (failure) { error(safe(failure)); }
     finally { busy = false; controls(); }
   });
-  $('hide-meeting').addEventListener('click', async () => {
-    if (busy || !account || !loaded || meetingHidden || pending && !pending.saved) return;
-    if (unsaved()) { error('Save your talk changes before hiding this meeting.'); return; }
+  async function manageMeeting(operation) {
+    if (busy || !account || !loaded || !notesLoaded || meetingHidden || pending && !pending.saved || operation === 'archive-meeting' && meeting.status === 'archived') return;
+    if (unsaved()) { error('Save your changes before hiding or archiving this meeting.'); return; }
     error(); busy = true; controls();
     try {
       checked(); await verify();
       const current = await currentMeeting();
-      if (current.hash !== registrationHash) throw problem('The meeting details changed. Reload talks before hiding it.');
-      await submitRequest({schema_version:2, operation:'hide-meeting', request_id:crypto.randomUUID(), meeting_id:ident, registration_hash:registrationHash});
+      if (current.hash !== registrationHash) throw problem('The meeting details changed. Reload talks before hiding or archiving it.');
+      await submitRequest({schema_version:2, operation, request_id:crypto.randomUUID(), meeting_id:ident, registration_hash:registrationHash});
     } catch (failure) { error(safe(failure)); }
     finally { busy = false; controls(); }
-  });
+  }
+  $('hide-meeting').addEventListener('click', () => manageMeeting('hide-meeting'));
+  $('archive-meeting').addEventListener('click', () => manageMeeting('archive-meeting'));
+  $('meeting-notes').addEventListener('input', controls);
   $('check-admin').addEventListener('click', checkAccess);
   $('check-status').addEventListener('click', checkProgress);
   $('reload-talks').addEventListener('click', async () => {

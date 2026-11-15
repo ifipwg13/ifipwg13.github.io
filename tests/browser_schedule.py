@@ -5,6 +5,7 @@ Fictitious data/credentials only. Both repositories must be checked out.
 import copy
 import json
 import re
+import uuid
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import patch
 import unittest
@@ -137,6 +138,12 @@ class ScheduleBrowserTests(FormBrowserFixture):
     def hidden_field(self, number): return self.page.locator(f'tr[data-talk-number="{number}"] input[type="checkbox"]')
     def save(self): self.page.get_by_role('button',name='Save changes',exact=True).click()
     def done(self): self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Schedule synchronized.')")
+    def notes_ready(self): self.page.wait_for_function("() => !document.getElementById('meeting-notes').disabled")
+    def notes_done(self): self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Notes saved.'")
+    def stored_notes(self): return m.scheduler.notes.current(m,self.api,'meeting-4',4)
+    def seed_notes(self,value):
+        return self.api.api('POST',f'repos/{m.PRIVATE}/issues/4/comments',
+            {'body':m.scheduler.notes.document('meeting-4',str(uuid.uuid4()),value)})
 
     def attendance(self,name,number=1001,ident='meeting-4',schema=3,owner=50):
         data={'schema_version':schema,'meeting_id':ident,'credential_fingerprint':'f'*64}
@@ -157,9 +164,10 @@ class ScheduleBrowserTests(FormBrowserFixture):
 
     def registered(self,text):
         self.page.wait_for_function('(text)=>document.getElementById("registered-people").textContent.includes(text)',arg=text)
-        self.assertEqual(self.page.locator('#registered-people strong').inner_text(),'Registered so far:')
+        self.assertEqual(self.page.locator('#registered-people strong').inner_text(),'Registered:')
+        self.assertEqual(self.page.locator('#meeting-notes-row strong').inner_text(),'Notes:')
         self.assertEqual(self.page.locator('#meeting-dates strong').inner_text(),'When:')
-        self.assertEqual(self.page.locator('#registered-people').evaluate('node=>node.nextElementSibling.id'),'meeting-dates')
+        self.assertEqual(self.page.locator('#registered-people').evaluate('node=>node.nextElementSibling.id'),'meeting-notes-row')
 
     def test_real_navigation_one_password_multiple_changes_correct_meeting_and_public_order(self):
         self.page.goto(self.base + '/prototype/meetings/meeting-4/')
@@ -445,19 +453,219 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.page.get_by_role('button',name='Reload talks',exact=True).click(); self.ready()
         self.assertFalse(self.hidden_field(7).is_checked())
 
-    def test_all_three_actions_appear_together_only_after_admin_verification(self):
+    def test_notes_are_loaded_only_after_admin_verification_and_cleared_on_exit(self):
+        value='PRIVATE NOTES CANARY — Café, Grüße, 日本語.\nAnother line.'
+        self.seed_notes(value)
+        context=self.browser.new_context(java_script_enabled=False)
+        try:
+            page=context.new_page();page.goto(self.base+'/prototype/schedule.html?meeting=meeting-4')
+            self.assertFalse(page.locator('#meeting-notes').is_visible())
+            self.assertFalse(page.locator('#archive-meeting').is_visible())
+            self.assertEqual(page.locator('#meeting-notes').input_value(),'')
+        finally:context.close()
         self.page.goto(self.base+'/prototype/schedule.html?meeting=meeting-4')
         self.page.wait_for_function("() => !document.getElementById('admin-fields').disabled")
-        for id in ('save-schedule','reload-talks','hide-meeting'):self.assertFalse(self.page.locator('#'+id).is_visible())
+        self.assertFalse(self.page.locator('#meeting-notes').is_visible())
+        self.assertNotIn(value,self.page.content())
+        self.assertFalse(any('/comments?' in request['url'] for request in self.requests))
+        self.open_editor(credential=TOKEN)
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
+        self.assertFalse(self.page.locator('#meeting-notes').is_visible())
+        self.open_editor();self.ready();self.notes_ready()
+        self.assertEqual(self.page.locator('#meeting-notes').input_value(),value)
+        self.page.locator('#admin-token').fill('')
+        self.assertEqual(self.page.locator('#meeting-notes').input_value(),'')
+        self.assertFalse(self.page.locator('#meeting-notes').is_visible())
+        self.open_editor();self.ready();self.notes_ready()
+        self.page.evaluate("window.dispatchEvent(new PageTransitionEvent('pagehide'))")
+        self.assertEqual(self.page.locator('#meeting-notes').input_value(),'')
+        self.assertEqual(self.page.evaluate('[localStorage.length,sessionStorage.length]'),[0,0])
+        self.assertEqual(self.posts,0)
+
+    def test_notes_only_save_reload_edit_clear_for_a_meeting_without_talks(self):
+        for number in (7,8):del self.api.issues[number]
+        m.sync_preview(self.api,maintain_private=False);self.flush_pages()
+        public=copy.deepcopy(self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH))
+        self.open_editor();self.ready();self.notes_ready()
+        for value in ('Café\n\n日本語 — Grüße.','A correction.',''):
+            self.page.locator('#meeting-notes').fill(value);self.save();self.notes_done()
+            self.assertEqual(self.stored_notes()['text'],value)
+            self.assertEqual(self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH),public)
+            self.page.get_by_role('button',name='Reload talks',exact=True).click();self.ready();self.notes_ready()
+            self.assertEqual(self.page.locator('#meeting-notes').input_value(),value)
+        self.assertEqual(self.posts,3)
+        self.assertFalse(self.errors);self.assertFalse(self.workflow_errors)
+
+    def test_notes_and_talk_changes_must_be_saved_before_archiving_then_remain_editable(self):
+        self.api.issues[7]['labels'].append('talk-hidden')
+        self.api.comments[4].append(self.attendance('Alice PRIVATE MEMBER'))
+        self.open_editor();self.ready();self.notes_ready()
+        self.registered('Alice PRIVATE MEMBER')
+        self.page.locator('#meeting-notes').fill('PRIVATE NOTES CANARY — Grüße.\nRoom arrangements.')
+        self.field(8,3).fill('11:15')
+        for name in ('Hide Meeting','Archive Meeting'):
+            button=self.page.get_by_role('button',name=name,exact=True)
+            self.assertTrue(button.is_disabled());button.dispatch_event('click')
+        self.assertEqual(self.posts,0)
+        self.save();self.done()
+        self.assertEqual(m.web.parse(self.api.issues[8])['time'],'11:15')
+        self.assertEqual(self.page.locator('#admin-token').input_value(),ADMIN)
+        self.page.get_by_role('button',name='Archive Meeting',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting archived.'")
+        self.assertTrue(self.page.locator('#archive-meeting').is_disabled())
+        self.assertTrue(self.api.issues[4]['locked']);self.assertEqual(self.api.issues[4]['state'],'closed')
+        self.assertNotIn('hidden',m.label_names(self.api.issues[4]))
+        page=self.api.file(m.PUBLIC,'prototype/meetings/meeting-4/index.html',m.PREVIEW_BRANCH)
+        self.assertIn('This meeting is archived',page)
+        self.assertNotIn('data-talk-number="7"',page);self.assertIn('data-talk-number="8"',page)
+        self.assertNotIn('PRIVATE NOTES CANARY',page)
+        self.assertNotIn('participation.html?',page);self.assertNotIn('submit-talk.html?',page)
+        self.page.get_by_role('button',name='Reload talks',exact=True).click();self.ready();self.notes_ready()
+        self.assertIn('Room arrangements.',self.page.locator('#meeting-notes').input_value())
+        self.page.locator('#meeting-notes').fill('An archived correction.')
+        self.save();self.notes_done()
+        self.assertEqual(self.stored_notes()['text'],'An archived correction.')
+        self.assertEqual(m.registration_status(self.api.issues[4]),'archived')
+        self.assertFalse(any('/labels' in request['url'] or request['method'] in {'PATCH','DELETE'} for request in self.requests))
+        self.assertFalse(self.errors);self.assertFalse(self.workflow_errors)
+
+    def test_stale_notes_do_not_overwrite_a_later_correction_and_report_partial_results(self):
+        self.open_editor();self.ready();self.notes_ready()
+        self.seed_notes('A newer private correction.')
+        self.page.locator('#meeting-notes').fill('An older tab edit.')
+        self.field(7,3).fill('11:15');self.save()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Some changes')")
+        self.assertEqual(self.stored_notes()['text'],'A newer private correction.')
+        self.assertEqual(m.web.parse(self.api.issues[7])['time'],'11:15')
+        self.assertIn('not confirmed',self.page.locator('#notes-status').inner_text())
+        self.assertTrue(self.page.locator('#archive-meeting').is_disabled())
+        self.page.get_by_role('button',name='Reload talks',exact=True).click();self.ready();self.notes_ready()
+        self.assertEqual(self.page.locator('#meeting-notes').input_value(),'A newer private correction.')
+
+    def test_broken_notes_do_not_load_as_empty_or_block_independent_talk_corrections(self):
+        body=m.scheduler.notes.MARKER+'\nPRIVATE BROKEN NOTES CANARY'
+        self.api.api('POST',f'repos/{m.PRIVATE}/issues/4/comments',{'body':body})
+        self.open_editor();self.ready()
+        self.page.wait_for_function("() => document.getElementById('notes-status').textContent.includes('administrator review')")
+        self.assertTrue(self.page.locator('#meeting-notes').is_disabled())
+        self.assertNotIn('PRIVATE BROKEN NOTES CANARY',self.page.content())
+        self.field(7,3).fill('11:15');self.save();self.done()
+        self.assertEqual(m.web.parse(self.api.issues[7])['time'],'11:15')
+        data=m.scheduler.parse(self.last_event['comment']['body'],m.web)
+        self.assertNotIn('notes',data)
+        self.assertIn(body,[comment['body'] for comment in self.api.comments[4]])
+        self.assertTrue(self.page.locator('#hide-meeting').is_disabled())
+        self.assertTrue(self.page.locator('#archive-meeting').is_disabled())
+
+    def test_notes_unicode_boundary_markup_and_invalid_input_are_handled_as_text(self):
+        self.open_editor();self.ready();self.notes_ready()
+        for value in ('x'*10001,'bad\x01text',ADMIN):
+            self.page.locator('#meeting-notes').fill(value);self.save()
+            self.page.wait_for_function("() => !document.getElementById('form-error').hidden")
+            self.assertEqual(self.posts,0)
+        for value in ('😀'*10000,'<script>alert("private")</script>\nRene\u0301 & Müller'):
+            self.page.locator('#meeting-notes').fill(value);self.save();self.notes_done()
+            self.assertEqual(self.stored_notes()['text'],m.scheduler.notes.text(value))
+            self.assertTrue(self.page.locator('#archive-meeting').is_enabled())
+            self.page.get_by_role('button',name='Reload talks',exact=True).click();self.ready();self.notes_ready()
+            self.assertEqual(self.page.locator('#meeting-notes').input_value(),m.scheduler.notes.text(value))
+            self.assertEqual(self.page.locator('#meeting-notes-row script').count(),0)
+        self.assertFalse(self.errors);self.assertFalse(self.workflow_errors)
+
+    def test_uncertain_notes_post_and_member_forged_receipt_never_duplicate_or_confirm_early(self):
+        self.mode='pending';self.lost=True;self.open_editor();self.ready();self.notes_ready()
+        self.page.locator('#meeting-notes').fill('PRIVATE NOTES CANARY — one request.')
+        self.save()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Request submitted.')")
+        data=m.scheduler.parse(self.last_event['comment']['body'],m.web)
+        target=m.scheduler.notes.document('meeting-4',data['request_id'],data['notes']['text'])
+        fake=dict(schema_version=1,request_id=data['request_id'],comment_id=self.last_event['comment']['id'],
+            request_hash=m.scheduler.digest(self.last_event['comment']['body']),meeting_id='meeting-4',state='saved',results=[],
+            notes={'state':'saved','after_hash':m.scheduler.digest(target)})
+        self.api.comments[4].append({'body':m.scheduler.STATUS+json.dumps(fake)+' -->','user':{'login':'member','type':'User'}})
+        self.page.get_by_role('button',name='Check progress',exact=True).click()
+        self.assertNotEqual(self.page.locator('#submission-status').inner_text(),'Notes saved.')
+        self.assertTrue(self.page.locator('#archive-meeting').is_disabled())
+        self.process_batch();self.page.get_by_role('button',name='Check progress',exact=True).click();self.notes_done()
+        self.assertEqual(self.posts,1)
+        self.assertEqual(sum(comment['body'].startswith(m.scheduler.notes.MARKER) for comment in self.api.comments[4]),1)
+
+    def test_notes_read_failure_can_be_retried_without_saving_an_empty_value(self):
+        self.seed_notes('PRIVATE NOTES CANARY — retained.')
+        self.hold_registration_read=True;self.open_editor();self.ready()
+        self.assertTrue(self.page.locator('#meeting-notes').is_disabled())
+        self.json_response(self.held_registration_route,{'message':'PRIVATE NOTES ERROR CANARY'},500)
+        self.page.wait_for_function("() => document.getElementById('notes-status').textContent.includes('could not be loaded')")
+        self.assertTrue(self.page.locator('#archive-meeting').is_disabled())
+        self.assertNotIn('PRIVATE NOTES ERROR CANARY',self.page.content())
+        self.page.get_by_role('button',name='Reload talks',exact=True).click();self.ready();self.notes_ready()
+        self.assertEqual(self.page.locator('#meeting-notes').input_value(),'PRIVATE NOTES CANARY — retained.')
+        self.assertEqual(self.posts,0)
+
+    def test_archive_denies_revoked_role_and_clears_loaded_private_notes(self):
+        self.seed_notes('PRIVATE NOTES CANARY — protected.')
+        self.open_editor();self.ready();self.notes_ready()
+        self.api.permissions['manager']='read'
+        self.page.get_by_role('button',name='Archive Meeting',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
+        self.assertFalse(self.page.locator('#archive-meeting').is_visible())
+        self.assertEqual(self.page.locator('#meeting-notes').input_value(),'')
+        self.assertEqual(self.posts,0)
+        self.assertNotIn('archived',m.label_names(self.api.issues[4]))
+
+    def test_archiving_failure_and_later_reactivation_are_not_overridden_by_retry(self):
+        self.mode='sync-failure';self.open_editor();self.ready();self.notes_ready()
+        self.page.get_by_role('button',name='Archive Meeting',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting archiving is not confirmed.')")
+        self.assertEqual(self.posts,1);self.assertIn('archived',m.label_names(self.api.issues[4]))
+        self.api.issues[4]['labels'].remove('archived')
+        m.manage_meeting(self.api,{'number':4,'id':'meeting-4','action':'reactivate'});self.flush_pages()
+        self.mode='automatic';self.process_batch()
+        self.page.get_by_role('button',name='Check progress',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.includes('Archiving was not applied again')")
+        self.assertEqual(m.registration_status(self.api.issues[4]),'active')
+        self.assertEqual(self.posts,1)
+
+    def test_archive_without_talks_works_with_keyboard_on_mobile(self):
+        for number in (7,8):del self.api.issues[number]
+        self.page.set_viewport_size({'width':375,'height':950})
+        self.open_editor();self.ready();self.notes_ready()
+        self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),375)
+        self.page.get_by_role('button',name='Archive Meeting',exact=True).focus();self.page.keyboard.press('Enter')
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting archived.'")
+        self.assertTrue(self.page.locator('#archive-meeting').is_disabled())
+        self.assertEqual(m.registration_status(self.api.issues[4]),'archived')
+        self.assertEqual(self.posts,1)
+        self.page.get_by_role('button',name='Reload talks',exact=True).click();self.ready();self.notes_ready()
+        self.assertTrue(self.page.locator('#archive-meeting').is_disabled())
+
+    def test_notes_survive_hiding_and_restoring_the_meeting(self):
+        self.seed_notes('PRIVATE NOTES CANARY — keep through restoration.')
+        before=self.stored_notes()
+        self.open_editor();self.ready();self.notes_ready()
+        self.page.get_by_role('button',name='Hide Meeting',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.assertEqual(self.stored_notes(),before)
+        self.api.issues[4]['labels'].remove('hidden')
+        m.manage_meeting(self.api,{'number':4,'id':'meeting-4','action':'sync'})
+        self.api.issues[4]['labels'].remove('archived')
+        m.manage_meeting(self.api,{'number':4,'id':'meeting-4','action':'reactivate'});self.flush_pages()
+        self.open_editor();self.ready();self.notes_ready()
+        self.assertEqual(self.page.locator('#meeting-notes').input_value(),before['text'])
+
+    def test_all_four_actions_appear_together_only_after_admin_verification(self):
+        self.page.goto(self.base+'/prototype/schedule.html?meeting=meeting-4')
+        self.page.wait_for_function("() => !document.getElementById('admin-fields').disabled")
+        for id in ('save-schedule','reload-talks','hide-meeting','archive-meeting'):self.assertFalse(self.page.locator('#'+id).is_visible())
         self.page.locator('#admin-token').fill(TOKEN)
         self.page.get_by_role('button',name='Check credentials',exact=True).click()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
-        for id in ('save-schedule','reload-talks','hide-meeting'):self.assertFalse(self.page.locator('#'+id).is_visible())
+        for id in ('save-schedule','reload-talks','hide-meeting','archive-meeting'):self.assertFalse(self.page.locator('#'+id).is_visible())
         self.open_editor();self.ready()
-        boxes=[self.page.get_by_role('button',name=name,exact=True).bounding_box() for name in ('Save changes','Reload talks','Hide Meeting')]
+        boxes=[self.page.get_by_role('button',name=name,exact=True).bounding_box() for name in ('Save changes','Reload talks','Hide Meeting','Archive Meeting')]
         self.assertLess(max(box['y'] for box in boxes)-min(box['y'] for box in boxes),2)
         self.page.locator('#admin-token').fill('')
-        for id in ('save-schedule','reload-talks','hide-meeting'):self.assertFalse(self.page.locator('#'+id).is_visible())
+        for id in ('save-schedule','reload-talks','hide-meeting','archive-meeting'):self.assertFalse(self.page.locator('#'+id).is_visible())
         self.assertEqual(self.posts,0)
 
     def test_unsaved_talk_edits_must_be_saved_before_hiding_without_password_reentry(self):
@@ -467,7 +675,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         for column,value in [(2,'13-02-2027'),(3,'10:30')]:
             self.field(7,column).fill(value)
             self.assertTrue(button.is_disabled())
-            self.assertIn('Save your talk changes',self.page.locator('#hide-meeting-help').inner_text())
+            self.assertIn('Save your changes',self.page.locator('#hide-meeting-help').inner_text())
         button.dispatch_event('click')
         self.assertEqual(self.posts,0)
         self.save();self.done()
@@ -519,7 +727,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         for number in (7,8):del self.api.issues[number]
         self.page.get_by_role('button',name='Reload talks',exact=True).click()
         self.page.wait_for_function("() => !document.getElementById('hide-meeting').disabled")
-        self.assertTrue(self.page.get_by_role('button',name='Save changes',exact=True).is_disabled())
+        self.assertTrue(self.page.get_by_role('button',name='Save changes',exact=True).is_enabled())
         self.assertEqual(self.page.locator('#schedule-rows tr').count(),0)
         button.click()
         self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
@@ -579,10 +787,10 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.assertFalse(any('/comments?' in record['url'] for record in self.requests))
         self.open_editor();self.ready();self.registered('Alice PRIVATE CANARY, Zoë PRIVATE CANARY')
         line=self.page.locator('#registered-people')
-        self.assertEqual(line.inner_text(),'Registered so far: Alice PRIVATE CANARY, Zoë PRIVATE CANARY')
-        self.assertEqual(line.evaluate('node=>node.nextElementSibling.id'),'meeting-dates')
-        self.assertTrue(line.evaluate('node=>node.nextElementSibling.nextElementSibling.textContent.startsWith("Use ")'))
-        self.assertEqual(line.locator('strong').inner_text(),'Registered so far:')
+        self.assertEqual(line.inner_text(),'Registered: Alice PRIVATE CANARY, Zoë PRIVATE CANARY')
+        self.assertEqual(line.evaluate('node=>node.nextElementSibling.id'),'meeting-notes-row')
+        self.assertTrue(self.page.locator('#meeting-dates').evaluate('node=>node.nextElementSibling.textContent.startsWith("Use ")'))
+        self.assertEqual(line.locator('strong').inner_text(),'Registered:')
         self.assertEqual(self.page.locator('#meeting-dates strong').inner_text(),'When:')
         self.assertGreater(int(line.locator('strong').evaluate('node=>getComputedStyle(node).fontWeight')),400)
         self.assertNotIn('Other meeting',line.inner_text())
