@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-hdHecgenvn5XB4W1v6tWdgyY41J+GSrMWmggPAlBeCQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-Y/GCpbpHuy12FVvoKpxi0yd+fc+BLUZf3FmP5iHNlrY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Participation · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -169,6 +169,24 @@ const memberAPI = (() => {
     } catch { return null; }
   }
 
+  function registrationNames(comments, ident) {
+    if (!Array.isArray(comments)) throw inputError('Registrations could not be read.');
+    const names = new Map(), identifiers = new Set();
+    let duplicates = false;
+    for (const comment of comments) {
+      if (!comment || !Number.isSafeInteger(comment.id) || comment.id < 1) continue;
+      if (identifiers.has(comment.id)) throw inputError('Registrations changed while loading. Reload talks.');
+      identifiers.add(comment.id);
+      if (comment.user?.type !== 'User' || !Number.isSafeInteger(comment.user.id) || comment.user.id < 1) continue;
+      // Read all issuing accounts, not just the administrator whose PAT is in use.
+      const record = attendanceRecord(comment, ident, comment.user);
+      if (!record) continue;
+      if (names.has(record.key)) duplicates = true;
+      else names.set(record.key, record.name);
+    }
+    return {names:Array.from(names.values()).sort((a,b) => a.localeCompare(b)), duplicates};
+  }
+
   function calendar(value) {
     let year, month, day;
     let match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
@@ -217,7 +235,7 @@ const memberAPI = (() => {
     } finally { clearTimeout(timer); }
   }
 
-  return {repo, uploads, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
+  return {repo, uploads, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, registrationNames, calendar, clock, meetings,
     displayDate: value => value.split('-').reverse().join('-')};
 })();
 

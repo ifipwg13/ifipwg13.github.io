@@ -145,6 +145,10 @@ class BrowserTests(unittest.TestCase):
                     self.open(server, '/')
                     self.assertEqual(self.page.locator('h1').inner_text(), 'Foundations of System Specification')
                     self.assertEqual(self.page.locator('.affiliation').inner_text(), 'An IFIP TC1 Working Group')
+                    order=[self.page.locator('#'+key).bounding_box()['y'] for key in ('aims','scope','chairs','members')]
+                    self.assertEqual(order,sorted(order))
+                    for key in ('aims','scope'):
+                        self.assertEqual(self.page.locator('[data-group-text="'+key+'"]').text_content(),self.people[key])
                     self.assertEqual(self.page.locator('[aria-labelledby="chairs-heading"] li').all_text_contents(),
                                      self.people['current_chairs'])
                     self.assertEqual(self.page.locator('[aria-labelledby="past-chairs-heading"] li').all_text_contents(),
@@ -172,7 +176,7 @@ class BrowserTests(unittest.TestCase):
                     self.no_overflow()
                     nav.get_by_role('link',name='Admin',exact=True).click()
                     self.assertEqual(self.page.url,base+'/prototype/admin.html')
-                    self.assertEqual(self.page.locator('textarea').count(),4)
+                    self.assertEqual(self.page.locator('textarea').count(),6)
                     self.assertEqual(self.page.locator('textarea:visible').count(),0)
                     self.assertTrue(self.page.get_by_role('button',name='Save changes',exact=True).is_disabled())
                     self.page.get_by_role('navigation').get_by_role('link', name='Meetings', exact=True).click()

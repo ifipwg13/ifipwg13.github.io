@@ -7,6 +7,7 @@ import unittest
 
 from browser_talk_submission import FormBrowserFixture, TOKEN, API, ROOT, m
 import test_group_profile as profile_tests
+from test_group_content import CONTENT
 
 g=m.profile
 ADMIN='github_pat_GROUP_ADMIN_FICTITIOUS_ONLY'
@@ -17,7 +18,8 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         super().setUp()
         self.api=profile_tests.GroupGitHub()
         files=self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)
-        files['index.html']=g.render((ROOT/'index.html').read_text(),profile_tests.PEOPLE,1)
+        files[g.DATA_PATH]=g.document(profile_tests.PEOPLE,1,CONTENT)
+        files['index.html']=g.render((ROOT/'index.html').read_text(),profile_tests.PEOPLE,1,CONTENT)
         files['prototype/admin.html']=(ROOT/'prototype/admin.html').read_text()
         files['members/index.html']=(ROOT/'members/index.html').read_text()
         self.flush_pages()
@@ -86,17 +88,17 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         self.page.get_by_role('button',name='Check credentials',exact=True).click()
     def ready(self):self.page.wait_for_function("() => !document.getElementById('save-people').disabled")
     def save(self):self.page.get_by_role('button',name='Save changes',exact=True).click()
-    def done(self):self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Home lists updated.')")
+    def done(self):self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Home updated.')")
 
     def test_navigation_prefill_unicode_save_and_static_home(self):
         self.page.goto(self.base+'/')
         self.assertEqual(self.page.get_by_role('navigation').get_by_role('link').all_text_contents(),['Home','Meetings','Admin'])
         self.page.get_by_role('link',name='Admin',exact=True).click()
-        self.assertEqual(self.page.locator('textarea').count(),4)
+        self.assertEqual(self.page.locator('textarea').count(),6)
         self.assertEqual(self.page.locator('textarea:visible').count(),0)
         self.assertTrue(self.page.locator('#current-chairs').is_disabled())
         self.page.locator('#admin-token').fill(ADMIN);self.page.get_by_role('button',name='Check credentials',exact=True).click();self.ready()
-        self.assertEqual(self.page.locator('textarea:visible').count(),4)
+        self.assertEqual(self.page.locator('textarea:visible').count(),6)
         for key,id in {'current_chairs':'current-chairs','past_chairs':'past-chairs','members':'members','emeriti':'emeriti'}.items():
             self.assertEqual(self.page.locator('#'+id).input_value(),'\n'.join(profile_tests.PEOPLE[key]))
         before=set(self.api.issues)
@@ -114,7 +116,7 @@ class GroupAdminBrowserTests(FormBrowserFixture):
 
     def test_reload_reuses_password_and_order_and_all_empty_lists_are_supported(self):
         self.open_admin();self.ready();self.page.locator('#members').fill('B. Example\nA. Example');self.save();self.done()
-        self.page.get_by_role('button',name='Reload lists',exact=True).click();self.ready()
+        self.page.get_by_role('button',name='Reload content',exact=True).click();self.ready()
         self.assertEqual(self.page.locator('#members').input_value(),'B. Example\nA. Example')
         self.assertEqual(self.page.locator('#admin-token').input_value(),ADMIN)
         for id in ('current-chairs','past-chairs','members','emeriti'):self.page.locator('#'+id).fill('')
@@ -134,14 +136,14 @@ class GroupAdminBrowserTests(FormBrowserFixture):
     def test_editors_hide_after_credential_changes_expiry_and_non_admin_checks(self):
         before=self.api.file(m.PUBLIC,g.DATA_PATH,m.PREVIEW_BRANCH)
         self.open_admin();self.ready()
-        self.assertEqual(self.page.locator('textarea:visible').count(),4)
+        self.assertEqual(self.page.locator('textarea:visible').count(),6)
         self.page.locator('#admin-token').fill(TOKEN)
         self.assertEqual(self.page.locator('textarea:visible').count(),0)
         self.page.get_by_role('button',name='Check credentials',exact=True).click()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
         self.assertEqual(self.page.locator('textarea:visible').count(),0)
         self.open_admin();self.ready();self.auth_error=401
-        self.page.get_by_role('button',name='Reload lists',exact=True).click()
+        self.page.get_by_role('button',name='Reload content',exact=True).click()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('rejected')")
         self.assertEqual(self.page.locator('textarea:visible').count(),0)
         self.assertEqual(self.posts,0)
@@ -153,7 +155,7 @@ class GroupAdminBrowserTests(FormBrowserFixture):
             page=context.new_page();page.goto(self.base+'/prototype/admin.html')
             self.assertEqual(page.locator('textarea:visible').count(),0)
             notice=page.locator('noscript .notice')
-            self.assertEqual(notice.inner_text(),'Enable JavaScript to edit these lists. No changes have been sent.')
+            self.assertEqual(notice.inner_text(),'Enable JavaScript to edit Home. No changes have been sent.')
             self.assertTrue(notice.is_visible())
         finally:context.close()
 
@@ -164,9 +166,9 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         self.open_admin()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('could not be loaded')")
         self.assertTrue(self.page.locator('#save-people').is_disabled())
-        self.assertTrue(self.page.get_by_role('button',name='Reload lists',exact=True).is_enabled())
+        self.assertTrue(self.page.get_by_role('button',name='Reload content',exact=True).is_enabled())
         files['index.html']=original;self.flush_pages()
-        self.page.get_by_role('button',name='Reload lists',exact=True).click();self.ready()
+        self.page.get_by_role('button',name='Reload content',exact=True).click();self.ready()
         self.assertEqual(self.page.locator('#members').input_value(),'\n'.join(profile_tests.PEOPLE['members']))
         self.assertEqual(self.posts,0)
 
@@ -191,10 +193,10 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         self.open_admin();self.ready();self.page.locator('#members').fill('Stale editor changes')
         newer=profile_tests.PEOPLE|{'past_chairs':['A newer Unicode ä correction']}
         files=self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)
-        files[g.DATA_PATH]=g.document(newer,2);files['index.html']=g.render(files['index.html'],newer,2);self.flush_pages()
-        self.save();self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('The lists changed elsewhere.')")
+        files[g.DATA_PATH]=g.document(newer,2,CONTENT);files['index.html']=g.render(files['index.html'],newer,2,CONTENT);self.flush_pages()
+        self.save();self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Home changed elsewhere.')")
         self.assertEqual(g.parse_document(self.api.file(m.PUBLIC,g.DATA_PATH,m.PREVIEW_BRANCH))[0],newer)
-        self.page.get_by_role('button',name='Reload lists',exact=True).click();self.ready()
+        self.page.get_by_role('button',name='Reload content',exact=True).click();self.ready()
         self.assertEqual(self.page.locator('#past-chairs').input_value(),'A newer Unicode ä correction')
 
     def test_lost_post_and_double_click_do_not_duplicate_updates(self):
@@ -207,7 +209,7 @@ class GroupAdminBrowserTests(FormBrowserFixture):
     def test_failed_verification_not_reported_as_saved_and_retry_recovers(self):
         self.mode='verification-failure';self.open_admin();self.ready();self.page.locator('#members').fill('A corrected é name');self.save()
         self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('The update needs administrator attention.')")
-        self.assertNotIn('Home lists updated',self.page.locator('#submission-status').inner_text())
+        self.assertNotIn('Home updated',self.page.locator('#submission-status').inner_text())
         self.mode='automatic';self.process_update()
         self.page.get_by_role('button',name='Check progress',exact=True).click();self.done()
         self.assertEqual(self.posts,1)
@@ -227,8 +229,61 @@ class GroupAdminBrowserTests(FormBrowserFixture):
     def test_unchanged_and_blank_line_only_edits_send_no_request(self):
         self.open_admin();self.ready()
         self.page.locator('#members').fill('\n  '+'\n\n'.join(profile_tests.PEOPLE['members'])+'\n')
-        self.save();self.page.wait_for_function("() => document.getElementById('submission-status').textContent==='No list changes to save.'")
+        self.save();self.page.wait_for_function("() => document.getElementById('submission-status').textContent==='No Home changes to save.'")
         self.assertEqual(self.posts,0)
+
+    def test_six_field_prefill_unicode_paragraphs_and_combined_save(self):
+        self.open_admin();self.ready()
+        self.assertEqual(self.page.locator('#aims').input_value(),CONTENT['aims'])
+        self.assertEqual(self.page.locator('#scope').input_value(),CONTENT['scope'])
+        self.page.locator('#aims').fill('Überprüfung & discussion.\n\nRene\u0301, 李明.')
+        self.page.locator('#scope').fill('<script>alert("example")</script>\nPlain text.')
+        self.page.locator('#members').fill('Zoë Müller\n李明')
+        self.save();self.done()
+        self.assertEqual(self.posts,1)
+        people,version,content=g.parse_profile(self.api.file(m.PUBLIC,g.DATA_PATH,m.PREVIEW_BRANCH))
+        self.assertEqual(people['members'],['Zoë Müller','李明']);self.assertEqual(version,2)
+        self.assertEqual(content['aims'],'Überprüfung & discussion.\n\nRené, 李明.')
+        self.page.get_by_role('link',name='Return to Home',exact=True).click()
+        self.assertEqual(self.page.locator('[data-group-text="aims"]').text_content(),content['aims'])
+        self.assertEqual(self.page.locator('[data-group-text="scope"]').text_content(),content['scope'])
+        self.assertEqual(self.page.locator('script').count(),0)
+        self.assertEqual(self.page.locator('.members-grid').count(),2)
+        order=[self.page.locator('#'+key).bounding_box()['y'] for key in ('aims','scope','chairs','members')]
+        self.assertEqual(order,sorted(order));self.assertFalse(self.errors)
+
+    def test_missing_scope_disables_every_editor_and_never_clears_published_content(self):
+        original=self.api.file(m.PUBLIC,g.DATA_PATH,m.PREVIEW_BRANCH)
+        files=self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)
+        files['index.html']=files['index.html'].replace('data-group-text="scope"','data-missing-scope="scope"');self.flush_pages()
+        self.open_admin()
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('could not be loaded')")
+        self.assertEqual(self.page.locator('textarea:visible').count(),0)
+        self.assertTrue(self.page.locator('#save-people').is_disabled());self.assertEqual(self.posts,0)
+        self.assertEqual(self.api.file(m.PUBLIC,g.DATA_PATH,m.PREVIEW_BRANCH),original)
+
+    def test_empty_text_keeps_roster_and_invalid_text_never_posts(self):
+        self.open_admin();self.ready()
+        for value in ('x'*10001,'bad\x01text',ADMIN):
+            self.page.locator('#aims').fill(value);self.save()
+            self.page.wait_for_function("() => !document.getElementById('form-error').hidden")
+            self.assertEqual(self.posts,0)
+        self.page.locator('#aims').fill('');self.page.locator('#scope').fill('')
+        self.save();self.done()
+        people,_,content=g.parse_profile(self.api.file(m.PUBLIC,g.DATA_PATH,m.PREVIEW_BRANCH))
+        self.assertEqual(people,profile_tests.PEOPLE);self.assertEqual(content,{'aims':'','scope':''})
+
+    def test_concurrent_scope_edit_conflicts_with_roster_edit_without_overwrite(self):
+        self.open_admin();self.ready();self.page.locator('#members').fill('An edit based on old prose')
+        newer=CONTENT | {'scope':'A newer administrator scope.'}
+        files=self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)
+        files[g.DATA_PATH]=g.document(profile_tests.PEOPLE,2,newer)
+        files['index.html']=g.render(files['index.html'],profile_tests.PEOPLE,2,newer);self.flush_pages()
+        self.save()
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Home changed elsewhere.')")
+        self.assertEqual(g.parse_profile(self.api.file(m.PUBLIC,g.DATA_PATH,m.PREVIEW_BRANCH))[2],newer)
+        self.page.get_by_role('button',name='Reload content',exact=True).click();self.ready()
+        self.assertEqual(self.page.locator('#scope').input_value(),newer['scope'])
 
 
 if __name__=='__main__':unittest.main()

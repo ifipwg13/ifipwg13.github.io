@@ -1,8 +1,9 @@
-/* Unicode public lists; private requests, one checked Admin password per session. */
+/* Public Home text/lists; private requests, one checked Admin password per session. */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
   const fields = {current_chairs:'current-chairs', past_chairs:'past-chairs', members:'members', emeriti:'emeriti'};
+  const texts = {aims:'aims', scope:'scope'};
   const MARKER = '<!-- wg13-group-profile-update -->', STATUS = '<!-- wg13-group-profile-status ';
   const CONTROL = '<!-- wg13-group-administration -->';
   let credential='', account=null, loaded=null, controller=null, pending=null, busy=false, timer=null, polls=0;
@@ -58,8 +59,14 @@
         if (lists.length!==1 || Array.from(lists[0].children).some(child=>child.tagName!=='LI' || child.children.length)) throw new Error();
         people[key]=Array.from(lists[0].children, item=>item.textContent);
       }
-      return {revision,version,people};
-    } catch { throw problem('Home lists could not be loaded. Use Reload lists; saving is disabled until all four lists are available.'); }
+      const content={};
+      for (const key of Object.keys(texts)) {
+        const paragraphs=doc.querySelectorAll('p[data-group-text="'+key+'"]');
+        if (paragraphs.length!==1 || paragraphs[0].children.length) throw new Error();
+        content[key]=paragraphs[0].textContent;
+      }
+      return {revision,version,people,content};
+    } catch { throw problem('Home content could not be loaded. Use Reload content; saving is disabled until all six fields are available.'); }
     finally { clearTimeout(timeout); }
   }
   async function controlRecord() {
@@ -82,6 +89,7 @@
     const number=await controlRecord();
     checked();
     for (const [key,id] of Object.entries(fields)) $(id).value=snapshot.people[key].join('\n');
+    for (const [key,id] of Object.entries(texts)) $(id).value=snapshot.content[key];
     loaded=snapshot; controller=number; pending=null; polls=0; clearTimeout(timer);
     $('submission-status').textContent=''; $('form-status').textContent='';
   }
@@ -108,8 +116,15 @@
       }
       people[key]=entries;
     }
-    if (new TextEncoder().encode(JSON.stringify(people)).length>50000 || new TextEncoder().encode(JSON.stringify({schema_version:1,version:loaded.version+1,...people},null,2)+'\n').length>60000) throw problem('The name lists are too large; shorten them before saving.');
-    return people;
+    const content={};
+    for (const [key,id] of Object.entries(texts)) {
+      const text=$(id).value.replace(/\r\n?/g,'\n').normalize('NFC').trim();
+      if (Array.from(text).length>10000 || /[\x00-\x08\x0b-\x1f\x7f-\x9f\u2028\u2029]/.test(text) || /[\ud800-\udfff]/u.test(text)) throw problem('Use plain text for Aims and Scope, at most 10,000 characters each.');
+      if (text.includes(credential) || /(?:github_pat_|gh[pousr]_)[A-Za-z0-9_]+/.test(text)) throw problem('Never put a password in Home content.');
+      content[key]=text;
+    }
+    if (new TextEncoder().encode(JSON.stringify(people)).length>50000 || new TextEncoder().encode(JSON.stringify({schema_version:2,version:loaded.version+1,...people,...content},null,2)+'\n').length>60000) throw problem('The Home content is too large; shorten it before saving.');
+    return {people,content};
   }
   async function progress() {
     checked(); const comments=[];
@@ -131,11 +146,11 @@
       } catch { /* Other comments and identities cannot confirm an update. */ }
     }
     if (latest?.state==='published' && /^[a-f0-9]{40}$/.test(latest.revision)) {
-      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='Home lists updated. Refresh Home to see the changes.';
+      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='Home updated. Refresh Home to see the changes.';
     } else if (latest?.state==='conflict') {
-      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='The lists changed elsewhere. Reload lists before editing again; your request did not replace the newer lists.';
+      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='Home changed elsewhere. Reload content before editing again; your request did not replace the newer content.';
     } else if (latest?.state==='needs-attention') {
-      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='The update needs administrator attention. Its publication is not confirmed. Check progress or reload the current lists before retrying.';
+      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='The update needs administrator attention. Its publication is not confirmed. Check progress or reload the current content before retrying.';
     } else {
       $('submission-status').textContent='Update submitted. Waiting for synchronization. Use Check progress if this takes longer.';
       if (++polls<12) timer=setTimeout(checkProgress,5000);
@@ -151,12 +166,12 @@
     event.preventDefault(); if (busy || pending || !loaded || !account) return;
     error(); busy=true; controls();
     try {
-      checked(); const people=collect();
-      if (JSON.stringify(people)===JSON.stringify(loaded.people)) { $('submission-status').textContent='No list changes to save.'; return; }
+      checked(); const value=collect();
+      if (JSON.stringify(value)===JSON.stringify({people:loaded.people,content:loaded.content})) { $('submission-status').textContent='No Home changes to save.'; return; }
       await verify();
-      if (await controlRecord()!==controller) throw problem('The administration record changed. Reload lists.');
+      if (await controlRecord()!==controller) throw problem('The administration record changed. Reload content.');
       const id=crypto.randomUUID();
-      const body=MARKER+'\n```json\n'+JSON.stringify({schema_version:1,request_id:id,base_revision:loaded.revision,base_version:loaded.version,people})+'\n```';
+      const body=MARKER+'\n```json\n'+JSON.stringify({schema_version:2,request_id:id,base_revision:loaded.revision,base_version:loaded.version,...value})+'\n```';
       if (new TextEncoder().encode(body).length>60000) throw problem('The update request is too large.');
       pending={id,body,hash:await memberAPI.fingerprint(body),login:account.login,commentId:null,complete:false};
       $('submission-status').textContent='Submitting Home update…';
@@ -183,8 +198,8 @@
   for (const event of ['input','change']) $('admin-token').addEventListener(event,reset);
   addEventListener('pagehide',()=>{
     reset(); $('admin-token').value=''; loaded=null; pending=null;
-    for (const id of Object.values(fields)) $(id).value='';
+    for (const id of [...Object.values(texts),...Object.values(fields)]) $(id).value='';
   });
-  $('form-status').textContent='Check administrator credentials to load the current Home lists.';
+  $('form-status').textContent='Check administrator credentials to load the current Home content.';
   controls();
 })();

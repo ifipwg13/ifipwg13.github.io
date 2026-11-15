@@ -105,6 +105,7 @@ span.talk-title, span.talk-authors { cursor: text; }
 .members-grid h2 { margin-top: 0; }
 .member-list { list-style: none; padding: 0; overflow-wrap: anywhere; }
 .member-list li { margin-block: .35rem; }
+.group-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .skip-link { position: absolute; top: -10rem; left: 1rem; background: #fff; padding: .75rem; z-index: 1; }
 .skip-link:focus { top: 1rem; }
 

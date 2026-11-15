@@ -4,6 +4,7 @@ Fictitious data/credentials only. Both repositories must be checked out.
 """
 import copy
 import json
+import re
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import patch
 import unittest
@@ -23,6 +24,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         files['prototype/index.html'] = files['prototype/index.html'].replace('<html><body>',
             '<html><head><link rel="stylesheet" href="assets/style.css"></head><body>')
         self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)['prototype/schedule.html'] = (ROOT / 'prototype/schedule.html').read_text()
+        self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)['prototype/participation.html'] = (ROOT / 'prototype/participation.html').read_text()
         m.prepare(self.api,m.authorize(self.api,self.api.request(4,DETAILS | {'end_date':'2027-02-14'}),'issues'))
         m.prepare(self.api,m.authorize(self.api,self.api.request(10,DETAILS | {'name':'Another meeting'}),'issues'))
         for number, ident in [(7,'meeting-4'),(8,'meeting-4'),(12,'meeting-10')]:
@@ -39,6 +41,10 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.post_error = None
         self.last_event = None
         self.workflow_errors = []
+        self.reactions = []
+        self.reaction_error = None
+        self.hold_registration_read = False
+        self.held_registration_route = None
 
     def route(self, route):
         request = route.request
@@ -49,7 +55,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         if request.method == 'OPTIONS':
             route.fulfill(status=204,headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET, POST',
                 'Access-Control-Allow-Headers':'authorization,content-type,x-github-api-version'}); return
-        self.assertEqual(request.method in {'GET','POST'},True)
+        self.assertEqual(request.method in {'GET','POST','DELETE'},True)
         self.assertIn(request.headers.get('authorization'),{'Bearer ' + ADMIN,'Bearer ' + TOKEN})
         owner = {'login':'manager' if request.headers['authorization'] == 'Bearer ' + ADMIN else 'member', 'id':1,'type':'User'}
         for key in (ADMIN,TOKEN):
@@ -68,6 +74,14 @@ class ScheduleBrowserTests(FormBrowserFixture):
             records = [self.api.issue_record(issue) for issue in self.api.issues.values() if all(label in m.label_names(issue) for label in selected)]
             page = int(parse_qs(url.query).get('page',['1'])[0])
             self.json_response(route,records[(page-1)*100:page*100])
+        elif path.startswith(root + '/issues/comments/') and request.method=='DELETE':
+            number=int(path.rsplit('/',1)[-1])
+            for comments in self.api.comments.values():
+                found=next((comment for comment in comments if comment.get('id')==number and comment.get('user',{}).get('login')==owner['login'] and comment.get('user',{}).get('id')==owner['id']),None)
+                if found is not None:
+                    comments.remove(found)
+                    route.fulfill(status=204,headers={'Access-Control-Allow-Origin':'*'});return
+            self.json_response(route,{},404)
         elif path.startswith(root + '/issues/'):
             tail = path[len(root + '/issues/'):].split('/')
             number = int(tail[0])
@@ -83,10 +97,14 @@ class ScheduleBrowserTests(FormBrowserFixture):
                 result['user'] = owner
                 self.last_event = {'repository':{'full_name':m.PRIVATE},'sender':owner,'action':'created',
                                    'issue':{'number':number},'comment':result}
-                if self.mode != 'pending': self.process_batch()
+                if self.mode != 'pending' and result['body'].startswith(m.scheduler.MARKER): self.process_batch()
                 if self.lost: route.abort('failed')
                 else: self.json_response(route,result,201)
+            elif tail[1] == 'reactions':
+                self.json_response(route,self.reactions if not self.reaction_error else {},self.reaction_error or 200)
             elif tail[1] == 'comments':
+                if self.hold_registration_read:
+                    self.hold_registration_read=False;self.held_registration_route=route;return
                 comments = copy.deepcopy(self.api.comments.get(number,[]))
                 for comment in comments:
                     if not comment['body'].startswith(m.scheduler.STATUS): continue
@@ -119,6 +137,26 @@ class ScheduleBrowserTests(FormBrowserFixture):
     def hidden_field(self, number): return self.page.locator(f'tr[data-talk-number="{number}"] input[type="checkbox"]')
     def save(self): self.page.get_by_role('button',name='Save changes',exact=True).click()
     def done(self): self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Schedule synchronized.')")
+
+    def attendance(self,name,number=1001,ident='meeting-4',schema=3,owner=50):
+        data={'schema_version':schema,'meeting_id':ident,'credential_fingerprint':'f'*64}
+        if schema==1:
+            data['username']=name
+            body='Yes\n\nParticipant: '+name+'\n\n'
+        else:
+            data['name']=name
+            if schema==2:data['member_id']='11111111-1111-4111-8111-111111111111'
+            label=name.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
+            label=re.sub(r'[\\`*_{}\[\]()#+.!|>\-]',lambda match:'\\'+match[0],label)
+            body='Yes — '+label+'\n\n'
+        metadata=json.dumps(data,ensure_ascii=True,separators=(',',':'))
+        if schema!=1:
+            for before,after in [('<','\\u003c'),('>','\\u003e'),('&','\\u0026')]:metadata=metadata.replace(before,after)
+        return {'id':number,'body':body+'<!-- wg13-participation '+metadata+' -->',
+                'user':{'id':owner,'login':'fictitious-member-'+str(owner),'type':'User'}}
+
+    def registered(self,text):
+        self.page.wait_for_function('(text)=>document.getElementById("registered-people").textContent.includes(text)',arg=text)
 
     def test_real_navigation_one_password_multiple_changes_correct_meeting_and_public_order(self):
         self.page.goto(self.base + '/prototype/meetings/meeting-4/')
@@ -527,6 +565,100 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
         self.assertIn('talk-hidden',m.label_names(self.api.issues[7]))
         self.assertTrue(self.api.issues[4]['locked']);self.assertEqual(self.api.issues[4]['state'],'closed')
+
+
+    def test_registered_names_are_private_sorted_and_placed_between_dates_and_instructions(self):
+        self.api.comments[4].extend([self.attendance('Zoë PRIVATE CANARY'),self.attendance('Alice PRIVATE CANARY',1002,owner=51)])
+        self.api.comments[10].append(self.attendance('Other meeting PRIVATE CANARY',1003,ident='meeting-10'))
+        self.page.goto(self.base+'/prototype/schedule.html?meeting=meeting-4')
+        self.assertFalse(self.page.locator('#registered-people').is_visible())
+        self.page.wait_for_function("() => !document.getElementById('admin-fields').disabled")
+        self.assertFalse(any('/comments?' in record['url'] for record in self.requests))
+        self.open_editor();self.ready();self.registered('Alice PRIVATE CANARY, Zoë PRIVATE CANARY')
+        line=self.page.locator('#registered-people')
+        self.assertEqual(line.inner_text(),'Registered so far: Alice PRIVATE CANARY, Zoë PRIVATE CANARY')
+        self.assertEqual(line.evaluate('node=>node.previousElementSibling.id'),'meeting-dates')
+        self.assertTrue(line.evaluate('node=>node.nextElementSibling.textContent.startsWith("Use ")'))
+        self.assertNotIn('Other meeting',line.inner_text())
+        public='\n'.join(value for value in self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH).values() if isinstance(value,str))
+        for secret in ('Alice PRIVATE CANARY','Zoë PRIVATE CANARY','f'*64):self.assertNotIn(secret,public)
+        self.assertEqual(self.posts,0)
+
+    def test_registration_and_unregistration_forms_are_reflected_after_reload(self):
+        self.open_editor();self.ready();self.registered('None yet.')
+        member=self.context.new_page();member.goto(self.base+'/prototype/participation.html?meeting=meeting-4')
+        member.wait_for_function("() => !document.getElementById('participation-fields').disabled")
+        member.locator('#participant-name').fill('José PRIVATE REGISTRATION')
+        member.locator('#github-token').fill(TOKEN)
+        member.get_by_role('button',name='Check credentials',exact=True).click()
+        member.wait_for_function("() => document.getElementById('identity').textContent === 'Credentials accepted.'")
+        member.get_by_role('radio',name='Register',exact=True).check();member.get_by_role('button',name='Submit',exact=True).click()
+        member.wait_for_function("() => document.getElementById('submission-status').textContent === 'Registration confirmed.'")
+        self.page.get_by_role('button',name='Reload talks',exact=True).click();self.ready();self.registered('José PRIVATE REGISTRATION')
+        member.get_by_role('radio',name='Unregister',exact=True).check();member.get_by_role('button',name='Submit',exact=True).click()
+        member.wait_for_function("() => document.getElementById('submission-status').textContent === 'Unregistration confirmed.'")
+        self.page.get_by_role('button',name='Reload talks',exact=True).click();self.ready();self.registered('None yet.')
+        self.assertFalse(self.errors);self.assertFalse(self.workflow_errors);member.close()
+
+    def test_registration_read_supports_pagination_all_accounts_and_older_named_formats(self):
+        self.api.comments[4].extend(self.attendance(f'Person {index:03}',1000+index,owner=10+index) for index in reversed(range(150)))
+        self.api.comments[4].extend([self.attendance('old.member',2001,schema=1),self.attendance('Older Named Member',2002,schema=2)])
+        self.open_editor();self.ready();self.registered('Person 149')
+        text=self.page.locator('#registered-people').inner_text()
+        self.assertIn('old.member',text);self.assertIn('Older Named Member',text)
+        self.assertLess(text.index('Person 000'),text.index('Person 149'))
+        self.assertTrue(any('/comments?' in request['url'] and 'page=2' in request['url'] for request in self.requests))
+
+    def test_duplicate_names_invalid_comments_and_html_are_handled_without_guessing(self):
+        first=self.attendance('Zoë PRIVATE MEMBER')
+        duplicate=self.attendance('ZOE\u0308 PRIVATE MEMBER',1002,owner=51)
+        wrong=self.attendance('Wrong association',1003,ident='meeting-10')
+        withdrawn=self.attendance('Withdrawn name',1004);withdrawn['body']=withdrawn['body'].replace('Yes —','No —',1)
+        bot=self.attendance('System name',1005);bot['user']['type']='Bot'
+        html=self.attendance('<script>alert(1)</script>',1006)
+        self.api.comments[4].extend([first,duplicate,wrong,withdrawn,bot,html,{'id':1007,'body':'Yes','user':first['user']}])
+        self.open_editor();self.ready();self.registered('Duplicate registration records need review.')
+        text=self.page.locator('#registered-people').inner_text()
+        self.assertIn('Zoë PRIVATE MEMBER',text);self.assertNotIn('ZOE\u0308 PRIVATE MEMBER',text)
+        for ignored in ('Wrong association','Withdrawn name','System name'):self.assertNotIn(ignored,text)
+        self.assertIn('<script>alert(1)</script>',text);self.assertEqual(self.page.locator('#registered-people script').count(),0)
+        self.assertFalse(self.errors)
+
+    def test_earlier_reactions_require_review_and_do_not_invent_person_names(self):
+        self.reactions=[{'content':'+1','user':{'login':'private-old-login','id':77}}]
+        self.open_editor();self.ready();self.registered('Some earlier registrations need review.')
+        text=self.page.locator('#registered-people').inner_text()
+        self.assertNotIn('private-old-login',text);self.assertNotIn('None yet',text)
+
+    def test_registration_failure_does_not_clear_or_block_schedule_edits(self):
+        self.reaction_error=500;self.open_editor();self.ready();self.registered('Could not load registrations.')
+        self.field(7,3).fill('10:30');self.save();self.done()
+        self.assertEqual(m.web.parse(self.api.issues[7])['time'],'10:30')
+        self.assertNotIn('None yet',self.page.locator('#registered-people').inner_text())
+
+    def test_late_registration_response_never_discards_unsaved_talk_edits(self):
+        self.hold_registration_read=True;self.open_editor();self.ready()
+        self.assertIsNotNone(self.held_registration_route)
+        self.field(7,3).fill('10:30')
+        self.json_response(self.held_registration_route,[self.attendance('Late PRIVATE MEMBER')])
+        self.registered('Late PRIVATE MEMBER')
+        self.assertEqual(self.field(7,3).input_value(),'10:30')
+        self.assertTrue(self.page.locator('#hide-meeting').is_disabled());self.assertEqual(self.posts,0)
+
+    def test_stale_registration_response_cannot_reappear_after_credentials_are_cleared(self):
+        self.hold_registration_read=True;self.open_editor();self.ready()
+        self.page.locator('#admin-token').fill('')
+        self.json_response(self.held_registration_route,[self.attendance('STALE PRIVATE MEMBER')])
+        self.page.wait_for_timeout(100)
+        self.assertEqual(self.page.locator('#registered-people').text_content(),'')
+        self.assertNotIn('STALE PRIVATE MEMBER',self.page.content())
+
+    def test_archived_meeting_still_reports_registrations_without_reopening_it(self):
+        self.api.comments[4].append(self.attendance('Archived PRIVATE MEMBER'))
+        m.manage_meeting(self.api,{'number':4,'id':'meeting-4','action':'archive'});self.flush_pages()
+        self.open_editor();self.ready();self.registered('Archived PRIVATE MEMBER')
+        self.assertEqual(self.api.issues[4]['state'],'closed');self.assertTrue(self.api.issues[4]['locked'])
+        self.assertIn('archived',m.label_names(self.api.issues[4]));self.assertEqual(self.posts,0)
 
 
 if __name__ == '__main__': unittest.main()

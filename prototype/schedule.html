@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-i/M4nGv3EOBBjq/f2l+UifrraFFsDMeVMr1IUIf7uX0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-zgKwTadP0I1ZVPXNWcLqZujKxIRR0Vq/61DPJKvi+7c='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Schedule · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -31,6 +31,7 @@
       </fieldset>
       <section id="schedule-editor" aria-label="Talk schedule" hidden>
         <p id="meeting-dates"></p>
+        <p id="registered-people" role="status" aria-live="polite"></p>
         <p>Use DD-MM-YYYY or DD-MM-YY, leading zeros are optional. Times use HH:MM.</p>
         <p>Check <strong>Hidden</strong> to hide a talk from public pages; clear it to restore the talk. Apply your choices with <strong>Save changes</strong>.</p>
         <div class="schedule-scroll"><table class="schedule-table">
@@ -169,6 +170,24 @@ const memberAPI = (() => {
     } catch { return null; }
   }
 
+  function registrationNames(comments, ident) {
+    if (!Array.isArray(comments)) throw inputError('Registrations could not be read.');
+    const names = new Map(), identifiers = new Set();
+    let duplicates = false;
+    for (const comment of comments) {
+      if (!comment || !Number.isSafeInteger(comment.id) || comment.id < 1) continue;
+      if (identifiers.has(comment.id)) throw inputError('Registrations changed while loading. Reload talks.');
+      identifiers.add(comment.id);
+      if (comment.user?.type !== 'User' || !Number.isSafeInteger(comment.user.id) || comment.user.id < 1) continue;
+      // Read all issuing accounts, not just the administrator whose PAT is in use.
+      const record = attendanceRecord(comment, ident, comment.user);
+      if (!record) continue;
+      if (names.has(record.key)) duplicates = true;
+      else names.set(record.key, record.name);
+    }
+    return {names:Array.from(names.values()).sort((a,b) => a.localeCompare(b)), duplicates};
+  }
+
   function calendar(value) {
     let year, month, day;
     let match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
@@ -217,7 +236,7 @@ const memberAPI = (() => {
     } finally { clearTimeout(timer); }
   }
 
-  return {repo, uploads, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, calendar, clock, meetings,
+  return {repo, uploads, request, authenticate, identify, administrator, fingerprint, participantName, nameKey, metadata, uuid, realName, bot, attendanceBody, attendanceRecord, registrationNames, calendar, clock, meetings,
     displayDate: value => value.split('-').reverse().join('-')};
 })();
 
@@ -230,6 +249,7 @@ const memberAPI = (() => {
   const $ = id => document.getElementById(id);
   let meeting = null, credential = '', account = null, registrationHash = '';
   let busy = false, rows = [], pending = null, timer = null, polls = 0, loaded = false, meetingHidden = false;
+  let registrationLoad = 0;
   const problem = message => Object.assign(new Error(message), {safe:true});
   const labels = issue => (issue.labels || []).map(label => typeof label === 'string' ? label : label.name);
   const hash = text => memberAPI.fingerprint(text);
@@ -278,7 +298,10 @@ const memberAPI = (() => {
       row.hiddenField.disabled = busy || !account || !!pending || meetingHidden;
     }
   }
-  function resetAccess() { credential = ''; account = null; clearTimeout(timer); $('admin-identity').textContent = ''; controls(); }
+  function resetAccess() {
+    credential = ''; account = null; clearTimeout(timer); registrationLoad++;
+    $('registered-people').textContent = ''; $('admin-identity').textContent = ''; controls();
+  }
   function headings(body) {
     const found = []; let offset = 0, fence = null;
     for (const line of body.match(/[^\n]*\n|[^\n]+$/g) || []) {
@@ -381,12 +404,44 @@ const memberAPI = (() => {
     $('form-status').textContent = rows.length ? '' : 'This meeting has no talks to schedule.';
     controls();
   }
+  async function loadRegistrations() {
+    const generation = ++registrationLoad, secret = credential, owner = account?.login;
+    const current = () => generation === registrationLoad && account?.login === owner && credential === secret && $('admin-token').value.trim() === secret;
+    const read = async path => {
+      if (!current()) throw new Error('Stale registration read');
+      const value = await api(path);
+      if (!current()) throw new Error('Stale registration read');
+      return value;
+    };
+    $('registered-people').textContent = 'Registered so far: Loading…';
+    try {
+      const comments = [];
+      for (let page = 1; page <= 100; page++) {
+        const batch = await read(memberAPI.repo + '/issues/' + meeting.registration + '/comments?per_page=100&page=' + page);
+        if (!Array.isArray(batch)) throw new Error('Invalid registrations');
+        comments.push(...batch);
+        if (batch.length < 100) break;
+        if (page === 100) throw new Error('Too many registration records');
+      }
+      const people = memberAPI.registrationNames(comments, ident);
+      const earlier = await read(memberAPI.repo + '/issues/' + meeting.registration + '/reactions?content=%2B1&per_page=1');
+      if (!Array.isArray(earlier)) throw new Error('Earlier registrations unavailable');
+      const notices = [earlier.length ? 'Some earlier registrations need review.' : '', people.duplicates ? 'Duplicate registration records need review.' : ''].filter(Boolean);
+      const names = people.names.length ? people.names.join(', ') : earlier.length ? 'Names for earlier registrations are unavailable.' : 'None yet.';
+      if (current()) $('registered-people').textContent = 'Registered so far: ' + names + (notices.length ? ' ' + notices.join(' ') : '');
+    } catch {
+      if (current()) $('registered-people').textContent = 'Registered so far: Could not load registrations. Use Reload talks to retry.';
+    }
+  }
   async function loadTalks() {
     loaded = false; controls();
     const current = await currentMeeting();
     meeting.date = current.date; meeting.endDate = current.endDate; registrationHash = current.hash;
     $('meeting-name').textContent = current.issue.title.replace(/^\[(?:meeting [0-9]+|meeting-[0-9]+|demo-001)\]\s*/, '');
     $('meeting-dates').textContent = 'When: ' + memberAPI.displayDate(meeting.date) + (meeting.date === meeting.endDate ? '' : ' – ' + memberAPI.displayDate(meeting.endDate));
+    // This read only updates its own text line. It cannot discard unsaved edits
+    // or block scheduling if the attendance endpoint is slow/unavailable.
+    void loadRegistrations();
     const fetched = [], seen = new Set();
     for (let page = 1; page <= 100; page++) {
       const batch = await api(memberAPI.repo + '/issues?state=all&labels=' + encodeURIComponent('talk,meeting:' + ident) + '&per_page=100&page=' + page);
@@ -401,6 +456,7 @@ const memberAPI = (() => {
       if (batch.length < 100) break;
       if (page === 100) throw problem('Too many talks to load safely. Contact the organizer.');
     }
+    checked();
     rows = fetched.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.number - b.number);
     pending = null; polls = 0; clearTimeout(timer); $('submission-status').textContent = '';
     loaded = true;
