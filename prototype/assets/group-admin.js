@@ -30,6 +30,8 @@
     $('check-admin').disabled=busy;
     $('people-fields').hidden=!account || !loaded;
     $('people-fields').disabled=busy || !account || !loaded || !!pending;
+    $('save-people').hidden=!account;
+    $('reload-people').hidden=!account;
     $('save-people').disabled=busy || !account || !loaded || !controller || !!pending;
     $('reload-people').disabled=busy || !account || !!pending && !pending.complete;
     $('check-status').hidden=!pending;

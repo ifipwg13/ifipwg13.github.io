@@ -157,6 +157,9 @@ class ScheduleBrowserTests(FormBrowserFixture):
 
     def registered(self,text):
         self.page.wait_for_function('(text)=>document.getElementById("registered-people").textContent.includes(text)',arg=text)
+        self.assertEqual(self.page.locator('#registered-people strong').inner_text(),'Registered so far:')
+        self.assertEqual(self.page.locator('#meeting-dates strong').inner_text(),'When:')
+        self.assertEqual(self.page.locator('#registered-people').evaluate('node=>node.nextElementSibling.id'),'meeting-dates')
 
     def test_real_navigation_one_password_multiple_changes_correct_meeting_and_public_order(self):
         self.page.goto(self.base + '/prototype/meetings/meeting-4/')
@@ -567,7 +570,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.assertTrue(self.api.issues[4]['locked']);self.assertEqual(self.api.issues[4]['state'],'closed')
 
 
-    def test_registered_names_are_private_sorted_and_placed_between_dates_and_instructions(self):
+    def test_registered_names_are_private_sorted_and_precede_dates_and_instructions(self):
         self.api.comments[4].extend([self.attendance('Zoë PRIVATE CANARY'),self.attendance('Alice PRIVATE CANARY',1002,owner=51)])
         self.api.comments[10].append(self.attendance('Other meeting PRIVATE CANARY',1003,ident='meeting-10'))
         self.page.goto(self.base+'/prototype/schedule.html?meeting=meeting-4')
@@ -577,24 +580,28 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.open_editor();self.ready();self.registered('Alice PRIVATE CANARY, Zoë PRIVATE CANARY')
         line=self.page.locator('#registered-people')
         self.assertEqual(line.inner_text(),'Registered so far: Alice PRIVATE CANARY, Zoë PRIVATE CANARY')
-        self.assertEqual(line.evaluate('node=>node.previousElementSibling.id'),'meeting-dates')
-        self.assertTrue(line.evaluate('node=>node.nextElementSibling.textContent.startsWith("Use ")'))
+        self.assertEqual(line.evaluate('node=>node.nextElementSibling.id'),'meeting-dates')
+        self.assertTrue(line.evaluate('node=>node.nextElementSibling.nextElementSibling.textContent.startsWith("Use ")'))
+        self.assertEqual(line.locator('strong').inner_text(),'Registered so far:')
+        self.assertEqual(self.page.locator('#meeting-dates strong').inner_text(),'When:')
+        self.assertGreater(int(line.locator('strong').evaluate('node=>getComputedStyle(node).fontWeight')),400)
         self.assertNotIn('Other meeting',line.inner_text())
         public='\n'.join(value for value in self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH).values() if isinstance(value,str))
         for secret in ('Alice PRIVATE CANARY','Zoë PRIVATE CANARY','f'*64):self.assertNotIn(secret,public)
         self.assertEqual(self.posts,0)
 
     def test_registration_and_unregistration_forms_are_reflected_after_reload(self):
+        self.install_roster(['José Example'], [])
         self.open_editor();self.ready();self.registered('None yet.')
         member=self.context.new_page();member.goto(self.base+'/prototype/participation.html?meeting=meeting-4')
         member.wait_for_function("() => !document.getElementById('participation-fields').disabled")
-        member.locator('#participant-name').fill('José PRIVATE REGISTRATION')
+        member.locator('#participant-name').select_option('José Example')
         member.locator('#github-token').fill(TOKEN)
         member.get_by_role('button',name='Check credentials',exact=True).click()
         member.wait_for_function("() => document.getElementById('identity').textContent === 'Credentials accepted.'")
         member.get_by_role('radio',name='Register',exact=True).check();member.get_by_role('button',name='Submit',exact=True).click()
         member.wait_for_function("() => document.getElementById('submission-status').textContent === 'Registration confirmed.'")
-        self.page.get_by_role('button',name='Reload talks',exact=True).click();self.ready();self.registered('José PRIVATE REGISTRATION')
+        self.page.get_by_role('button',name='Reload talks',exact=True).click();self.ready();self.registered('José Example')
         member.get_by_role('radio',name='Unregister',exact=True).check();member.get_by_role('button',name='Submit',exact=True).click()
         member.wait_for_function("() => document.getElementById('submission-status').textContent === 'Unregistration confirmed.'")
         self.page.get_by_role('button',name='Reload talks',exact=True).click();self.ready();self.registered('None yet.')
@@ -639,6 +646,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
     def test_late_registration_response_never_discards_unsaved_talk_edits(self):
         self.hold_registration_read=True;self.open_editor();self.ready()
         self.assertIsNotNone(self.held_registration_route)
+        self.registered('Loading…')
         self.field(7,3).fill('10:30')
         self.json_response(self.held_registration_route,[self.attendance('Late PRIVATE MEMBER')])
         self.registered('Late PRIVATE MEMBER')
@@ -650,7 +658,8 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.page.locator('#admin-token').fill('')
         self.json_response(self.held_registration_route,[self.attendance('STALE PRIVATE MEMBER')])
         self.page.wait_for_timeout(100)
-        self.assertEqual(self.page.locator('#registered-people').text_content(),'')
+        self.assertEqual(self.page.locator('#registered-names').text_content(),'')
+        self.assertFalse(self.page.locator('#registered-people').is_visible())
         self.assertNotIn('STALE PRIVATE MEMBER',self.page.content())
 
     def test_archived_meeting_still_reports_registrations_without_reopening_it(self):

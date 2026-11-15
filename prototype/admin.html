@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-N0lvmUWBWRwctFKHzSwSQqSCtKT0e19JgPNOAISxm5o='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-VpYyIL1TnE1TulRF3Yy98Vsm0ZjcXMaBZeJfuH+jDKE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Admin · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -46,8 +46,8 @@
       </fieldset>
       <p id="form-error" role="alert" hidden></p>
       <div class="actions">
-        <button id="save-people" type="submit" class="button" disabled>Save changes</button>
-        <button id="reload-people" type="button" class="button button-secondary" disabled>Reload content</button>
+        <button id="save-people" type="submit" class="button" disabled hidden>Save changes</button>
+        <button id="reload-people" type="button" class="button button-secondary" disabled hidden>Reload content</button>
         <button id="check-status" type="button" class="button button-secondary" hidden>Check progress</button>
       </div>
     </form>
@@ -274,6 +274,8 @@ const memberAPI = (() => {
     $('check-admin').disabled=busy;
     $('people-fields').hidden=!account || !loaded;
     $('people-fields').disabled=busy || !account || !loaded || !!pending;
+    $('save-people').hidden=!account;
+    $('reload-people').hidden=!account;
     $('save-people').disabled=busy || !account || !loaded || !controller || !!pending;
     $('reload-people').disabled=busy || !account || !!pending && !pending.complete;
     $('check-status').hidden=!pending;

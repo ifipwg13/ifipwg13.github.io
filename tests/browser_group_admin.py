@@ -21,6 +21,7 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         files[g.DATA_PATH]=g.document(profile_tests.PEOPLE,1,CONTENT)
         files['index.html']=g.render((ROOT/'index.html').read_text(),profile_tests.PEOPLE,1,CONTENT)
         files['prototype/admin.html']=(ROOT/'prototype/admin.html').read_text()
+        files['prototype/participation.html']=(ROOT/'prototype/participation.html').read_text()
         files['members/index.html']=(ROOT/'members/index.html').read_text()
         self.flush_pages()
         self.base=f'http://127.0.0.1:{self.preview.server_port}/__preview/synchronized'
@@ -97,7 +98,9 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         self.assertEqual(self.page.locator('textarea').count(),6)
         self.assertEqual(self.page.locator('textarea:visible').count(),0)
         self.assertTrue(self.page.locator('#current-chairs').is_disabled())
+        for id in ('save-people','reload-people'):self.assertFalse(self.page.locator('#'+id).is_visible())
         self.page.locator('#admin-token').fill(ADMIN);self.page.get_by_role('button',name='Check credentials',exact=True).click();self.ready()
+        for id in ('save-people','reload-people'):self.assertTrue(self.page.locator('#'+id).is_visible())
         self.assertEqual(self.page.locator('textarea:visible').count(),6)
         for key,id in {'current_chairs':'current-chairs','past_chairs':'past-chairs','members':'members','emeriti':'emeriti'}.items():
             self.assertEqual(self.page.locator('#'+id).input_value(),'\n'.join(profile_tests.PEOPLE[key]))
@@ -128,6 +131,7 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         self.open_admin(TOKEN)
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
         self.assertTrue(self.page.locator('#members').is_disabled());self.assertEqual(self.posts,0)
+        for id in ('save-people','reload-people'):self.assertFalse(self.page.locator('#'+id).is_visible())
         self.open_admin();self.ready();self.page.locator('#members').fill('Changed')
         self.api.permissions['manager']='read';self.save()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
@@ -139,13 +143,16 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         self.assertEqual(self.page.locator('textarea:visible').count(),6)
         self.page.locator('#admin-token').fill(TOKEN)
         self.assertEqual(self.page.locator('textarea:visible').count(),0)
+        for id in ('save-people','reload-people'):self.assertFalse(self.page.locator('#'+id).is_visible())
         self.page.get_by_role('button',name='Check credentials',exact=True).click()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('requires administrator')")
         self.assertEqual(self.page.locator('textarea:visible').count(),0)
+        for id in ('save-people','reload-people'):self.assertFalse(self.page.locator('#'+id).is_visible())
         self.open_admin();self.ready();self.auth_error=401
         self.page.get_by_role('button',name='Reload content',exact=True).click()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('rejected')")
         self.assertEqual(self.page.locator('textarea:visible').count(),0)
+        for id in ('save-people','reload-people'):self.assertFalse(self.page.locator('#'+id).is_visible())
         self.assertEqual(self.posts,0)
         self.assertEqual(self.api.file(m.PUBLIC,g.DATA_PATH,m.PREVIEW_BRANCH),before)
 
@@ -154,6 +161,7 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         try:
             page=context.new_page();page.goto(self.base+'/prototype/admin.html')
             self.assertEqual(page.locator('textarea:visible').count(),0)
+            for id in ('save-people','reload-people'):self.assertFalse(page.locator('#'+id).is_visible())
             notice=page.locator('noscript .notice')
             self.assertEqual(notice.inner_text(),'Enable JavaScript to edit Home. No changes have been sent.')
             self.assertTrue(notice.is_visible())
@@ -166,11 +174,55 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         self.open_admin()
         self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('could not be loaded')")
         self.assertTrue(self.page.locator('#save-people').is_disabled())
+        self.assertTrue(self.page.locator('#save-people').is_visible())
         self.assertTrue(self.page.get_by_role('button',name='Reload content',exact=True).is_enabled())
         files['index.html']=original;self.flush_pages()
         self.page.get_by_role('button',name='Reload content',exact=True).click();self.ready()
         self.assertEqual(self.page.locator('#members').input_value(),'\n'.join(profile_tests.PEOPLE['members']))
         self.assertEqual(self.posts,0)
+
+    def test_buttons_wait_for_verification_and_stay_disabled_until_content_loads(self):
+        held=[]
+        self.context.route('**/__preview/synchronized/index.html',lambda route:held.append(route))
+        self.page.goto(self.base+'/prototype/admin.html')
+        self.page.locator('#admin-token').fill(ADMIN)
+        for id in ('save-people','reload-people'):self.assertFalse(self.page.locator('#'+id).is_visible())
+        self.page.get_by_role('button',name='Check credentials',exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('admin-identity').textContent === 'Administrator access confirmed.'")
+        self.assertEqual(len(held),1)
+        for id in ('save-people','reload-people'):
+            self.assertTrue(self.page.locator('#'+id).is_visible())
+            self.assertTrue(self.page.locator('#'+id).is_disabled())
+        held[0].fulfill(status=200,content_type='text/html',body=self.api.file(m.PUBLIC,'index.html',m.PREVIEW_BRANCH))
+        self.ready()
+        self.assertTrue(self.page.locator('#reload-people').is_enabled())
+        self.assertFalse(self.errors)
+
+    def test_home_roster_edits_feed_both_participation_choices_on_reopening(self):
+        files=self.api.branch_files(m.PUBLIC,m.PREVIEW_BRANCH)
+        files['prototype/index.html']=files['prototype/index.html'].replace('<html><body>',
+            '<html><head><link rel="stylesheet" href="assets/style.css"></head><body>')
+        m.prepare(self.api,m.authorize(self.api,self.api.request(4),'issues'));self.flush_pages()
+        member=self.context.new_page()
+        self.addCleanup(member.close)
+        url=self.base+'/prototype/participation.html?meeting=meeting-4'
+        member.goto(url)
+        member.wait_for_function("() => !document.getElementById('participant-name').disabled")
+        self.assertIn('José Example',member.locator('#participant-name option').all_text_contents())
+        self.open_admin();self.ready()
+        self.page.locator('#members').fill('Zoë Müller\nRene\u0301 Example')
+        self.page.locator('#emeriti').fill('Older Example')
+        self.save();self.done()
+        member.reload()
+        member.wait_for_function("() => !document.getElementById('participant-name').disabled")
+        expected=['Choose your name','Older Example','René Example','Zoë Müller']
+        self.assertEqual(member.locator('#participant-name option').all_text_contents(),expected)
+        self.assertEqual(member.locator('#participant-name').input_value(),'')
+        for action in ('Register','Unregister'):
+            member.get_by_role('radio',name=action,exact=True).check()
+            self.assertEqual(member.locator('#participant-name option').all_text_contents(),expected)
+        self.assertEqual(self.posts,1)
+        self.assertFalse(self.errors);self.assertFalse(self.workflow_errors)
 
     def test_missing_or_ambiguous_control_record_disables_save(self):
         self.api.issues[g.control_number()+1]=copy.deepcopy(self.api.issues[g.control_number()])|{'number':g.control_number()+1}

@@ -125,6 +125,16 @@ class FormBrowserFixture(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(value) if isinstance(value, bytes) else path.write_text(value)
 
+    def install_roster(self, members, emeriti):
+        """Publish fictitious names through the actual static Home renderer."""
+        people = {'current_chairs':['Chair Only Example'], 'past_chairs':['Former Chair Only Example'],
+                  'members':members, 'emeriti':emeriti}
+        content = {'aims':'Fictitious group aims.', 'scope':'Fictitious group scope.'}
+        files = self.api.branch_files(m.PUBLIC, m.PREVIEW_BRANCH)
+        files[m.profile.DATA_PATH] = m.profile.document(people, 1, content)
+        files['index.html'] = m.profile.render((ROOT / 'index.html').read_text(), people, 1, content)
+        self.flush_pages()
+
     def json_response(self, route, body, status=200):
         route.fulfill(status=status, content_type="application/json", body=json.dumps(body),
                       headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})

@@ -50,6 +50,7 @@ class ParticipationBrowserTests(FormBrowserFixture):
         self.auth_error = None
         self.deny_mutations = False
         self.base = f'http://127.0.0.1:{self.preview.server_port}/__preview/synchronized'
+        self.install_roster(['Alice Example', 'Bob Example'], ['René <Example> --> & Co.'])
         self.public_before = copy.deepcopy(self.api.branch_files(m.PUBLIC, m.PREVIEW_BRANCH))
         source = Path(__file__).resolve().parents[1] / 'prototype/participation.html'
         (self.directory / 'prototype/participation.html').write_bytes(source.read_bytes())
@@ -133,10 +134,10 @@ class ParticipationBrowserTests(FormBrowserFixture):
         self.page.goto(self.base + '/prototype/participation.html?meeting=' + ident)
         if ready:
             self.page.wait_for_function("() => !document.getElementById('participation-fields').disabled")
-            self.page.locator('#participant-name').fill('Alice Example')
+            self.page.locator('#participant-name').select_option('Alice Example')
 
     def check(self, credential=TOKEN, name='Alice Example'):
-        self.page.locator('#participant-name').fill(name)
+        self.page.locator('#participant-name').select_option(name)
         self.page.locator('#github-token').fill(credential)
         self.page.get_by_role('button', name='Check credentials', exact=True).click()
         self.page.wait_for_function("() => document.getElementById('identity').textContent === 'Credentials accepted.'")
@@ -148,6 +149,79 @@ class ParticipationBrowserTests(FormBrowserFixture):
     def confirmed(self, registered):
         expected = 'Registration confirmed.' if registered else 'Unregistration confirmed.'
         self.page.wait_for_function('(text) => document.getElementById("submission-status").textContent === text', arg=expected)
+
+    def test_dropdown_combines_current_members_and_emeriti_without_free_text_or_duplicates(self):
+        self.install_roster(['Bob Example', 'Alice Example', 'ALICE EXAMPLE', 'Rene\u0301 Example'],
+                            ['René Example', 'Older Example'])
+        self.open_participation(ready=False)
+        self.page.wait_for_function("() => !document.getElementById('participant-name').disabled")
+        dropdown = self.page.get_by_role('combobox', name='Name', exact=True)
+        self.assertEqual(dropdown.input_value(), '')
+        self.assertEqual(dropdown.locator('option').all_text_contents(),
+                         ['Choose your name', 'Alice Example', 'Bob Example', 'Older Example', 'René Example'])
+        self.assertEqual(self.page.locator('input#participant-name, datalist').count(), 0)
+        dropdown.select_option('Older Example')
+        for action in ('Register', 'Unregister'):
+            self.page.get_by_role('radio', name=action, exact=True).check()
+            self.assertEqual(dropdown.input_value(), 'Older Example')
+        self.assertNotIn('Chair Only Example', dropdown.inner_text())
+        self.assertFalse(self.mutations)
+
+    def test_missing_historical_name_cannot_be_injected_and_records_are_preserved(self):
+        self.api.comments[4].append({'id':999, 'user':{'id':11, 'login':'member'},
+                                   'body':attendance_body('meeting-4', 'Former Example')})
+        saved = copy.deepcopy(self.api.comments[4])
+        self.open_participation(); self.check(); self.choose('Unregister'); self.confirmed(False)
+        self.assertNotIn('Former Example', self.page.locator('#participant-name').inner_text())
+        self.page.locator('#participant-name').evaluate("node => node.append(new Option('Former Example', 'Former Example'))")
+        self.page.locator('#participant-name').select_option('Former Example')
+        before = len(self.requests)
+        self.page.get_by_role('button', name='Check credentials', exact=True).click()
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('Choose your name from the list')")
+        self.assertEqual(len(self.requests), before)
+        self.assertEqual(self.api.comments[4], saved)
+        self.assertFalse(self.mutations)
+        self.assertTrue(self.page.locator('#submit-participation').is_disabled())
+
+    def test_roster_load_failure_is_recoverable_and_never_exposes_error_body(self):
+        target = '**/__preview/synchronized/index.html'
+        self.context.route(target, lambda route: route.fulfill(status=503, body='PRIVATE ROSTER ERROR CANARY'))
+        self.open_participation(ready=False)
+        self.page.wait_for_function("() => !document.getElementById('retry-meetings').hidden")
+        self.assertIn('Names could not be loaded', self.page.locator('#form-status').inner_text())
+        for field in ('participant-name', 'github-token', 'check-token', 'submit-participation'):
+            self.assertTrue(self.page.locator('#' + field).is_disabled())
+        self.assertNotIn('PRIVATE ROSTER ERROR CANARY', self.page.content())
+        self.assertFalse(self.requests); self.assertFalse(self.mutations)
+        self.context.unroute(target)
+        self.page.get_by_role('button', name='Retry loading', exact=True).click()
+        self.page.wait_for_function("() => !document.getElementById('participant-name').disabled")
+        self.check(); self.choose('Register'); self.confirmed(True)
+        self.assertEqual(len(self.mutations), 1)
+
+    def test_empty_or_incomplete_roster_never_offers_a_partial_list(self):
+        original = self.api.file(m.PUBLIC, 'index.html', m.PREVIEW_BRANCH)
+        variants = [original.replace('data-group-list="emeriti"', 'data-missing-list="emeriti"'),
+                    original.replace('data-group-list="members"', 'data-group-list="emeriti"'),
+                    original.replace('>Alice Example</li>', '><b>Alice Example</b></li>')]
+        target = '**/__preview/synchronized/index.html'
+        for body in variants:
+            self.assertNotEqual(body, original)
+            with self.subTest(body=body[-80:]):
+                def serve_home(route):
+                    route.fulfill(status=200, content_type='text/html', body=body)
+                self.context.route(target, serve_home)
+                self.open_participation(ready=False)
+                self.page.wait_for_function("() => !document.getElementById('retry-meetings').hidden")
+                self.assertEqual(self.page.locator('#participant-name option').all_text_contents(), ['Choose your name'])
+                self.assertTrue(self.page.locator('#github-token').is_disabled())
+                self.context.unroute(target)
+        self.install_roster([], [])
+        self.open_participation(ready=False)
+        self.page.wait_for_function("() => !document.getElementById('retry-meetings').hidden")
+        self.assertIn('No Members or Emeriti', self.page.locator('#form-status').inner_text())
+        self.assertTrue(self.page.locator('#submit-participation').is_disabled())
+        self.assertFalse(self.mutations)
 
     def test_register_unregister_idempotence_privacy_and_read_role(self):
         saved = copy.deepcopy(self.api.comments[4])
@@ -270,29 +344,33 @@ class ParticipationBrowserTests(FormBrowserFixture):
         self.assertEqual(self.api.comments[4],saved); self.assertFalse(self.mutations)
 
     def test_name_normalization_prevents_duplicate_registration_and_allows_unregister(self):
-        self.open_participation(); self.check(TOKEN,'  Alice   Example ')
+        self.api.comments[4].append({'id':999, 'user':{'id':11, 'login':'member'},
+            'body':attendance_body('meeting-4', 'ALICE   EXAMPLE')})
+        self.open_participation(); self.check()
         self.choose('Register'); self.confirmed(True)
-        self.check(TOKEN,'ALICE example'); self.choose('Register'); self.confirmed(True)
-        self.assertEqual(len(self.mutations),1)
+        self.choose('Register'); self.confirmed(True)
+        self.assertFalse(self.mutations)
         self.choose('Unregister'); self.confirmed(False)
-        self.assertEqual(len(self.mutations),2)
+        self.assertEqual(len(self.mutations),1)
+        self.assertTrue(self.mutations[0][1].endswith('/999'))
 
     def test_retired_directory_is_not_consulted_and_legacy_username_records_stay_readable(self):
         install_retired_directory(self.api)
         saved = copy.deepcopy(self.api.issues[900])
         self.api.comments[4].append({'id':999,'user':{'id':11,'login':'member'},'body':attendance_body('meeting-4','old-alice',version=1)})
+        self.install_roster(['Alice Example', 'OLD-ALICE'], [])
         self.open_participation(); self.check(OTHER_TOKEN,'OLD-ALICE'); self.choose('Unregister'); self.confirmed(False)
         self.assertEqual(self.api.issues[900],saved)
         self.assertFalse(any('participant-directory' in r['url'] or '/issues/900' in r['url'] for r in self.requests))
         self.assertTrue(self.mutations[0][1].endswith('/999'))
 
     def test_name_required_and_changing_it_invalidates_checked_access(self):
-        self.open_participation(); self.page.locator('#participant-name').fill('')
+        self.open_participation(); self.page.locator('#participant-name').select_option('')
         self.page.locator('#github-token').fill(TOKEN)
         self.page.get_by_role('button',name='Check credentials',exact=True).click()
-        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('Enter your name')")
+        self.page.wait_for_function("() => document.getElementById('form-error').textContent.includes('Choose your name')")
         self.assertFalse(self.mutations)
-        self.check(); self.page.locator('#participant-name').fill('Bob Example')
+        self.check(); self.page.locator('#participant-name').select_option('Bob Example')
         self.assertTrue(self.page.locator('#submit-participation').is_disabled())
 
     def test_silent_name_autofill_is_detected_before_a_mutation(self):
@@ -304,7 +382,7 @@ class ParticipationBrowserTests(FormBrowserFixture):
         self.assertFalse(self.mutations)
 
     def test_accents_and_html_delimiters_are_private_plain_text_and_fingerprint_is_hidden(self):
-        self.open_participation(); self.check(TOKEN,'Rene\u0301 <Example> --> & Co.')
+        self.open_participation(); self.check(TOKEN,'René <Example> --> & Co.')
         self.choose('Register'); self.confirmed(True)
         body = self.api.comments[4][-1]['body']
         self.assertIn('René',body)
