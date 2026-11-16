@@ -112,7 +112,7 @@
       if (!labels.includes('registration') || !labels.includes('meeting:' + latest.meeting_id)) throw new Error('Registration verification pending');
       const hidden = labels.includes('hidden');
       const archived = labels.includes('archived') || issue.state !== 'open' || issue.locked;
-      $('submission-status').textContent = hidden ? 'Meeting synchronized. It is currently hidden.' : archived ? 'Meeting synchronized. It is currently archived.' : 'Meeting ready. Open the meeting or refresh the meetings page.';
+      $('submission-status').textContent = (hidden ? 'Meeting saved. It is currently hidden.' : archived ? 'Meeting saved. It is currently archived.' : 'Meeting saved.') + ' The website update may take a few minutes; then refresh the meetings page.';
       $('meeting-link').href = 'meetings/' + latest.meeting_id + '/';
       $('meeting-link').hidden = hidden;
       pending.complete = true; clearTimeout(timer);

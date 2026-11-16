@@ -89,7 +89,7 @@ class GroupAdminBrowserTests(FormBrowserFixture):
         self.page.get_by_role('button',name='Check credentials',exact=True).click()
     def ready(self):self.page.wait_for_function("() => !document.getElementById('save-people').disabled")
     def save(self):self.page.get_by_role('button',name='Save changes',exact=True).click()
-    def done(self):self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Home updated.')")
+    def done(self):self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Home saved.')")
 
     def test_navigation_prefill_unicode_save_and_static_home(self):
         self.page.goto(self.base+'/')
@@ -272,7 +272,7 @@ class GroupAdminBrowserTests(FormBrowserFixture):
     def test_failed_verification_not_reported_as_saved_and_retry_recovers(self):
         self.mode='verification-failure';self.open_admin();self.ready();self.page.locator('#members').fill('A corrected é name');self.save()
         self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('The update needs administrator attention.')")
-        self.assertNotIn('Home updated',self.page.locator('#submission-status').inner_text())
+        self.assertNotIn('Home saved',self.page.locator('#submission-status').inner_text())
         self.mode='automatic';self.process_update()
         self.page.get_by_role('button',name='Check progress',exact=True).click();self.done()
         self.assertEqual(self.posts,1)

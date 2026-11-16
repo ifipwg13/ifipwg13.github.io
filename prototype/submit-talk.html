@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-YUaAnfnunQygSw2lKjLAVcPE7SpyRkq9QVPtBSrl8OY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-WYb3slOGPMFLj1sTDn1R2LG06sdDwWTGX5SxXSWqKjE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Add talk · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -477,7 +477,7 @@ const memberAPI = (() => {
     }
     const latest = states.at(-1);
     if (latest?.state === 'published' && /^[a-f0-9]{40}$/.test(latest.revision) && meetings.has(latest.meeting_id)) {
-      $('submission-status').textContent = 'Your talk is published. Refresh the meeting page to see it.';
+      $('submission-status').textContent = 'Your talk is saved. The website update may take a few minutes; then refresh the meeting page.';
       $('meeting-link').href = 'meetings/' + latest.meeting_id + '/';
       $('meeting-link').hidden = false;
       return;

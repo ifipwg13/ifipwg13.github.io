@@ -511,7 +511,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.assertEqual(m.web.parse(self.api.issues[8])['time'],'11:15')
         self.assertEqual(self.page.locator('#admin-token').input_value(),ADMIN)
         self.page.get_by_role('button',name='Archive Meeting',exact=True).click()
-        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting archived.'")
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting archived.')")
         self.assertTrue(self.page.locator('#archive-meeting').is_disabled())
         self.assertTrue(self.api.issues[4]['locked']);self.assertEqual(self.api.issues[4]['state'],'closed')
         self.assertNotIn('hidden',m.label_names(self.api.issues[4]))
@@ -632,7 +632,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.open_editor();self.ready();self.notes_ready()
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),375)
         self.page.get_by_role('button',name='Archive Meeting',exact=True).focus();self.page.keyboard.press('Enter')
-        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting archived.'")
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting archived.')")
         self.assertTrue(self.page.locator('#archive-meeting').is_disabled())
         self.assertEqual(m.registration_status(self.api.issues[4]),'archived')
         self.assertEqual(self.posts,1)
@@ -644,7 +644,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         before=self.stored_notes()
         self.open_editor();self.ready();self.notes_ready()
         self.page.get_by_role('button',name='Hide Meeting',exact=True).click()
-        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting hidden.')")
         self.assertEqual(self.stored_notes(),before)
         self.api.issues[4]['labels'].remove('hidden')
         m.manage_meeting(self.api,{'number':4,'id':'meeting-4','action':'sync'})
@@ -683,7 +683,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.assertEqual(m.web.parse(self.api.issues[7])['time'],'10:30')
         self.assertTrue(button.is_enabled())
         button.click()
-        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting hidden.')")
         self.assertEqual(self.posts,2)
         self.assertEqual(self.page.locator('#admin-token').input_value(),ADMIN)
         self.assertIn('hidden',m.label_names(self.api.issues[4]))
@@ -717,7 +717,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.assertTrue(button.is_enabled());self.assertEqual(self.posts,0)
         self.assertEqual(self.api.issues[7],before)
         button.click()
-        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting hidden.')")
         self.assertEqual(self.posts,1)
 
     def test_empty_meeting_can_be_hidden_and_unsaved_cancellation_restores_availability(self):
@@ -730,7 +730,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.assertTrue(self.page.get_by_role('button',name='Save changes',exact=True).is_enabled())
         self.assertEqual(self.page.locator('#schedule-rows tr').count(),0)
         button.click()
-        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting hidden.')")
         self.assertEqual(self.posts,1)
 
     def test_role_revoked_after_loading_cannot_hide_a_meeting(self):
@@ -752,7 +752,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.page.get_by_role('button',name='Check progress',exact=True).click()
         self.assertNotEqual(self.page.locator('#submission-status').inner_text(),'Meeting hidden.')
         self.process_batch();self.page.get_by_role('button',name='Check progress',exact=True).click()
-        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting hidden.')")
         self.assertEqual(self.posts,1)
 
     def test_hiding_sync_failure_is_not_reported_as_success_and_can_be_recovered(self):
@@ -763,7 +763,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.assertTrue(self.page.get_by_role('button',name='Hide Meeting',exact=True).is_disabled())
         self.mode='automatic';self.process_batch()
         self.page.get_by_role('button',name='Check progress',exact=True).click()
-        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting hidden.')")
         self.assertEqual(self.posts,1)
 
     def test_archived_meeting_hiding_works_with_keyboard_on_mobile(self):
@@ -772,7 +772,7 @@ class ScheduleBrowserTests(FormBrowserFixture):
         self.page.set_viewport_size({'width':390,'height':844})
         self.open_editor();self.ready()
         self.page.get_by_role('button',name='Hide Meeting',exact=True).focus();self.page.keyboard.press('Enter')
-        self.page.wait_for_function("() => document.getElementById('submission-status').textContent === 'Meeting hidden.'")
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting hidden.')")
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
         self.assertIn('talk-hidden',m.label_names(self.api.issues[7]))
         self.assertTrue(self.api.issues[4]['locked']);self.assertEqual(self.api.issues[4]['state'],'closed')

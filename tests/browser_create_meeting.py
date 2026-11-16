@@ -114,7 +114,7 @@ class MeetingCreationBrowserTests(FormBrowserFixture):
 
     def create(self): self.page.get_by_role('button',name='Create meeting',exact=True).click()
 
-    def ready(self): self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting ready.')")
+    def ready(self): self.page.wait_for_function("() => document.getElementById('submission-status').textContent.startsWith('Meeting saved.')")
 
     def test_navigation_creation_and_correct_public_meeting_after_sync(self):
         self.page.goto(self.base + '/')
