@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "version": 9,
+  "version": 10,
   "current_chairs": [
     "Corina Cirstea",
     "Fabio Gadducci",
@@ -49,8 +49,7 @@
     "Pawel Sobocinski (EE)",
     "Ana Sokolova (AT)",
     "Max Tschaikowski (IT)",
-    "Fabio Zanasi (UK)",
-    "Fictitious Launch Participant"
+    "Fabio Zanasi (UK)"
   ],
   "emeriti": [
     "Egidio Astesiano (IT)",
