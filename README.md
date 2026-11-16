@@ -13,10 +13,10 @@ feature branches are snapshots; use the integrated branch described below.
 
 ## Publication
 
-Publication is awaiting final approval. PR #1 brings the integrated
-`prototype/meeting-management` website into `main`. GitHub Pages is configured to
-serve `main` at <https://ifipwg13.github.io/>. This does not change either private
-repository's visibility. Existing `/prototype/` URLs are retained.
+The website was published on **16 November 2026** following approval. PR #1 is
+merged, and GitHub Pages serves `main` at <https://ifipwg13.github.io/>. The private
+publisher uses **live** mode, so Issue and Home changes update `main`. The private
+repositories remain private. Existing `/prototype/` URLs are retained.
 
 The trusted private `.github/site-publication.json` selects the destination:
 `preview` uses `prototype/meeting-management`, `live` uses `main`, and `paused`
@@ -26,7 +26,28 @@ and recovery procedure. Synchronization no longer depends on PR #1 staying open.
 A successful form confirmation means the repository content was verified;
 GitHub Pages deployment can take additional time.
 
-## Codespaces preview before publication
+## Current Codespaces preview
+
+Use the integrated `main` server for development previews. Its default source
+is `main`; it uses port **8003**:
+
+```sh
+cd "$(git rev-parse --show-toplevel)" &&
+git fetch origin refs/heads/main:refs/remotes/origin/main &&
+live_preview_script="$(mktemp /tmp/live-preview.XXXXXX.py)" &&
+git show origin/main:scripts/preview_server.py > "$live_preview_script" &&
+python3 "$live_preview_script" --repository "$PWD" --port 8003
+```
+
+To review future feature work, use `--branch feature/your-branch`. The synchronized
+view will still follow `main`. Preview reads public repository files only and
+does not alter a branch or deploy the website. If GitHub cannot be reached it
+shows an error rather than an old snapshot.
+
+## Historical prototype preview
+
+These retained views do **not** receive current Issue updates after launch.
+Use **Current Codespaces preview** above for normal development.
 
 Open the website repository's existing Codespace. Stop its running preview with
 **Ctrl+C**, then paste this whole block into its terminal:
@@ -45,9 +66,9 @@ should say **Synchronized preview**, with source `prototype/meeting-management`.
 The server fetches the branch, including all slide formats; no `git pull` or
 manual slide copying is needed. It preserves local uncommitted work.
 
-## Review the unmerged publication preparation
+## Retained preparation snapshot (historical)
 
-Before the paired changes are integrated, use this block instead:
+To inspect the retained preparation snapshot, use this block instead:
 
 ```sh
 cd "$(git rev-parse --show-toplevel)" &&
@@ -61,24 +82,6 @@ Open port **8003** as above. This is a **Review snapshot** of the candidate;
 Issue changes go to the synchronized branch. Its switch link opens that view.
 The preview bar and `/__preview/` routing are local preview features only.
 The published static site needs neither Codespaces nor this server.
-
-## Preview after publication
-
-After the approved cutover, use the integrated `main` server. Its default source
-is `main`; it uses port **8003**:
-
-```sh
-cd "$(git rev-parse --show-toplevel)" &&
-git fetch origin refs/heads/main:refs/remotes/origin/main &&
-live_preview_script="$(mktemp /tmp/live-preview.XXXXXX.py)" &&
-git show origin/main:scripts/preview_server.py > "$live_preview_script" &&
-python3 "$live_preview_script" --repository "$PWD" --port 8003
-```
-
-To review future feature work, use `--branch feature/your-branch`. The synchronized
-view will still follow `main`. Preview reads public repository files only and
-does not alter a branch or deploy the website. If GitHub cannot be reached it
-shows an error rather than an old snapshot.
 
 ## Source and checks
 
