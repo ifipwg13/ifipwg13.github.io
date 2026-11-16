@@ -221,7 +221,7 @@
     }
     const latest = states.at(-1);
     if (latest?.state === 'published' && /^[a-f0-9]{40}$/.test(latest.revision) && meetings.has(latest.meeting_id)) {
-      $('submission-status').textContent = 'Your talk is published. Refresh the meeting page to see it.';
+      $('submission-status').textContent = 'Your talk is saved. The website update may take a few minutes; then refresh the meeting page.';
       $('meeting-link').href = 'meetings/' + latest.meeting_id + '/';
       $('meeting-link').hidden = false;
       return;

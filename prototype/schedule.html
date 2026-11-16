@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-XuJtHcUG5v9tjW5NT9bfddoAzybtZdlnI9WW72Iqn0c='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-dXhbqxsosHPmXVut60s8awhoc+IHQrBzigg5T1ftSk4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Schedule · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -572,9 +572,9 @@ const memberAPI = (() => {
       if (latest?.state === 'synchronized' && latest.results[0]?.state === 'saved' && /^[a-f0-9]{40}$/.test(latest.revision)) {
         pending.complete = pending.saved = true; clearTimeout(timer);
         if (archiving) {
-          meeting.status = 'archived'; $('submission-status').textContent = 'Meeting archived.';
+          meeting.status = 'archived'; $('submission-status').textContent = 'Meeting archived. The website update may take a few minutes.';
         } else {
-          meetingHidden = true; $('submission-status').textContent = 'Meeting hidden.';
+          meetingHidden = true; $('submission-status').textContent = 'Meeting hidden. The website update may take a few minutes.';
           $('meeting-link').href = './'; $('meeting-link').textContent = 'Return to all meetings';
         }
       } else if (['conflict','needs-attention'].includes(latest?.state)) {
@@ -615,7 +615,7 @@ const memberAPI = (() => {
     if (completed) {
       pending.complete = true; clearTimeout(timer);
       pending.saved = ['synchronized', 'saved'].includes(latest.state) && notesSaved;
-      $('submission-status').textContent = pending.saved ? notesOnly ? 'Notes saved.' : 'Schedule synchronized. Return to the meeting to see the updated programme.' :
+      $('submission-status').textContent = pending.saved ? notesOnly ? 'Notes saved.' : 'Schedule synchronized. The website update may take a few minutes; then refresh the meeting page.' :
         'Some changes need attention. Review the results, then reload talks before retrying.';
     } else if (latest?.state === 'needs-attention') {
       pending.complete = true; clearTimeout(timer);

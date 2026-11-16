@@ -148,7 +148,7 @@
       } catch { /* Other comments and identities cannot confirm an update. */ }
     }
     if (latest?.state==='published' && /^[a-f0-9]{40}$/.test(latest.revision)) {
-      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='Home updated. Refresh Home to see the changes.';
+      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='Home saved. The website update may take a few minutes; then refresh Home.';
     } else if (latest?.state==='conflict') {
       pending.complete=true; clearTimeout(timer); $('submission-status').textContent='Home changed elsewhere. Reload content before editing again; your request did not replace the newer content.';
     } else if (latest?.state==='needs-attention') {

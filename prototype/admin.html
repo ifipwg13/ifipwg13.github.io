@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-HIbqKIYjYQ/9lYt8l+6XPb+3J5YQm3LFZAIdsiUgioo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-xlBR+AzlCScwCQN0GCrUKPOZIEvZ2QoJAqDwr6l7xAE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Admin · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -392,7 +392,7 @@ const memberAPI = (() => {
       } catch { /* Other comments and identities cannot confirm an update. */ }
     }
     if (latest?.state==='published' && /^[a-f0-9]{40}$/.test(latest.revision)) {
-      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='Home updated. Refresh Home to see the changes.';
+      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='Home saved. The website update may take a few minutes; then refresh Home.';
     } else if (latest?.state==='conflict') {
       pending.complete=true; clearTimeout(timer); $('submission-status').textContent='Home changed elsewhere. Reload content before editing again; your request did not replace the newer content.';
     } else if (latest?.state==='needs-attention') {

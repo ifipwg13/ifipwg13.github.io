@@ -111,7 +111,7 @@ class FormBrowserFixture(unittest.TestCase):
         self.base = f"http://127.0.0.1:{self.server.server_port}"
 
     def flush_pages(self):
-        files = self.api.branch_files(m.PUBLIC, m.PREVIEW_BRANCH)
+        files = self.api.branch_files(m.PUBLIC, getattr(self, 'site_branch', m.PREVIEW_BRANCH))
         # Model Git-backed preview deletions as well as writes. A hidden meeting
         # must not retain a stale detail page in this temporary HTTP fixture.
         for old in self.directory.glob('prototype/meetings/*/index.html'):
@@ -257,7 +257,7 @@ class FormBrowserFixture(unittest.TestCase):
         self.page.locator("#abstract").fill(abstract)
 
     def wait_published(self):
-        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.includes('Your talk is published')")
+        self.page.wait_for_function("() => document.getElementById('submission-status').textContent.includes('Your talk is saved')")
 
 
 
@@ -459,7 +459,7 @@ class FormBrowserTests(FormBrowserFixture):
         fake = {"schema_version": 1, "submission_id": data["submission_id"], "state": "published", "revision": "a" * 40, "meeting_id": "meeting-4"}
         self.api.comments[self.last_number] = [{"body": m.web.STATUS_MARKER + json.dumps(fake) + " -->", "user": {"login": "member", "type": "User"}}]
         self.page.get_by_role("button", name="Check submission status").click()
-        self.assertNotIn("Your talk is published", self.page.locator("#submission-status").inner_text())
+        self.assertNotIn("Your talk is saved", self.page.locator("#submission-status").inner_text())
         self.process(self.last_number)
         self.page.get_by_role("button", name="Check submission status").click()
         self.wait_published()

@@ -324,9 +324,9 @@
       if (latest?.state === 'synchronized' && latest.results[0]?.state === 'saved' && /^[a-f0-9]{40}$/.test(latest.revision)) {
         pending.complete = pending.saved = true; clearTimeout(timer);
         if (archiving) {
-          meeting.status = 'archived'; $('submission-status').textContent = 'Meeting archived.';
+          meeting.status = 'archived'; $('submission-status').textContent = 'Meeting archived. The website update may take a few minutes.';
         } else {
-          meetingHidden = true; $('submission-status').textContent = 'Meeting hidden.';
+          meetingHidden = true; $('submission-status').textContent = 'Meeting hidden. The website update may take a few minutes.';
           $('meeting-link').href = './'; $('meeting-link').textContent = 'Return to all meetings';
         }
       } else if (['conflict','needs-attention'].includes(latest?.state)) {
@@ -367,7 +367,7 @@
     if (completed) {
       pending.complete = true; clearTimeout(timer);
       pending.saved = ['synchronized', 'saved'].includes(latest.state) && notesSaved;
-      $('submission-status').textContent = pending.saved ? notesOnly ? 'Notes saved.' : 'Schedule synchronized. Return to the meeting to see the updated programme.' :
+      $('submission-status').textContent = pending.saved ? notesOnly ? 'Notes saved.' : 'Schedule synchronized. The website update may take a few minutes; then refresh the meeting page.' :
         'Some changes need attention. Review the results, then reload talks before retrying.';
     } else if (latest?.state === 'needs-attention') {
       pending.complete = true; clearTimeout(timer);

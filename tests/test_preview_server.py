@@ -17,6 +17,10 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location("preview", Path(__file__).resolve().parents[1] / "scripts/preview_server.py")
 p = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p)
+FIXTURE_BRANCH = "prototype/meeting-management"
+
+# Exercise the pre-launch override as well as the post-launch main default.
+TEST_BRANCH = "prototype/meeting-management"
 
 
 def git(repository, *args):
@@ -29,6 +33,27 @@ def meeting_page(title, stylesheet="assets/style.css"):
 
 
 class PreviewTests(unittest.TestCase):
+    def test_after_launch_default_preview_tracks_main_including_binary_slides(self):
+        name = '12345678-1234-4567-8123-123456789abc-' + 'a'*64 + '.pdf'
+        path = 'prototype/slides/meeting-4/' + name
+        target = self.remote / path
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b'%PDF-1.7\nFictitious binary fixture\n%%EOF')
+        git(self.remote, 'add', '.')
+        git(self.remote, 'commit', '-m', 'Candidate with slides')
+        git(self.remote, 'switch', 'main')
+        git(self.remote, 'merge', '--ff-only', FIXTURE_BRANCH)
+        self.source = p.GitSource(self.checkout)
+        self.assertEqual(self.source.branch, 'main')
+        server = self.server()
+        status, headers, page = self.request(server, '/')
+        self.assertEqual(status, 200)
+        self.assertIn(b'<strong>Synchronized preview</strong>', page)
+        self.assertIn(b'<code>main</code>', page)
+        for prefix in ('/', p.SYNCHRONIZED_VIEW):
+            self.assertEqual(self.request(server, prefix + path)[2], target.read_bytes())
+        self.assertEqual(headers['X-Preview-Revision'], git(self.remote, 'rev-parse', 'main').decode().strip())
+
     def test_legacy_slide_formats_have_restricted_paths_correct_mime_and_binary_bytes(self):
         base='prototype/slides/legacy-20200301-123456789abc/talk-2-'+'b'*64
         content=b'\x00\xff\x80Preserve binary slide bytes'
@@ -85,7 +110,7 @@ class PreviewTests(unittest.TestCase):
         git(self.remote, "add", ".")
         git(self.remote, "commit", "-m", "Published baseline")
         self.main = git(self.remote, "rev-parse", "main")
-        git(self.remote, "switch", "-c", p.BRANCH)
+        git(self.remote, "switch", "-c", TEST_BRANCH)
         (self.remote / "prototype/assets").mkdir(parents=True)
         (self.remote / "index.html").write_text(meeting_page("Group homepage", "prototype/assets/style.css"))
         (self.remote / "members").mkdir()
@@ -99,12 +124,12 @@ class PreviewTests(unittest.TestCase):
         (self.remote / "prototype/link.html").symlink_to("../README.md")
         git(self.remote, "add", ".")
         git(self.remote, "commit", "-m", "Initial prototype")
-        git(root, "clone", "--branch", p.BRANCH, str(self.remote), str(self.checkout))
+        git(root, "clone", "--branch", TEST_BRANCH, str(self.remote), str(self.checkout))
         # Keep the real public remote identity, but route Git to an isolated
         # fixture through repository-local configuration. Never use the network.
         git(self.checkout, "remote", "set-url", "origin", "https://github.com/" + p.REPOSITORY + ".git")
         git(self.checkout, "config", "url." + str(self.remote) + ".insteadOf", "https://github.com/" + p.REPOSITORY + ".git")
-        self.source = p.GitSource(self.checkout)
+        self.source = p.GitSource(self.checkout, branch=TEST_BRANCH, synchronized_branch=TEST_BRANCH)
 
     def publish(self):
         (self.remote / "prototype/index.html").write_text(meeting_page("First and new meeting"))
@@ -245,8 +270,8 @@ class PreviewTests(unittest.TestCase):
         self.assertIn(b"<style>\nh1 {color: navy}\n</style>", content)
         self.assertNotIn(b'rel="stylesheet"', content)
         self.assertIn(b"<strong>Synchronized preview</strong>", content)
-        self.assertIn(p.BRANCH.encode(), content)
-        revision = git(self.remote, "rev-parse", p.BRANCH).decode().strip()
+        self.assertIn(TEST_BRANCH.encode(), content)
+        revision = git(self.remote, "rev-parse", TEST_BRANCH).decode().strip()
         self.assertEqual(headers["X-Preview-Revision"], revision)
         self.assertIn(revision[:7].encode(), content)
         self.assertEqual(headers["Pragma"], "no-cache")
@@ -342,7 +367,7 @@ class PreviewTests(unittest.TestCase):
 
     def test_html_style_and_sorter_use_the_same_revision_during_a_concurrent_update(self):
         self.publish_sorter()
-        first = git(self.remote, "rev-parse", p.BRANCH).decode().strip()
+        first = git(self.remote, "rev-parse", TEST_BRANCH).decode().strip()
         original = self.source.read
         switched = False
 
@@ -471,26 +496,26 @@ class PreviewTests(unittest.TestCase):
         # Reproduce managed checkouts that fetch only main: an ordinary fetch
         # must not be mistaken for updating origin/prototype/meeting-management.
         git(self.checkout, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main")
-        initial = git(self.checkout, "rev-parse", "origin/" + p.BRANCH)
+        initial = git(self.checkout, "rev-parse", "origin/" + TEST_BRANCH)
         (self.remote / "scripts").mkdir()
         (self.remote / "scripts/preview_server.py").write_text(Path(p.__file__).read_text())
         git(self.remote, "add", "scripts/preview_server.py")
         git(self.remote, "commit", "-m", "Publish current preview server")
-        latest = git(self.remote, "rev-parse", p.BRANCH)
+        latest = git(self.remote, "rev-parse", TEST_BRANCH)
         self.assertNotEqual(initial, latest)
-        git(self.checkout, "fetch", "origin", p.BRANCH)
-        self.assertEqual(git(self.checkout, "rev-parse", "origin/" + p.BRANCH), initial)
+        git(self.checkout, "fetch", "origin", TEST_BRANCH)
+        self.assertEqual(git(self.checkout, "rev-parse", "origin/" + TEST_BRANCH), initial)
         (self.checkout / "prototype/index.html").write_text("Preserved local changes")
         head = git(self.checkout, "rev-parse", "HEAD")
         self.check_documented_server(self.documented_command('meeting_preview_script'), b"Group homepage")
         self.assertEqual(git(self.checkout, "rev-parse", "HEAD"), head)
-        self.assertEqual(git(self.checkout, "rev-parse", "origin/" + p.BRANCH), latest)
+        self.assertEqual(git(self.checkout, "rev-parse", "origin/" + TEST_BRANCH), latest)
         self.assertEqual((self.checkout / "prototype/index.html").read_text(), "Preserved local changes")
 
     def test_existing_codespace_review_command_selects_the_feature_without_altering_local_work(self):
         command = self.documented_command('group_preview_script')
         branch = re.search(r'--branch ([\w/-]+)', command)[1]
-        prototype = git(self.remote, "rev-parse", p.BRANCH)
+        prototype = git(self.remote, "rev-parse", TEST_BRANCH)
         git(self.remote, "switch", "-c", branch)
         (self.remote / "index.html").write_text(meeting_page("Review group homepage", "prototype/assets/style.css"))
         (self.remote / "scripts").mkdir()
@@ -502,7 +527,7 @@ class PreviewTests(unittest.TestCase):
         head = git(self.checkout, "rev-parse", "HEAD")
         self.check_documented_server(command, b"Review group homepage")
         self.assertEqual(git(self.checkout, "rev-parse", "HEAD"), head)
-        self.assertEqual(git(self.remote, "rev-parse", p.BRANCH), prototype)
+        self.assertEqual(git(self.remote, "rev-parse", TEST_BRANCH), prototype)
         self.assertEqual(git(self.remote, "rev-parse", "main"), self.main)
         self.assertEqual((self.checkout / "index.html").read_text(), "Preserved local homepage")
 
@@ -520,16 +545,16 @@ class PreviewTests(unittest.TestCase):
     def test_private_remote_is_rejected(self):
         git(self.checkout, "remote", "set-url", "origin", "https://github.com/ifipwg13/meetings.git")
         with self.assertRaisesRegex(p.PreviewError, "original origin"):
-            p.GitSource(self.checkout)
+            p.GitSource(self.checkout, branch=TEST_BRANCH, synchronized_branch=TEST_BRANCH)
 
     def test_selected_feature_branch_is_previewed_without_merging_the_prototype(self):
-        prototype = git(self.remote, "rev-parse", p.BRANCH)
+        prototype = git(self.remote, "rev-parse", TEST_BRANCH)
         main = git(self.remote, "rev-parse", "main")
         git(self.remote, "switch", "-c", "feature/review")
         (self.remote / "prototype/index.html").write_text(meeting_page("Review feature"))
         git(self.remote, "add", "prototype/index.html")
         git(self.remote, "commit", "-m", "Unmerged review feature")
-        self.source = p.GitSource(self.checkout, branch="feature/review")
+        self.source = p.GitSource(self.checkout, branch="feature/review", synchronized_branch=TEST_BRANCH)
         server = self.server()
         status, headers, content = self.request(server)
         self.assertEqual(status, 200)
@@ -538,9 +563,9 @@ class PreviewTests(unittest.TestCase):
         self.assertIn(b'This review branch does not receive Issue updates.', content)
         self.assertIn(p.SYNCHRONIZED_VIEW.encode(), content)
         self.assertEqual(headers["X-Preview-Revision"], git(self.remote, "rev-parse", "feature/review").decode().strip())
-        self.assertEqual(git(self.remote, "rev-parse", p.BRANCH), prototype)
+        self.assertEqual(git(self.remote, "rev-parse", TEST_BRANCH), prototype)
         self.assertEqual(git(self.remote, "rev-parse", "main"), main)
-        default = p.GitSource(self.checkout)
+        default = p.GitSource(self.checkout, branch=TEST_BRANCH, synchronized_branch=TEST_BRANCH)
         self.assertIn(b"First meeting", default.page("prototype/index.html")[0])
         # Opening both views in separate tabs must not mix sources or race fetches.
         cases = [('/prototype/', b'Review feature', b'Review snapshot'),
@@ -564,9 +589,9 @@ class PreviewTests(unittest.TestCase):
         self.publish_meeting_states(archived=True, munich_visible=True)
         git(self.remote, 'switch', '-c', 'feature/stale-review')
         snapshot = git(self.remote, 'rev-parse', 'HEAD').decode().strip()
-        git(self.remote, 'switch', p.BRANCH)
+        git(self.remote, 'switch', TEST_BRANCH)
         self.publish_meeting_states(archived=False, munich_visible=False)
-        self.source = p.GitSource(self.checkout, branch='feature/stale-review')
+        self.source = p.GitSource(self.checkout, branch='feature/stale-review', synchronized_branch=TEST_BRANCH)
         server = self.server()
         status, headers, old = self.request(server)
         self.assertEqual(status, 200)
@@ -580,12 +605,12 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b'Group homepage', home)
         self.assertIn(b'<strong>Synchronized preview</strong>', home)
-        self.assertIn(p.BRANCH.encode(), home)
+        self.assertIn(TEST_BRANCH.encode(), home)
         status, headers, current = self.request(server, prefix + '/prototype/')
         self.assertEqual(status, 200)
         self.assertIn(b'Bologna Active', current)
         self.assertNotIn(b'id="munich"', current)
-        self.assertEqual(headers['X-Preview-Revision'], git(self.remote, 'rev-parse', p.BRANCH).decode().strip())
+        self.assertEqual(headers['X-Preview-Revision'], git(self.remote, 'rev-parse', TEST_BRANCH).decode().strip())
         # Removing hidden restores visibility; an archived meeting stays archived.
         self.publish_meeting_states(archived=True, munich_visible=True)
         refreshed = self.request(server, prefix + '/prototype/')[2]
@@ -612,7 +637,7 @@ class PreviewTests(unittest.TestCase):
             self.assertEqual(self.request(server, prefix + invalid)[0], 404)
         # Query strings cannot select another repository or an arbitrary branch.
         content = self.request(server, p.SYNCHRONIZED_VIEW + '?branch=main&repository=private')[2]
-        self.assertIn(p.BRANCH.encode(), content)
+        self.assertIn(TEST_BRANCH.encode(), content)
         self.assertIn(b'Synchronized preview', content)
 
     def test_failed_synchronized_fetch_cannot_fall_back_to_review_or_stale_data(self):

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-lBGQhJ6nGhOKQE+95yAAxq2WaSy5Mc0qatdT6FTkcm0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-zj2+L/L20mNO9WE2PkSmThShSAjdFy8os45qfQTUwa8='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Create meeting · IFIP WG1.3</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -358,7 +358,7 @@ const memberAPI = (() => {
       if (!labels.includes('registration') || !labels.includes('meeting:' + latest.meeting_id)) throw new Error('Registration verification pending');
       const hidden = labels.includes('hidden');
       const archived = labels.includes('archived') || issue.state !== 'open' || issue.locked;
-      $('submission-status').textContent = hidden ? 'Meeting synchronized. It is currently hidden.' : archived ? 'Meeting synchronized. It is currently archived.' : 'Meeting ready. Open the meeting or refresh the meetings page.';
+      $('submission-status').textContent = (hidden ? 'Meeting saved. It is currently hidden.' : archived ? 'Meeting saved. It is currently archived.' : 'Meeting saved.') + ' The website update may take a few minutes; then refresh the meetings page.';
       $('meeting-link').href = 'meetings/' + latest.meeting_id + '/';
       $('meeting-link').hidden = hidden;
       pending.complete = true; clearTimeout(timer);

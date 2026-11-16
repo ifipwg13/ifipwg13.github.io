@@ -17,7 +17,7 @@ import urllib.parse
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-BRANCH = "prototype/meeting-management"
+BRANCH = "main"
 REF = "refs/remotes/origin/" + BRANCH
 REPOSITORY = "ifipwg13/ifipwg13.github.io"
 LIST_SCRIPT = '<script src="assets/meetings-list.js" defer></script>'
@@ -76,7 +76,7 @@ def canonical_url(url):
     return canonical if canonical != path else None
 
 
-def styled_preview(content, stylesheet, revision, javascript=None, logo=None, branch=BRANCH):
+def styled_preview(content, stylesheet, revision, javascript=None, logo=None, branch=BRANCH, synchronized_branch=BRANCH):
     """Deliver a complete styled page even if a browser's CSS request would fail."""
     page = content.decode("utf-8")
     style = "<style>\n" + stylesheet.decode("utf-8").replace("</", "<\\/") + "\n</style>"
@@ -95,7 +95,7 @@ def styled_preview(content, stylesheet, revision, javascript=None, logo=None, br
         data_url = 'data:image/png;base64,' + base64.b64encode(logo).decode('ascii')
         page = LOGO_IMAGE.sub(lambda match: match[1] + data_url + match[2], page)
     fetched = dt.datetime.now(ZoneInfo("Europe/Berlin")).strftime("%d-%m-%Y %H:%M:%S %Z")
-    synchronized = branch == BRANCH
+    synchronized = branch == synchronized_branch
     mode = 'Synchronized preview' if synchronized else 'Review snapshot'
     explanation = ('Issue changes appear after synchronization succeeds and you refresh.' if synchronized else
                    'This review branch does not receive Issue updates. '
@@ -108,7 +108,7 @@ def styled_preview(content, stylesheet, revision, javascript=None, logo=None, br
 
 
 class GitSource:
-    def __init__(self, repository, interval=2, branch=BRANCH):
+    def __init__(self, repository, interval=2, branch=BRANCH, synchronized_branch=BRANCH):
         self.repository = Path(repository)
         self.interval = interval
         self.last_fetch = None
@@ -120,13 +120,15 @@ class GitSource:
         ssh_repo = remote in {"git@github.com:" + REPOSITORY, "git@github.com:" + REPOSITORY + ".git"}
         if not (https_repo or ssh_repo):
             raise PreviewError("Run this preview from the ifipwg13/ifipwg13.github.io repository with its original origin remote.")
-        if not isinstance(branch, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", branch):
-            raise PreviewError("Choose a valid public Git branch for the preview.")
-        try:
-            self.git("check-ref-format", "refs/heads/" + branch)
-        except PreviewError:
-            raise PreviewError("Choose a valid public Git branch for the preview.") from None
+        for selected in (branch, synchronized_branch):
+            if not isinstance(selected, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", selected):
+                raise PreviewError("Choose a valid public Git branch for the preview.")
+            try:
+                self.git("check-ref-format", "refs/heads/" + selected)
+            except PreviewError:
+                raise PreviewError("Choose a valid public Git branch for the preview.") from None
         self.branch = branch
+        self.synchronized_branch = synchronized_branch
         self.ref = "refs/remotes/origin/" + branch
 
     def git(self, *args, missing_ok=False):
@@ -164,9 +166,10 @@ class GitSource:
 
     def synchronized(self):
         """Return a reader for the public branch maintained by Issue automation."""
-        if self.branch == BRANCH:
+        if self.branch == self.synchronized_branch:
             return self
-        reader = GitSource(self.repository, self.interval, branch=BRANCH)
+        reader = GitSource(self.repository, self.interval, branch=self.synchronized_branch,
+                           synchronized_branch=self.synchronized_branch)
         # Both views fetch into one checkout; serialize their Git fetches.
         reader.lock = self.lock
         return reader
@@ -191,10 +194,10 @@ class GitSource:
                 logo = self.read(LOGO_PATH, revision)
             except FileNotFoundError:
                 raise PreviewError('The IFIP logo is missing from GitHub; the preview cannot display it correctly.') from None
-        return styled_preview(content, stylesheet, revision, javascript, logo, self.branch), revision
+        return styled_preview(content, stylesheet, revision, javascript, logo, self.branch, self.synchronized_branch), revision
 
 
-def make_server(source, host="0.0.0.0", port=8001):
+def make_server(source, host="0.0.0.0", port=8003):
     synchronized_source = None
     selection_lock = threading.Lock()
 
@@ -276,15 +279,18 @@ def make_server(source, host="0.0.0.0", port=8001):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=8001)
-    parser.add_argument("--branch", default=BRANCH, help="Public branch to preview; defaults to the existing prototype draft.")
+    parser.add_argument("--port", type=int, default=8003)
+    parser.add_argument("--branch", help="Public branch to review; defaults to the synchronized branch.")
+    parser.add_argument("--synchronized-branch", default=BRANCH,
+                        help="Branch receiving automation updates: main after launch, prototype/meeting-management before launch.")
     parser.add_argument("--repository", type=Path, default=Path(__file__).resolve().parents[1])
     args = parser.parse_args()
     try:
-        source = GitSource(args.repository, branch=args.branch)
+        source = GitSource(args.repository, branch=args.branch or args.synchronized_branch,
+                           synchronized_branch=args.synchronized_branch)
         source.latest()
         with make_server(source, port=args.port) as server:
-            mode = 'SYNCHRONIZED PREVIEW' if source.branch == BRANCH else 'REVIEW SNAPSHOT'
+            mode = 'SYNCHRONIZED PREVIEW' if source.branch == source.synchronized_branch else 'REVIEW SNAPSHOT'
             print(f"{mode} on port {server.server_port}. Open this port from Codespaces Ports. "
                   f"Source: {source.branch}. Check the Preview status bar for the source and version.", flush=True)
             server.serve_forever()
