@@ -106,6 +106,7 @@ python3 tests/browser_talk_submission.py
 python3 tests/browser_participation.py
 python3 tests/browser_create_meeting.py
 python3 tests/browser_group_admin.py
+python3 tests/browser_backup.py
 python3 tests/browser_schedule.py
 python3 tests/browser_meetings.py
 python3 tests/browser_release.py
@@ -116,3 +117,8 @@ handlers. Real token scopes, queued Actions, Firefox autofill, and final Pages
 deployment still require the private guide's live checks. Never commit raw tokens,
 private notes, attendance, participant fingerprints or private comments here.
 Removing published information does not erase earlier Git commits or caches.
+
+Administrators can request a private recovery ZIP from **Admin → Backup** after
+checking their credentials. See **Website backups** in the private operating
+guide for the archive contents, private GitHub download sign-in and restoration
+rehearsal. No backup ZIP or private appendix belongs in this public repository.
