@@ -7,6 +7,9 @@
   const MARKER = '<!-- wg13-group-profile-update -->', STATUS = '<!-- wg13-group-profile-status ';
   const CONTROL = '<!-- wg13-group-administration -->';
   let credential='', account=null, loaded=null, controller=null, pending=null, busy=false, timer=null, polls=0;
+  const BACKUP='<!-- wg13-backup-request -->', BACKUP_STATUS='<!-- wg13-backup-status ';
+  const BACKUP_DOWNLOAD='https://github.com/ifipwg13/meetings/releases/download/website-backup/website-backup.zip';
+  let backupPending=null, backupTimer=null, backupPolls=0;
   const problem = message => Object.assign(new Error(message),{safe:true});
   function error(message='') { $('form-error').textContent=message; $('form-error').hidden=!message; }
   function safe(failure) { return failure.safe || failure.httpStatus ? failure.message : 'The service could not be reached. Check progress before retrying.'; }
@@ -26,18 +29,31 @@
     catch (failure) { if ([401,403].includes(failure.httpStatus)) reset(); throw failure; }
   }
   function controls() {
+    const backing=!!backupPending && !backupPending.complete;
     $('admin-token').readOnly=busy;
     $('check-admin').disabled=busy;
     $('people-fields').hidden=!account || !loaded;
-    $('people-fields').disabled=busy || !account || !loaded || !!pending;
+    $('people-fields').disabled=busy || !account || !loaded || !!pending || backing;
     $('save-people').hidden=!account;
     $('reload-people').hidden=!account;
-    $('save-people').disabled=busy || !account || !loaded || !controller || !!pending;
-    $('reload-people').disabled=busy || !account || !!pending && !pending.complete;
-    $('check-status').hidden=!pending;
+    $('save-people').disabled=busy || !account || !loaded || !controller || !!pending || backing;
+    $('reload-people').disabled=busy || !account || !!pending && !pending.complete || backing;
+    $('backup-site').hidden=!account;
+    $('backup-site').disabled=busy || !account || !loaded || !controller || !!pending && !pending.complete || backing || unsavedHome();
+    $('check-status').hidden=!pending && !backupPending;
     $('check-status').disabled=busy || !account;
   }
-  function reset() { credential=''; account=null; clearTimeout(timer); $('admin-identity').textContent=''; controls(); }
+  function resetBackup() {
+    clearTimeout(backupTimer); backupPending=null; backupPolls=0;
+    $('backup-status').textContent=''; $('backup-download').hidden=true; $('backup-download').removeAttribute('href');
+  }
+  function reset() { credential=''; account=null; clearTimeout(timer); resetBackup(); $('admin-identity').textContent=''; controls(); }
+  function unsavedHome() {
+    if (!loaded) return false;
+    if (pending?.complete) return pending.result!=='published';
+    try { return JSON.stringify(collect())!==JSON.stringify({people:loaded.people,content:loaded.content}); }
+    catch { return true; }
+  }
   async function verify() {
     const candidate=password();
     let user;
@@ -86,6 +102,7 @@
     return found[0].number;
   }
   async function load() {
+    resetBackup();
     loaded=null; controls();
     const snapshot=await homeLists();
     const number=await controlRecord();
@@ -148,11 +165,11 @@
       } catch { /* Other comments and identities cannot confirm an update. */ }
     }
     if (latest?.state==='published' && /^[a-f0-9]{40}$/.test(latest.revision)) {
-      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='Home saved. The website update may take a few minutes; then refresh Home.';
+      pending.complete=true; pending.result='published'; clearTimeout(timer); $('submission-status').textContent='Home saved. The website update may take a few minutes; then refresh Home.';
     } else if (latest?.state==='conflict') {
-      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='Home changed elsewhere. Reload content before editing again; your request did not replace the newer content.';
+      pending.complete=true; pending.result='conflict'; clearTimeout(timer); $('submission-status').textContent='Home changed elsewhere. Reload content before editing again; your request did not replace the newer content.';
     } else if (latest?.state==='needs-attention') {
-      pending.complete=true; clearTimeout(timer); $('submission-status').textContent='The update needs administrator attention. Its publication is not confirmed. Check progress or reload the current content before retrying.';
+      pending.complete=true; pending.result='needs-attention'; clearTimeout(timer); $('submission-status').textContent='The update needs administrator attention. Its publication is not confirmed. Check progress or reload the current content before retrying.';
     } else {
       $('submission-status').textContent='Update submitted. Waiting for synchronization. Use Check progress if this takes longer.';
       if (++polls<12) timer=setTimeout(checkProgress,5000);
@@ -164,6 +181,80 @@
     try { await progress(); } catch (failure) { error(safe(failure)); }
     finally { busy=false; controls(); }
   }
+  async function backupProgress() {
+    checked();
+    const comments=[];
+    for (let page=1;page<=100;page++) {
+      const batch=await api(memberAPI.repo+'/issues/'+controller+'/comments?per_page=100&page='+page);
+      if (!Array.isArray(batch)) throw new Error();
+      comments.push(...batch);
+      if (batch.length<100) break;
+      if (page===100) throw problem('Too many records to check safely. Contact the organizer.');
+    }
+    const matching=comments.filter(c=>c.user?.login===backupPending.login && c.body===backupPending.body);
+    if (matching.length>1) throw problem('Duplicate backup requests need administrator review.');
+    if (!backupPending.commentId && matching.length===1) backupPending.commentId=matching[0].id;
+    let latest=null;
+    for (const comment of comments) {
+      if (!memberAPI.bot(comment) || !(comment.body || '').startsWith(BACKUP_STATUS)) continue;
+      try {
+        const value=JSON.parse(comment.body.slice(BACKUP_STATUS.length,comment.body.indexOf(' -->')));
+        if (value.schema_version===1 && value.request_id===backupPending.id &&
+            value.comment_id===backupPending.commentId && value.request_hash===backupPending.hash) latest=value;
+      } catch { /* Unrelated text cannot confirm a backup or supply a download URL. */ }
+    }
+    checked();
+    if (latest?.state==='ready' && latest.download_url===BACKUP_DOWNLOAD &&
+        /^[a-f0-9]{64}$/.test(latest.sha256 || '') && Number.isSafeInteger(latest.asset_id) && latest.asset_id>0 &&
+        Number.isSafeInteger(latest.size) && latest.size>0 && latest.size<2*1024**3) {
+      backupPending.complete=true; clearTimeout(backupTimer);
+      $('backup-status').textContent='Backup ready ('+(latest.size/1_000_000).toFixed(1)+' MB).';
+      $('backup-download').href=BACKUP_DOWNLOAD; $('backup-download').hidden=false;
+    } else if (['failed','superseded'].includes(latest?.state)) {
+      backupPending.complete=true; clearTimeout(backupTimer);
+      $('backup-status').textContent=latest.state==='failed' ?
+        'Backup could not be completed. Retry or contact the organizer; previous copies were retained.' :
+        'A newer backup replaced this request. Create another backup to refresh the result.';
+      $('backup-download').hidden=true; $('backup-download').removeAttribute('href');
+    } else {
+      $('backup-status').textContent='Preparing backup. Use Check progress if this takes longer.';
+      if (++backupPolls<12) backupTimer=setTimeout(checkBackupProgress,5000);
+    }
+  }
+  async function checkBackupProgress() {
+    if (busy || !backupPending) return;
+    clearTimeout(backupTimer); busy=true; controls(); error();
+    try { await backupProgress(); } catch (failure) { error(safe(failure)); }
+    finally { busy=false; controls(); }
+  }
+  $('backup-site').addEventListener('click',async()=>{
+    if (busy || !loaded || !account || backupPending && !backupPending.complete || pending && !pending.complete) return;
+    if (unsavedHome()) { $('backup-status').textContent='Save Home changes before making a backup.'; return; }
+    error(); busy=true; controls();
+    try {
+      checked(); await verify();
+      if (await controlRecord()!==controller) throw problem('The administration record changed. Reload content.');
+      resetBackup();
+      const id=crypto.randomUUID(), body=BACKUP+'\n```json\n'+JSON.stringify({schema_version:1,request_id:id})+'\n```';
+      backupPending={id,body,hash:await memberAPI.fingerprint(body),login:account.login,commentId:null,complete:false};
+      $('backup-status').textContent='Submitting backup request…';
+      try {
+        const result=await api(memberAPI.repo+'/issues/'+controller+'/comments','POST',{body});
+        if (!Number.isSafeInteger(result.id) || result.id<1) throw new Error();
+        backupPending.commentId=result.id;
+      } catch (failure) {
+        if (failure.safe || [400,401,403,404,410,422,429].includes(failure.httpStatus)) { backupPending=null; throw failure; }
+        // Locate an uncertain POST by its UUID; never post it again blindly.
+      }
+      await backupProgress();
+    } catch (failure) { error(safe(failure)); }
+    finally { busy=false; controls(); }
+  });
+  for (const id of [...Object.values(fields),...Object.values(texts)]) $(id).addEventListener('input',()=>{
+    controls();
+    if (account && unsavedHome()) $('backup-status').textContent='Save Home changes before making a backup.';
+    else if (!backupPending) $('backup-status').textContent='';
+  });
   $('talk-form').addEventListener('submit',async event=>{
     event.preventDefault(); if (busy || pending || !loaded || !account) return;
     error(); busy=true; controls();
@@ -190,7 +281,7 @@
     finally { busy=false; controls(); }
   });
   $('check-admin').addEventListener('click',checkAccess);
-  $('check-status').addEventListener('click',checkProgress);
+  $('check-status').addEventListener('click',()=>backupPending ? checkBackupProgress() : checkProgress());
   $('reload-people').addEventListener('click',async()=>{
     if (busy || pending && !pending.complete) return;
     busy=true; controls(); error();
