@@ -170,13 +170,19 @@ class PreviewTests(unittest.TestCase):
         finally:
             connection.close()
 
-    def documented_command(self, variable):
-        readme = (Path(p.__file__).resolve().parents[1] / "README.md").read_text()
+    def documented_command(self, review=False):
+        guide = Path(p.__file__).resolve().parents[2] / "meetings/README.md"
+        if not guide.is_file():
+            self.skipTest("The private operating guide is needed for its documented command checks")
+        readme = guide.read_text()
+        variable = 'live_preview_script'
         blocks = re.findall(r"```sh\n(.*?)```", readme, flags=re.DOTALL)
         command = textwrap.dedent(next(block for block in blocks if variable + "=" in block))
+        if review:
+            branch = re.search(r'`--branch ([\w/-]+)`', readme)[1]
+            command = command.replace('--port ', '--branch ' + branch + ' --port ', 1)
         command = re.sub(r"--port [0-9]+", "--port 0", command)
-        for prefix in ["meeting-preview.", "group-preview."]:
-            command = command.replace("/tmp/" + prefix, str(Path(self.directory.name) / prefix))
+        command = command.replace("/tmp/live-preview.", str(Path(self.directory.name) / 'live-preview.'))
         return command.replace('python3 "$' + variable + '"', 'exec python3 "$' + variable + '"')
 
     def check_documented_server(self, command, expected):
@@ -493,33 +499,40 @@ class PreviewTests(unittest.TestCase):
         self.assertNotIn(b"Missing stylesheet", content)
 
     def test_fetched_script_starts_outside_checkout_and_preserves_local_work(self):
-        # Reproduce managed checkouts that fetch only main: an ordinary fetch
-        # must not be mistaken for updating origin/prototype/meeting-management.
-        git(self.checkout, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main")
-        initial = git(self.checkout, "rev-parse", "origin/" + TEST_BRANCH)
+        # A retained prototype checkout may not map main into origin/main;
+        # the current private guide must fetch its startup script explicitly.
+        git(self.checkout, "config", "remote.origin.fetch", f"+refs/heads/{TEST_BRANCH}:refs/remotes/origin/{TEST_BRANCH}")
+        initial = git(self.checkout, "rev-parse", "origin/main")
+        git(self.remote, "switch", "main")
+        git(self.remote, "merge", "--ff-only", TEST_BRANCH)
         (self.remote / "scripts").mkdir()
         (self.remote / "scripts/preview_server.py").write_text(Path(p.__file__).read_text())
         git(self.remote, "add", "scripts/preview_server.py")
         git(self.remote, "commit", "-m", "Publish current preview server")
-        latest = git(self.remote, "rev-parse", TEST_BRANCH)
+        latest = git(self.remote, "rev-parse", "main")
         self.assertNotEqual(initial, latest)
-        git(self.checkout, "fetch", "origin", TEST_BRANCH)
-        self.assertEqual(git(self.checkout, "rev-parse", "origin/" + TEST_BRANCH), initial)
+        git(self.checkout, "fetch", "origin", "main")
+        self.assertEqual(git(self.checkout, "rev-parse", "origin/main"), initial)
         (self.checkout / "prototype/index.html").write_text("Preserved local changes")
         head = git(self.checkout, "rev-parse", "HEAD")
-        self.check_documented_server(self.documented_command('meeting_preview_script'), b"Group homepage")
+        self.check_documented_server(self.documented_command(), b"Group homepage")
         self.assertEqual(git(self.checkout, "rev-parse", "HEAD"), head)
-        self.assertEqual(git(self.checkout, "rev-parse", "origin/" + TEST_BRANCH), latest)
+        self.assertEqual(git(self.checkout, "rev-parse", "origin/main"), latest)
         self.assertEqual((self.checkout / "prototype/index.html").read_text(), "Preserved local changes")
 
     def test_existing_codespace_review_command_selects_the_feature_without_altering_local_work(self):
-        command = self.documented_command('group_preview_script')
+        command = self.documented_command(review=True)
         branch = re.search(r'--branch ([\w/-]+)', command)[1]
         prototype = git(self.remote, "rev-parse", TEST_BRANCH)
-        git(self.remote, "switch", "-c", branch)
-        (self.remote / "index.html").write_text(meeting_page("Review group homepage", "prototype/assets/style.css"))
+        git(self.remote, "switch", "main")
+        git(self.remote, "merge", "--ff-only", TEST_BRANCH)
         (self.remote / "scripts").mkdir()
         (self.remote / "scripts/preview_server.py").write_text(Path(p.__file__).read_text())
+        git(self.remote, "add", ".")
+        git(self.remote, "commit", "-m", "Publish main preview server")
+        self.main = git(self.remote, "rev-parse", "main")
+        git(self.remote, "switch", "-c", branch)
+        (self.remote / "index.html").write_text(meeting_page("Review group homepage", "prototype/assets/style.css"))
         git(self.remote, "add", ".")
         git(self.remote, "commit", "-m", "Review-only group homepage")
         git(self.checkout, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main")
